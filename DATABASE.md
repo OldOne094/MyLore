@@ -42,15 +42,28 @@ Conventions: TEXT UUID PKs, `created_at`/`updated_at` on user-writable aggregate
 `ON DELETE` semantics chosen per aggregate, indexed FK columns, CHECK constraints for enums.
 
 ```sql
+-- Baseline (migration 0001): app-level metadata.
+CREATE TABLE app_meta (
+  key        TEXT PRIMARY KEY,
+  value      TEXT NOT NULL,
+  updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
 -- Metadata only. User data lives in separate aggregates (P3).
+-- cover_asset_id/banner_asset_id are added in MISSION-017 (with `asset`):
+-- SQLite rejects writes to a table whose FK targets a missing parent, so the
+-- asset columns are deferred via ALTER TABLE ADD COLUMN. Enum CHECKs match
+-- migration 0002.
 CREATE TABLE media (
   id              TEXT PRIMARY KEY,          -- UUID
-  content_type    TEXT NOT NULL,             -- book|novel|web_novel|manga|manhwa|manhua|anime|tv|movie|other
+  content_type    TEXT NOT NULL CHECK (content_type IN
+                    ('book','novel','web_novel','manga','manhwa','manhua','anime','tv','movie','other')),
   format          TEXT,                      -- optional refinement (light_novel, webtoon, ova, ...)
   title_main      TEXT NOT NULL,
   title_original  TEXT,
   synopsis        TEXT,
-  pub_status      TEXT NOT NULL DEFAULT 'unknown', -- announced|ongoing|completed|hiatus|cancelled|unknown
+  pub_status      TEXT NOT NULL DEFAULT 'unknown' CHECK (pub_status IN
+                    ('announced','ongoing','completed','hiatus','cancelled','unknown')),
   start_date      TEXT,                      -- ISO date
   end_date        TEXT,
   release_year    INTEGER,
@@ -61,8 +74,8 @@ CREATE TABLE media (
   duration_min    INTEGER,
   ep_count        INTEGER,                   -- estimate/known count
   ch_count        INTEGER,
-  cover_asset_id  TEXT REFERENCES asset(id) ON DELETE SET NULL,
-  banner_asset_id TEXT REFERENCES asset(id) ON DELETE SET NULL,
+  -- cover_asset_id  TEXT REFERENCES asset(id) ON DELETE SET NULL,  (MISSION-017)
+  -- banner_asset_id TEXT REFERENCES asset(id) ON DELETE SET NULL,  (MISSION-017)
   provider        TEXT,                      -- provenance of current metadata
   provider_url    TEXT,
   metadata_refreshed_at TEXT,
@@ -80,7 +93,8 @@ CREATE TABLE media_alt_title (
 CREATE TABLE person (
   id    TEXT PRIMARY KEY,
   name  TEXT NOT NULL,
-  role  TEXT NOT NULL,          -- author|artist|director|studio|publisher|network
+  role  TEXT NOT NULL CHECK (role IN
+           ('author','artist','director','studio','publisher','network')),
   sort_order INTEGER NOT NULL DEFAULT 0
 );
 CREATE TABLE media_person (
@@ -99,7 +113,7 @@ CREATE TABLE media_genre (
 CREATE TABLE tag (
   id        TEXT PRIMARY KEY,
   name      TEXT NOT NULL,
-  scope     TEXT NOT NULL,       -- 'domain' (from providers) | 'personal'
+  scope     TEXT NOT NULL CHECK (scope IN ('domain','personal')),
   source    TEXT
 );
 CREATE TABLE media_tag (
@@ -113,7 +127,8 @@ CREATE TABLE content_node (
   id           TEXT PRIMARY KEY,
   media_id     TEXT NOT NULL REFERENCES media(id) ON DELETE CASCADE,
   parent_id    TEXT REFERENCES content_node(id) ON DELETE CASCADE,
-  kind         TEXT NOT NULL,    -- season|episode|volume|chapter|page_range|track|issue|node
+  kind         TEXT NOT NULL CHECK (kind IN
+                 ('season','episode','volume','chapter','page_range','track','issue','node')),
   position     INTEGER NOT NULL,
   number       TEXT,             -- display number (e.g. "12.5")
   title        TEXT,
@@ -253,6 +268,16 @@ CREATE TABLE trash (
 );
 ```
 
+### 3.1 Reference-data seeds (migration 0002)
+
+- **genres** (broad categories): action, adventure, comedy, crime, drama, fantasy, historical,
+  horror, mystery, psychological, romance, science_fiction, slice_of_life, sports, supernatural,
+  thriller, tragedy, war.
+- **tags** (domain/community, `scope='domain'`): isekai, reincarnation, time_travel, otome,
+  slow_burn, smut, wuxia, xianxia, xuanhuan, cultivation, harem, reverse_harem, shoujo_ai,
+  shounen_ai, yuri, yaoi, system, dungeon, academy, game_elements, litrpg.
+- Personal tags (`scope='personal'`) are user-created; no seeds.
+
 ## 4. Full-Text Search (FTS5)
 
 - **Index:** one FTS5 virtual table, **external-content** style is rejected in favor of a
@@ -279,17 +304,27 @@ CREATE VIRTUAL TABLE media_fts USING fts5(
 
 ## 5. Indexes & Query Support
 
-- `idx_node_media (media_id, kind, position)` — tree walks, per-type listings.
+- `idx_node_media (media_id, kind, position)` — tree walks, per-type listings (MISSION-014).
+- `idx_node_parent (parent_id, position)` — children listings (MISSION-014).
 - `tracking(core_status)`, `tracking(updated_at)` — dashboards, "continue" queries.
 - `media(content_type)`, `media(title_main)` — library filtering; `title_main` used for the
   non-FTS fast path (startsWith).
 - `node_progress` PK on node_id — fast per-node status; aggregate progress is
   `SELECT COUNT(*) FROM node_progress WHERE node_id IN (…chapters…) AND state='read'`.
 
+Cross-row invariants that SQLite cannot express are enforced by Rust validators
+(`infrastructure::content_node`, MISSION-014): a node's parent must belong to the same
+`media_id`, and the parent chain must stay acyclic.
+
 ## 6. Migrations
 
-- Versioned `.sql` files (`migrations/0001_init.sql`, …) run through `sqlx::migrate!` at startup,
-  each **inside a transaction** (verified 2026: plugin behavior; we use sqlx directly).
+- Versioned `.sql` files (`migrations/0001_init.sql`, `0002_media.sql`, `0003_content_node.sql`,
+  …) run through `sqlx::migrate!` at startup, each **inside a transaction** (verified 2026:
+  sqlx-sqlite wraps migration SQL + bookkeeping in a single transaction; see `migrate.rs`).
+  Wired as `db::migrate` in MISSION-012.
+- MISSION-017 adds `cover_asset_id`/`banner_asset_id` to `media` via `ALTER TABLE ADD COLUMN`
+  (SQLite rejects writes through an FK pointing at a missing parent, so the columns must wait
+  for the `asset` table).
 - Policy:
   - Never edit an applied migration.
   - Backward-compatible only (additive) for app updates; destructive changes happen in the next

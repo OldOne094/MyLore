@@ -21,8 +21,14 @@ pub enum AppError {
     #[error("configuration error: {0}")]
     Config(String),
 
+    #[error("validation error: {0}")]
+    Validation(String),
+
     #[error("database error: {0}")]
     Database(Box<sqlx::Error>),
+
+    #[error("migration error: {0}")]
+    Migration(Box<sqlx::migrate::MigrateError>),
 }
 
 impl From<sqlx::Error> for AppError {
@@ -31,10 +37,21 @@ impl From<sqlx::Error> for AppError {
     }
 }
 
+impl From<sqlx::migrate::MigrateError> for AppError {
+    fn from(source: sqlx::migrate::MigrateError) -> Self {
+        Self::Migration(Box::new(source))
+    }
+}
+
 impl AppError {
     /// Build an internal error without leaking internals to the UI.
     pub fn internal(message: impl Into<String>) -> Self {
         Self::Internal(message.into())
+    }
+
+    /// Build a validation error for data rejected by an invariant check.
+    pub fn validation(message: impl Into<String>) -> Self {
+        Self::Validation(message.into())
     }
 }
 
@@ -61,6 +78,10 @@ mod tests {
         assert_eq!(
             AppError::Config("missing key".into()).to_string(),
             "configuration error: missing key"
+        );
+        assert_eq!(
+            AppError::validation("parent is on another media").to_string(),
+            "validation error: parent is on another media"
         );
     }
 

@@ -3,6 +3,7 @@
 //! `migrations`, `repositories`, `providers`, `image_cache`, `backup`,
 //! `keyring` land with later M2/M7 missions.
 
+pub mod content_node;
 pub mod db;
 pub mod logging;
 

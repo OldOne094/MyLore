@@ -1,10 +1,12 @@
-//! In-memory SQLite harness for unit tests (`cargo test`).
+//! Test harness for `cargo test`.
 //!
-//! `sqlite::memory:` gives each connection its own database, so the pool is
-//! limited to a single connection. Use `crate::infrastructure::db::connect`
-//! for file-backed pools with WAL.
+//! - `in_memory_pool` — in-memory SQLite with pragmas (unit tests; single
+//!   connection so every query hits the same database).
+//! - `temp_db_path` / `cleanup_files` — isolated file-backed DB paths per test.
+//! - `migrated_pool` — a fully-migrated file-backed pool via `db::init`.
 
 use sqlx::sqlite::{SqliteConnectOptions, SqlitePool, SqlitePoolOptions};
+use std::path::{Path, PathBuf};
 use std::{str::FromStr, time::Duration};
 
 /// Create a pool over an in-memory SQLite database with pragmas applied.
@@ -22,6 +24,32 @@ pub async fn in_memory_pool() -> SqlitePool {
         .connect_with(options)
         .await
         .expect("failed to open in-memory database")
+}
+
+/// Unique temp dir per test process; returns a fresh db path.
+pub fn temp_db_path(name: &str) -> PathBuf {
+    let dir = std::env::temp_dir().join(format!("mylore-db-test-{}", std::process::id()));
+    std::fs::create_dir_all(&dir).expect("create temp dir");
+    let path = dir.join(name);
+    cleanup_files(&path);
+    path
+}
+
+/// Remove a database file and its WAL/SHM sidecars.
+pub fn cleanup_files(path: &Path) {
+    let base = path.display().to_string();
+    for suffix in ["", "-wal", "-shm"] {
+        let _ = std::fs::remove_file(format!("{base}{suffix}"));
+    }
+}
+
+/// Open a fully-migrated file-backed pool. Returns the pool and its path.
+pub async fn migrated_pool(name: &str) -> (SqlitePool, PathBuf) {
+    let path = temp_db_path(name);
+    let pool = crate::infrastructure::db::init(&path)
+        .await
+        .expect("init migrated database");
+    (pool, path)
 }
 
 #[cfg(test)]
