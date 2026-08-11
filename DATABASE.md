@@ -50,10 +50,9 @@ CREATE TABLE app_meta (
 );
 
 -- Metadata only. User data lives in separate aggregates (P3).
--- cover_asset_id/banner_asset_id are added in MISSION-017 (with `asset`):
--- SQLite rejects writes to a table whose FK targets a missing parent, so the
--- asset columns are deferred via ALTER TABLE ADD COLUMN. Enum CHECKs match
--- migration 0002.
+-- cover_asset_id/banner_asset_id are added by migration 0006 (MISSION-017),
+-- once `asset` exists, via ALTER TABLE ADD COLUMN ... REFERENCES asset(id).
+-- Enum CHECKs match the migrations.
 CREATE TABLE media (
   id              TEXT PRIMARY KEY,          -- UUID
   content_type    TEXT NOT NULL CHECK (content_type IN
@@ -74,8 +73,8 @@ CREATE TABLE media (
   duration_min    INTEGER,
   ep_count        INTEGER,                   -- estimate/known count
   ch_count        INTEGER,
-  -- cover_asset_id  TEXT REFERENCES asset(id) ON DELETE SET NULL,  (MISSION-017)
-  -- banner_asset_id TEXT REFERENCES asset(id) ON DELETE SET NULL,  (MISSION-017)
+  -- cover_asset_id  TEXT REFERENCES asset(id) ON DELETE SET NULL,  (added in migration 0006)
+  -- banner_asset_id TEXT REFERENCES asset(id) ON DELETE SET NULL,  (added in migration 0006)
   provider        TEXT,                      -- provenance of current metadata
   provider_url    TEXT,
   metadata_refreshed_at TEXT,
@@ -206,8 +205,8 @@ CREATE TABLE review (
   review       TEXT,
   short_review TEXT,
   notes        TEXT,
-  favorite     INTEGER NOT NULL DEFAULT 0,
-  is_spoiler   INTEGER NOT NULL DEFAULT 0,
+  favorite     INTEGER NOT NULL DEFAULT 0 CHECK (favorite IN (0, 1)),
+  is_spoiler   INTEGER NOT NULL DEFAULT 0 CHECK (is_spoiler IN (0, 1)),
   created_at   TEXT NOT NULL,
   updated_at   TEXT NOT NULL
 );
@@ -215,7 +214,7 @@ CREATE TABLE review (
 CREATE TABLE collection (
   id         TEXT PRIMARY KEY,
   name       TEXT NOT NULL,
-  is_smart   INTEGER NOT NULL DEFAULT 0,
+  is_smart   INTEGER NOT NULL DEFAULT 0 CHECK (is_smart IN (0, 1)),
   filter_def TEXT,               -- JSON filter definition for smart collections
   sort_order INTEGER NOT NULL DEFAULT 0,
   created_at TEXT NOT NULL
@@ -230,10 +229,10 @@ CREATE TABLE collection_member (
 
 CREATE TABLE asset (
   id            TEXT PRIMARY KEY,
-  kind          TEXT NOT NULL,       -- cover|banner|avatar|node_image
+  kind          TEXT NOT NULL CHECK (kind IN ('cover','banner','avatar','node_image')),
   remote_url    TEXT,
   local_path    TEXT,
-  status        TEXT NOT NULL DEFAULT 'remote', -- remote|cached|failed|missing
+  status        TEXT NOT NULL DEFAULT 'remote' CHECK (status IN ('remote','cached','failed','missing')),
   mime_type     TEXT,
   width         INTEGER,
   height        INTEGER,
@@ -242,6 +241,8 @@ CREATE TABLE asset (
   created_at    TEXT NOT NULL
 );
 
+-- provider_setting: not yet assigned to a mission (API keys via OS keyring;
+-- created with the provider configuration work, MISSION-063).
 CREATE TABLE provider_setting (
   provider  TEXT PRIMARY KEY,
   enabled   INTEGER NOT NULL DEFAULT 1,
@@ -260,7 +261,8 @@ CREATE TABLE activity (
   id         TEXT PRIMARY KEY,
   media_id   TEXT REFERENCES media(id) ON DELETE CASCADE,
   node_id    TEXT REFERENCES content_node(id) ON DELETE CASCADE,
-  kind       TEXT NOT NULL,      -- added|started|progress|completed|repeat|reviewed|deleted|merged|imported
+  kind       TEXT NOT NULL CHECK (kind IN
+               ('added','started','progress','completed','repeat','reviewed','deleted','merged','imported')),
   meta       TEXT,               -- JSON
   created_at TEXT NOT NULL
 );
@@ -269,10 +271,10 @@ CREATE INDEX idx_activity_media ON activity(media_id, created_at);
 -- Trash / recovery (REQ-MEDIA-007)
 CREATE TABLE trash (
   id           TEXT PRIMARY KEY,
-  kind         TEXT NOT NULL,    -- media|merge|bulk
+  kind         TEXT NOT NULL CHECK (kind IN ('media','merge','bulk')),
   payload      TEXT NOT NULL,    -- full JSON before-image
   deleted_at   TEXT NOT NULL,
-  restored     INTEGER NOT NULL DEFAULT 0
+  restored     INTEGER NOT NULL DEFAULT 0 CHECK (restored IN (0, 1))
 );
 ```
 
@@ -326,13 +328,13 @@ Cross-row invariants that SQLite cannot express are enforced by Rust validators
 
 ## 6. Migrations
 
-- Versioned `.sql` files (`migrations/0001_init.sql`, `0002_media.sql`, `0003_content_node.sql`,
-  `0004_media_identity.sql`, `0005_tracking.sql`, …) run through `sqlx::migrate!` at startup,
-  each **inside a transaction** (verified 2026: sqlx-sqlite wraps migration SQL + bookkeeping in a
-  single transaction; see `migrate.rs`). Wired as `db::migrate` in MISSION-012.
-- MISSION-017 adds `cover_asset_id`/`banner_asset_id` to `media` via `ALTER TABLE ADD COLUMN`
-  (SQLite rejects writes through an FK pointing at a missing parent, so the columns must wait
-  for the `asset` table).
+- Versioned `.sql` files (`migrations/0001_init.sql` … `0006_user_aggregates.sql`, …) run through
+  `sqlx::migrate!` at startup, each **inside a transaction** (verified 2026: sqlx-sqlite wraps
+  migration SQL + bookkeeping in a single transaction; see `migrate.rs`). Wired as `db::migrate`
+  in MISSION-012.
+- Migration 0006 adds `media.cover_asset_id`/`banner_asset_id` via `ALTER TABLE ADD COLUMN`
+  after `asset` exists (SQLite rejects writes through an FK pointing at a missing parent, so the
+  columns had to wait for the `asset` table).
 - Policy:
   - Never edit an applied migration.
   - Backward-compatible only (additive) for app updates; destructive changes happen in the next

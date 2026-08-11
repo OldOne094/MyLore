@@ -769,4 +769,245 @@ mod tests {
         pool.close().await;
         cleanup_files(&path);
     }
+
+    #[tokio::test]
+    async fn user_aggregate_tables_created() {
+        let (pool, path) = migrated_pool("user_agg_schema.db").await;
+
+        for table in [
+            "review",
+            "collection",
+            "collection_member",
+            "asset",
+            "activity",
+            "trash",
+            "settings",
+        ] {
+            let (found,): (i64,) = sqlx::query_as(
+                "SELECT COUNT(*) FROM sqlite_master WHERE type = 'table' AND name = ?",
+            )
+            .bind(table)
+            .fetch_one(&pool)
+            .await
+            .expect("check table exists");
+            assert_eq!(found, 1, "{table} table should exist after migration");
+        }
+
+        let (asset_columns,): (i64,) = sqlx::query_as(
+            "SELECT COUNT(*) FROM pragma_table_info('media') WHERE name IN ('cover_asset_id', 'banner_asset_id')",
+        )
+        .fetch_one(&pool)
+        .await
+        .unwrap();
+        assert_eq!(
+            asset_columns, 2,
+            "media should have the deferred asset columns"
+        );
+
+        pool.close().await;
+        cleanup_files(&path);
+    }
+
+    #[tokio::test]
+    async fn media_cover_asset_fk_sets_null_on_delete() {
+        let (pool, path) = migrated_pool("media_asset_fk.db").await;
+        insert_media(&pool, "m-1").await;
+        sqlx::query(
+            "INSERT INTO asset (id, kind, created_at) VALUES ('a-1', 'cover', '2026-01-01')",
+        )
+        .execute(&pool)
+        .await
+        .unwrap();
+        sqlx::query("UPDATE media SET cover_asset_id = 'a-1' WHERE id = 'm-1'")
+            .execute(&pool)
+            .await
+            .unwrap();
+
+        sqlx::query("DELETE FROM asset WHERE id = 'a-1'")
+            .execute(&pool)
+            .await
+            .unwrap();
+
+        let (cover,): (Option<String>,) =
+            sqlx::query_as("SELECT cover_asset_id FROM media WHERE id = 'm-1'")
+                .fetch_one(&pool)
+                .await
+                .unwrap();
+        assert_eq!(
+            cover, None,
+            "deleting an asset must SET NULL on media.cover_asset_id"
+        );
+
+        pool.close().await;
+        cleanup_files(&path);
+    }
+
+    #[tokio::test]
+    async fn review_checks_and_cascade() {
+        let (pool, path) = migrated_pool("review.db").await;
+        insert_media(&pool, "m-1").await;
+        insert_media(&pool, "m-2").await;
+
+        sqlx::query(
+            "INSERT INTO review (media_id, rating, favorite, created_at, updated_at)
+             VALUES ('m-1', 8, 1, '2026-01-01', '2026-01-01')",
+        )
+        .execute(&pool)
+        .await
+        .expect("valid review");
+
+        for rating in [0i64, 11] {
+            let out_of_range = sqlx::query(
+                "INSERT INTO review (media_id, rating, created_at, updated_at)
+                 VALUES ('m-2', ?, '2026-01-01', '2026-01-01')",
+            )
+            .bind(rating)
+            .execute(&pool)
+            .await;
+            assert!(out_of_range.is_err(), "rating CHECK must reject {rating}");
+        }
+
+        let bad_favorite = sqlx::query(
+            "INSERT INTO review (media_id, favorite, created_at, updated_at)
+             VALUES ('m-2', -1, '2026-01-01', '2026-01-01')",
+        )
+        .execute(&pool)
+        .await;
+        assert!(bad_favorite.is_err(), "favorite CHECK must reject -1");
+
+        sqlx::query("DELETE FROM media WHERE id = 'm-1'")
+            .execute(&pool)
+            .await
+            .unwrap();
+        let (count,): (i64,) = sqlx::query_as("SELECT COUNT(*) FROM review")
+            .fetch_one(&pool)
+            .await
+            .unwrap();
+        assert_eq!(count, 0, "review should cascade-delete with media");
+
+        pool.close().await;
+        cleanup_files(&path);
+    }
+
+    #[tokio::test]
+    async fn collection_members_cascade_both_ways() {
+        let (pool, path) = migrated_pool("collection.db").await;
+        insert_media(&pool, "m-1").await;
+        insert_media(&pool, "m-2").await;
+        sqlx::query(
+            "INSERT INTO collection (id, name, created_at) VALUES ('c-1', 'Reading', '2026-01-01')",
+        )
+        .execute(&pool)
+        .await
+        .unwrap();
+        for media_id in ["m-1", "m-2"] {
+            sqlx::query(
+                "INSERT INTO collection_member (collection_id, media_id, added_at) VALUES ('c-1', ?, '2026-01-01')",
+            )
+            .bind(media_id)
+            .execute(&pool)
+            .await
+            .unwrap();
+        }
+
+        sqlx::query("DELETE FROM media WHERE id = 'm-2'")
+            .execute(&pool)
+            .await
+            .unwrap();
+        let (after_media_delete,): (i64,) =
+            sqlx::query_as("SELECT COUNT(*) FROM collection_member WHERE collection_id = 'c-1'")
+                .fetch_one(&pool)
+                .await
+                .unwrap();
+        assert_eq!(
+            after_media_delete, 1,
+            "collection_member should cascade-delete with media"
+        );
+
+        sqlx::query("DELETE FROM collection WHERE id = 'c-1'")
+            .execute(&pool)
+            .await
+            .unwrap();
+        let (count,): (i64,) = sqlx::query_as("SELECT COUNT(*) FROM collection_member")
+            .fetch_one(&pool)
+            .await
+            .unwrap();
+        assert_eq!(
+            count, 0,
+            "collection_member should cascade-delete with collection"
+        );
+
+        pool.close().await;
+        cleanup_files(&path);
+    }
+
+    #[tokio::test]
+    async fn activity_checks_and_cascade() {
+        let (pool, path) = migrated_pool("activity.db").await;
+        insert_media(&pool, "m-1").await;
+
+        sqlx::query("INSERT INTO activity (id, media_id, kind, created_at) VALUES ('a-1', 'm-1', 'added', '2026-01-01')")
+            .execute(&pool)
+            .await
+            .expect("valid activity kind");
+
+        let bad_kind = sqlx::query(
+            "INSERT INTO activity (id, kind, created_at) VALUES ('a-2', 'watched', '2026-01-01')",
+        )
+        .execute(&pool)
+        .await;
+        assert!(
+            bad_kind.is_err(),
+            "activity kind CHECK must reject unknown values"
+        );
+
+        sqlx::query("DELETE FROM media WHERE id = 'm-1'")
+            .execute(&pool)
+            .await
+            .unwrap();
+        let (count,): (i64,) = sqlx::query_as("SELECT COUNT(*) FROM activity")
+            .fetch_one(&pool)
+            .await
+            .unwrap();
+        assert_eq!(count, 0, "activity should cascade-delete with media");
+
+        pool.close().await;
+        cleanup_files(&path);
+    }
+
+    #[tokio::test]
+    async fn trash_kind_check_and_settings_roundtrip() {
+        let (pool, path) = migrated_pool("trash_settings.db").await;
+
+        let bad_kind = sqlx::query(
+            "INSERT INTO trash (id, kind, payload, deleted_at) VALUES ('t-1', 'file', '{}', '2026-01-01')",
+        )
+        .execute(&pool)
+        .await;
+        assert!(
+            bad_kind.is_err(),
+            "trash kind CHECK must reject unknown values"
+        );
+
+        sqlx::query(
+            "INSERT INTO trash (id, kind, payload, deleted_at) VALUES ('t-2', 'media', '{}', '2026-01-01')",
+        )
+        .execute(&pool)
+        .await
+        .expect("valid trash row");
+
+        sqlx::query("INSERT INTO settings (key, value) VALUES ('ui.language', 'ar')")
+            .execute(&pool)
+            .await
+            .unwrap();
+        let (value,): (String,) =
+            sqlx::query_as("SELECT value FROM settings WHERE key = 'ui.language'")
+                .fetch_one(&pool)
+                .await
+                .unwrap();
+        assert_eq!(value, "ar", "settings should roundtrip values");
+
+        pool.close().await;
+        cleanup_files(&path);
+    }
 }
