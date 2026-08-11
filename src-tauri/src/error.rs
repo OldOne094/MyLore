@@ -43,6 +43,14 @@ impl From<sqlx::migrate::MigrateError> for AppError {
     }
 }
 
+impl From<crate::domain::DomainError> for AppError {
+    fn from(source: crate::domain::DomainError) -> Self {
+        match source {
+            crate::domain::DomainError::Validation(message) => Self::Validation(message),
+        }
+    }
+}
+
 impl AppError {
     /// Build an internal error without leaking internals to the UI.
     pub fn internal(message: impl Into<String>) -> Self {

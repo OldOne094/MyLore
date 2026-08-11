@@ -1,7 +1,22 @@
-//! Domain layer: entities, value objects, invariants (pure, no I/O).
+//! Domain layer: entities, value objects, enums, invariants (MISSION-022).
 //!
-//! `media`, `content_node`, `tracking`, `review`, `identity`, `status`,
-//! `progress`, `merge`, `stats` land with the domain milestone (M3).
+//! Pure and side-effect-free: no SQL, no I/O, no UI. Persistence happens in
+//! `infrastructure`; the application layer maps `DomainError` to `AppError` at
+//! the boundary.
+//!
+//! Entity layout follows `DOMAIN_MODEL.md`:
+//!   - `media`        — metadata aggregate (Media, MediaRuntime, PersonCredit, …)
+//!   - `content_node` — generic node tree + per-node progress
+//!   - `tracking`     — per-media user state
+//!   - `review`       — user rating / review / notes / favorite
+//!   - `value_objects`/`enums` — immutable values and `CHECK`-aligned enums
 
-/// Placeholder to keep the crate skeleton compiling until M3 domain types land.
-pub struct Placeholder;
+pub mod content_node;
+pub mod enums;
+pub mod error;
+pub mod media;
+pub mod review;
+pub mod tracking;
+pub mod value_objects;
+
+pub use error::DomainError;
