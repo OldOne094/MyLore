@@ -4,6 +4,7 @@ import { RouterProvider } from "react-router";
 import { initTheme } from "@/themes/theme";
 import { ThemeProvider } from "@/themes/ThemeProvider";
 import { ToastProvider } from "@/components/ui";
+import { PreferencesProvider } from "@/preferences/PreferencesProvider";
 import { router } from "@/router";
 import "@/i18n";
 import { initI18n } from "@/i18n";
@@ -18,9 +19,11 @@ initI18n();
 ReactDOM.createRoot(document.getElementById("root") as HTMLElement).render(
   <React.StrictMode>
     <ThemeProvider>
-      <ToastProvider>
-        <RouterProvider router={router} />
-      </ToastProvider>
+      <PreferencesProvider>
+        <ToastProvider>
+          <RouterProvider router={router} />
+        </ToastProvider>
+      </PreferencesProvider>
     </ThemeProvider>
   </React.StrictMode>,
 );

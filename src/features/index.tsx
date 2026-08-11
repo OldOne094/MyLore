@@ -21,4 +21,4 @@ export const CollectionsPage = placeholder("/collections");
 export const ReviewsPage = placeholder("/reviews");
 export const StatsPage = placeholder("/stats");
 export const CalendarPage = placeholder("/calendar");
-export const SettingsPage = placeholder("/settings");
+export { SettingsPage } from "@/features/settings/SettingsPage";

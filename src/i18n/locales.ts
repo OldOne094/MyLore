@@ -37,6 +37,12 @@ const en = {
   page: {
     status_bar: "Status bar",
   },
+  settings: {
+    theme: "Theme",
+    themeHint: "Light, dark, or follow the system appearance.",
+    language: "Language",
+    languageHint: "Interface language. Arabic switches the layout to RTL.",
+  },
 } as const;
 
 /* Arabic tree. Not annotated against `typeof en` because Arabic carries extra
@@ -81,6 +87,12 @@ const ar = {
   },
   page: {
     status_bar: "شريط الحالة",
+  },
+  settings: {
+    theme: "السمة",
+    themeHint: "فاتح، داكن، أو تتبُّع مظهر النظام.",
+    language: "اللغة",
+    languageHint: "لغة الواجهة. العربية تُحوِّل التخطيط إلى RTL.",
   },
 };
 
