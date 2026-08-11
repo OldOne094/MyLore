@@ -43,6 +43,13 @@ const en = {
     language: "Language",
     languageHint: "Interface language. Arabic switches the layout to RTL.",
   },
+  palette: {
+    title: "Command palette",
+    placeholder: "Type a command or search…",
+    empty: "No matching commands.",
+    group_navigation: "Navigation",
+    group_actions: "Actions",
+  },
 } as const;
 
 /* Arabic tree. Not annotated against `typeof en` because Arabic carries extra
@@ -93,6 +100,13 @@ const ar = {
     themeHint: "فاتح، داكن، أو تتبُّع مظهر النظام.",
     language: "اللغة",
     languageHint: "لغة الواجهة. العربية تُحوِّل التخطيط إلى RTL.",
+  },
+  palette: {
+    title: "لوحة الأوامر",
+    placeholder: "اكتب أمراً أو ابحث…",
+    empty: "لا توجد أوامر مطابقة.",
+    group_navigation: "التنقل",
+    group_actions: "إجراءات",
   },
 };
 

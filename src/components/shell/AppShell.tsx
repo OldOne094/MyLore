@@ -2,6 +2,7 @@ import { Outlet } from "react-router";
 import { NavRail } from "./NavRail";
 import { TopBar } from "./TopBar";
 import { StatusBar } from "./StatusBar";
+import { CommandPalette } from "@/features/command-palette/CommandPalette";
 
 /* App shell (MISSION-032): nav rail + top bar + status bar around the routed
    content. Layout uses logical flow so it mirrors in RTL for Arabic. */
@@ -17,6 +18,7 @@ export function AppShell() {
         </main>
         <StatusBar />
       </div>
+      <CommandPalette />
     </div>
   );
 }

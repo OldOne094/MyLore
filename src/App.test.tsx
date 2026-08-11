@@ -4,6 +4,7 @@ import userEvent from "@testing-library/user-event";
 import { createMemoryRouter, RouterProvider } from "react-router";
 import { ThemeProvider } from "@/themes/ThemeProvider";
 import { ToastProvider } from "@/components/ui";
+import { PreferencesProvider } from "@/preferences/PreferencesProvider";
 import { appRoutes } from "@/routes";
 import "@/i18n";
 import i18n from "@/i18n";
@@ -12,9 +13,11 @@ function renderApp(initialEntry = "/") {
   const router = createMemoryRouter(appRoutes, { initialEntries: [initialEntry] });
   return render(
     <ThemeProvider>
-      <ToastProvider>
-        <RouterProvider router={router} />
-      </ToastProvider>
+      <PreferencesProvider>
+        <ToastProvider>
+          <RouterProvider router={router} />
+        </ToastProvider>
+      </PreferencesProvider>
     </ThemeProvider>,
   );
 }

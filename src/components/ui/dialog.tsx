@@ -14,9 +14,11 @@ export interface DialogContentProps extends ComponentPropsWithoutRef<
   typeof DialogPrimitive.Content
 > {
   children: ReactNode;
+  /** Drop the default padding (e.g. for a command palette's flush layout). */
+  noPadding?: boolean;
 }
 
-export function DialogContent({ className, children, ...props }: DialogContentProps) {
+export function DialogContent({ className, children, noPadding, ...props }: DialogContentProps) {
   return (
     <DialogPrimitive.Portal>
       <DialogPrimitive.Overlay className="fixed inset-0 z-50 bg-black/50 backdrop-blur-sm" />
@@ -25,7 +27,8 @@ export function DialogContent({ className, children, ...props }: DialogContentPr
           "fixed left-1/2 top-1/2 z-50 w-[calc(100%-2rem)] max-w-lg",
           "translate-x-[-50%] translate-y-[-50%]",
           "rounded-lg border border-border-subtle bg-bg-raised shadow-lg",
-          "p-6 outline-none",
+          !noPadding && "p-6",
+          "outline-none",
           className,
         )}
         {...props}
