@@ -58,6 +58,7 @@ Legend — **Pri:** Core (must ship) · Important (should ship) · Optional (if 
 
 | Mission | Status |
 |---------|--------|
+| MISSION-009 Typed IPC boundary + codegen | **REVIEW** — contract in `scripts/ipc-contract.json` ✓ · `npm run codegen` → `src/api/ipc.generated.ts` ✓ · drift-guard (Rust #[command] scan + --check) ✓ · App.tsx uses typed `greet` ✓ · 4/4 tests ✓ · lint/build ✓ |
 | MISSION-008 Logging (tracing → rolling file, no secrets) + `AppError` | **REVIEW** — clippy -D warnings ✓ · 6/6 tests ✓ · cargo build ✓ · rolling daily logs + stdout ✓ · AppError→frontend as string ✓ |
 | MISSION-007 GitHub Actions CI (win/ubuntu/macos) | **REVIEW** — actionlint ✓ · prettier ✓ · all steps pass locally (fmt/clippy/test/build/lint) |
 | MISSION-006 Rust unit-test harness + in-memory sqlite helper | **DONE** (2026-08-11) — `cargo test` 2/2 ✓ · clippy -D warnings ✓ · fmt ✓ |

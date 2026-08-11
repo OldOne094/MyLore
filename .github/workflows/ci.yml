@@ -67,6 +67,9 @@ jobs:
       - name: ESLint
         run: npm run lint
 
+      - name: IPC codegen check
+        run: npm run codegen:check
+
       - name: Prettier check
         run: npm run format:check
 

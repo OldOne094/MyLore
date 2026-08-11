@@ -1,0 +1,13 @@
+{
+  "$comment": "Single source of truth for the typed IPC boundary. Edit this file, then run `npm run codegen` to regenerate src/api/ipc.generated.ts. Type expressions: string | number | boolean | null | any | unknown | void | `T[]` | `Record<string, T>` | anything else passes through raw TS.",
+  "version": 1,
+  "commands": [
+    {
+      "name": "greet",
+      "args": { "name": "string" },
+      "returns": "string",
+      "doc": "Placeholder greeting command (create-tauri-app scaffold). Resolves with the greeting or rejects with an AppError string."
+    }
+  ],
+  "events": []
+}
