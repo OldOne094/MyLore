@@ -136,6 +136,23 @@ string_enum! {
     }
 }
 
+impl CoreStatus {
+    /// Terminal buckets: the media is finished (completed / dropped).
+    pub fn is_terminal(self) -> bool {
+        matches!(self, Self::Completed | Self::Dropped)
+    }
+
+    /// Active buckets: content is being consumed right now.
+    pub fn is_active(self) -> bool {
+        matches!(self, Self::InProgress | Self::Repeat)
+    }
+
+    /// Not-started buckets: nothing has been consumed yet.
+    pub fn is_not_started(self) -> bool {
+        matches!(self, Self::Planned | Self::Wishlist)
+    }
+}
+
 string_enum! {
     /// Person roles on media (person.role CHECK).
     PersonRole {

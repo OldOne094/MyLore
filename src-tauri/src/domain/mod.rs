@@ -10,6 +10,7 @@
 //!   - `tracking`     — per-media user state
 //!   - `review`       — user rating / review / notes / favorite
 //!   - `progress`     — derived progress templates + aggregation engine
+//!   - `status`       — status engine: transitions, custom statuses, auto-rules
 //!   - `value_objects`/`enums` — immutable values and `CHECK`-aligned enums
 
 pub mod content_node;
@@ -18,6 +19,7 @@ pub mod error;
 pub mod media;
 pub mod progress;
 pub mod review;
+pub mod status;
 pub mod tracking;
 pub mod value_objects;
 
