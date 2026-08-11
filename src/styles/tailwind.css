@@ -1,0 +1,62 @@
+/* Tailwind entry — maps the MyLore design tokens (tokens.css) onto Tailwind
+   utilities so primitives can use bg-bg-surface, text-text-primary, rounded-md,
+   shadow-lg, etc. The values dereference the theme custom properties, so every
+   utility is theme-aware (light/dark via data-theme). MISSION-031. */
+
+@import "tailwindcss";
+
+@theme {
+  /* Surfaces & borders */
+  --color-bg-base: var(--bg-base);
+  --color-bg-surface: var(--bg-surface);
+  --color-bg-raised: var(--bg-raised);
+  --color-bg-hover: var(--bg-hover);
+  --color-border-subtle: var(--border-subtle);
+  --color-border-strong: var(--border-strong);
+
+  /* Text */
+  --color-text-primary: var(--text-primary);
+  --color-text-secondary: var(--text-secondary);
+  --color-text-tertiary: var(--text-tertiary);
+
+  /* Semantic */
+  --color-accent: var(--accent);
+  --color-accent-hover: var(--accent-hover);
+  --color-accent-soft: var(--accent-soft);
+  --color-ok: var(--ok);
+  --color-warn: var(--warn);
+  --color-danger: var(--danger);
+  --color-info: var(--info);
+
+  /* Status → color (DESIGN_SYSTEM.md §2) */
+  --color-status-planned: var(--status-planned);
+  --color-status-inprogress: var(--status-inprogress);
+  --color-status-completed: var(--status-completed);
+  --color-status-onhold: var(--status-onhold);
+  --color-status-dropped: var(--status-dropped);
+  --color-status-repeat: var(--status-repeat);
+
+  /* Fonts (DESIGN_SYSTEM.md §3) */
+  --font-sans: var(--font-ui);
+  --font-mono: "SF Mono", "Cascadia Code", "JetBrains Mono", Consolas, monospace;
+
+  /* Type scale (rem) */
+  --text-2xs: 0.75rem; /* 12 */
+  --text-xs: 0.8125rem; /* 13 */
+  --text-sm: 0.875rem; /* 14 */
+  --text-base: 1rem; /* 16 */
+  --text-lg: 1.25rem; /* 20 */
+  --text-xl: 1.75rem; /* 28 */
+  --text-2xl: 2.25rem; /* 36 */
+
+  /* Radius (DESIGN_SYSTEM.md §4) */
+  --radius-sm: 0.375rem; /* 6  */
+  --radius-md: 0.625rem; /* 10 */
+  --radius-lg: 1rem; /* 16 */
+  --radius-full: 999px;
+
+  /* Elevation — aliased (--shadow-* in tokens.css) so Tailwind's --shadow-*
+     theme keys can dereference without self-collision (DESIGN_SYSTEM.md §4) */
+  --shadow-sm: var(--elevation-sm);
+  --shadow-lg: var(--elevation-lg);
+}

@@ -26,5 +26,14 @@ export default tseslint.config(
       globals: globals.node,
     },
   },
+  {
+    // UI primitives intentionally re-export Radix subcomponents and hooks from
+    // one module (e.g. Dialog = Root/Trigger/Content) — fast refresh doesn't
+    // apply to this split, so the only-export-components rule is disabled here.
+    files: ["src/components/ui/**/*.{ts,tsx}"],
+    rules: {
+      "react-refresh/only-export-components": "off",
+    },
+  },
   prettier,
 );

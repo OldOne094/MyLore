@@ -74,8 +74,8 @@
   --warn: #9a6700;
   --danger: #c62828;
   --info: #1565c0;
-  --shadow-sm: 0 1px 2px rgb(28 27 26 / 0.08);
-  --shadow-lg: 0 2px 8px rgb(28 27 26 / 0.08), 0 12px 32px rgb(28 27 26 / 0.16);
+  --elevation-sm: 0 1px 2px rgb(28 27 26 / 0.08);
+  --elevation-lg: 0 2px 8px rgb(28 27 26 / 0.08), 0 12px 32px rgb(28 27 26 / 0.16);
   color-scheme: light;
 }
 
@@ -97,8 +97,8 @@
   --warn: #d9a441;
   --danger: #e57373;
   --info: #64b5f6;
-  --shadow-sm: 0 1px 2px rgb(0 0 0 / 0.4);
-  --shadow-lg: 0 2px 8px rgb(0 0 0 / 0.5), 0 12px 32px rgb(0 0 0 / 0.6);
+  --elevation-sm: 0 1px 2px rgb(0 0 0 / 0.4);
+  --elevation-lg: 0 2px 8px rgb(0 0 0 / 0.5), 0 12px 32px rgb(0 0 0 / 0.6);
   color-scheme: dark;
 }
 

@@ -1,15 +1,9 @@
-import { describe, expect, it, vi, afterEach } from "vitest";
-import { render, screen } from "@testing-library/react";
+import { describe, expect, it, afterEach } from "vitest";
+import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import App from "@/App";
 import { ThemeProvider } from "@/themes/ThemeProvider";
 import { THEME_STORAGE_KEY } from "@/themes/theme";
-
-vi.mock("@tauri-apps/api/core", () => ({
-  invoke: vi.fn().mockResolvedValue("Hello, MyLore! You've been greeted from Rust!"),
-}));
-
-import { invoke } from "@tauri-apps/api/core";
 
 function renderApp() {
   return render(
@@ -25,21 +19,9 @@ afterEach(() => {
 });
 
 describe("App", () => {
-  it("renders the scaffold heading", () => {
+  it("renders the primitives scaffold heading", () => {
     renderApp();
-    expect(screen.getByText("Welcome to MyLore")).toBeInTheDocument();
-  });
-
-  it("greets the user through the Tauri command", async () => {
-    const user = userEvent.setup();
-    renderApp();
-
-    const input = screen.getByPlaceholderText("Enter a name...");
-    await user.type(input, "MyLore");
-    await user.click(screen.getByRole("button", { name: "Greet" }));
-
-    expect(await screen.findByText(/You've been greeted from Rust!/)).toBeInTheDocument();
-    expect(invoke).toHaveBeenCalledWith("greet", { name: "MyLore" });
+    expect(screen.getByText("Design-system primitives")).toBeInTheDocument();
   });
 
   it("switches the applied theme and persists the choice", async () => {
@@ -54,5 +36,36 @@ describe("App", () => {
 
     await user.click(screen.getByRole("button", { name: "light" }));
     expect(document.documentElement.getAttribute("data-theme")).toBe("light");
+  });
+
+  it("validates the field and clears the error on input", async () => {
+    const user = userEvent.setup();
+    renderApp();
+
+    await user.click(screen.getByRole("button", { name: "Save" }));
+    expect(await screen.findByRole("alert")).toHaveTextContent("Name is required");
+
+    await user.type(screen.getByLabelText("Library name"), "Shelf");
+    expect(screen.queryByRole("alert")).not.toBeInTheDocument();
+  });
+
+  it("opens and closes the dialog", async () => {
+    const user = userEvent.setup();
+    renderApp();
+
+    await user.click(screen.getByRole("button", { name: "Open dialog" }));
+    expect(screen.getByRole("dialog")).toBeInTheDocument();
+    expect(screen.getByText("Edit entry")).toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: "Cancel" }));
+    await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
+  });
+
+  it("shows a success toast", async () => {
+    const user = userEvent.setup();
+    renderApp();
+
+    await user.click(screen.getByRole("button", { name: "Success toast" }));
+    expect(await screen.findByText("Saved")).toBeInTheDocument();
   });
 });

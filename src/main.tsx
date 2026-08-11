@@ -3,6 +3,7 @@ import ReactDOM from "react-dom/client";
 import App from "@/App";
 import { initTheme } from "@/themes/theme";
 import { ThemeProvider } from "@/themes/ThemeProvider";
+import "@/styles/tailwind.css";
 import "@/design-tokens/tokens.css";
 import "@/styles/global.css";
 

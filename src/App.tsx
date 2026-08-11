@@ -1,80 +1,184 @@
-import { useState } from "react";
-import reactLogo from "./assets/react.svg";
-import { greet } from "@/api";
+import { useState, type FormEvent } from "react";
 import { useTheme } from "@/themes/useTheme";
 import type { ThemePreference } from "@/themes/theme";
+import {
+  Badge,
+  Button,
+  Dialog,
+  DialogClose,
+  DialogContent,
+  DialogDescription,
+  DialogTitle,
+  DialogTrigger,
+  InputField,
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+  Skeleton,
+  ToastProvider,
+  useToast,
+} from "@/components/ui";
 import "./App.css";
 
 const THEME_CHOICES: ThemePreference[] = ["light", "dark", "system"];
 
-function App() {
-  const [greetMsg, setGreetMsg] = useState("");
-  const [name, setName] = useState("");
-  const { theme, preference, setPreference } = useTheme();
+function ThemeSwitcher() {
+  const { preference, setPreference } = useTheme();
+  return (
+    <div className="theme-switcher" aria-label="Theme">
+      {THEME_CHOICES.map((choice) => (
+        <button
+          key={choice}
+          type="button"
+          className={`theme-switcher__option${preference === choice ? " is-active" : ""}`}
+          aria-pressed={preference === choice}
+          onClick={() => setPreference(choice)}
+        >
+          {choice}
+        </button>
+      ))}
+    </div>
+  );
+}
 
-  async function onGreet() {
-    setGreetMsg(await greet({ name }));
+function FieldDemo() {
+  const [value, setValue] = useState("");
+  const [error, setError] = useState<string | undefined>();
+
+  function onSubmit(event: FormEvent) {
+    event.preventDefault();
+    setError(value.trim() ? undefined : "Name is required");
   }
 
   return (
-    <main className="shell">
-      <header className="shell__header">
-        <span className="shell__brand">MyLore</span>
-        <div className="theme-switcher" aria-label="Theme">
-          {THEME_CHOICES.map((choice) => (
-            <button
-              key={choice}
-              type="button"
-              className={`theme-switcher__option${preference === choice ? " is-active" : ""}`}
-              aria-pressed={preference === choice}
-              onClick={() => setPreference(choice)}
-            >
-              {choice}
-            </button>
-          ))}
-        </div>
-      </header>
+    <form className="stack" onSubmit={onSubmit}>
+      <InputField
+        label="Library name"
+        placeholder="e.g. My shelf"
+        value={value}
+        error={error}
+        onChange={(e) => {
+          setValue(e.currentTarget.value);
+          if (error) setError(undefined);
+        }}
+      />
+      <Button type="submit">Save</Button>
+    </form>
+  );
+}
 
-      <section className="card">
-        <h1 className="card__title">Welcome to MyLore</h1>
-        <p className="card__hint">
-          Current theme: <strong className="card__theme">{theme}</strong>
-        </p>
+function ToastDemo() {
+  const toast = useToast();
+  return (
+    <div className="row">
+      <Button
+        variant="secondary"
+        onClick={() => toast.success({ title: "Saved", description: "The record was updated." })}
+      >
+        Success toast
+      </Button>
+      <Button
+        variant="danger"
+        onClick={() => toast.error({ title: "Import failed", description: "No new records." })}
+      >
+        Error toast
+      </Button>
+      <Button
+        variant="secondary"
+        onClick={() =>
+          toast.info({ title: "Merged 2 entries", action: { label: "Undo", onClick: () => {} } })
+        }
+      >
+        Undo toast
+      </Button>
+    </div>
+  );
+}
 
-        <div className="row">
-          <a href="https://vite.dev" target="_blank" rel="noreferrer">
-            <img src="/vite.svg" className="logo logo--vite" alt="Vite logo" />
-          </a>
-          <a href="https://tauri.app" target="_blank" rel="noreferrer">
-            <img src="/tauri.svg" className="logo logo--tauri" alt="Tauri logo" />
-          </a>
-          <a href="https://react.dev" target="_blank" rel="noreferrer">
-            <img src={reactLogo} className="logo logo--react" alt="React logo" />
-          </a>
-        </div>
+function App() {
+  return (
+    <ToastProvider>
+      <main className="shell">
+        <header className="shell__header">
+          <span className="shell__brand">MyLore</span>
+          <ThemeSwitcher />
+        </header>
 
-        <form
-          className="row row--form"
-          onSubmit={(e) => {
-            e.preventDefault();
-            void onGreet();
-          }}
-        >
-          <input
-            id="greet-input"
-            className="field"
-            onChange={(e) => setName(e.currentTarget.value)}
-            placeholder="Enter a name..."
-          />
-          <button type="submit" className="button button--primary">
-            Greet
-          </button>
-        </form>
-        <p className="card__msg" aria-live="polite">
-          {greetMsg}
-        </p>
-      </section>
-    </main>
+        <section className="card" aria-labelledby="demo-heading">
+          <h1 id="demo-heading" className="card__title">
+            Design-system primitives
+          </h1>
+          <p className="card__hint">Token-driven UI on Radix (MISSION-031).</p>
+
+          <div className="stack">
+            <FieldDemo />
+          </div>
+
+          <div className="row">
+            <Button variant="primary">Primary</Button>
+            <Button variant="secondary">Secondary</Button>
+            <Button variant="ghost">Ghost</Button>
+            <Button variant="danger">Danger</Button>
+            <Button variant="secondary" size="sm">
+              Small
+            </Button>
+          </div>
+
+          <div className="row">
+            <Badge variant="planned">Planned</Badge>
+            <Badge variant="inprogress">In progress</Badge>
+            <Badge variant="completed">Completed</Badge>
+            <Badge variant="onhold">On hold</Badge>
+            <Badge variant="dropped">Dropped</Badge>
+            <Badge variant="repeat">Repeat</Badge>
+            <Badge>Neutral</Badge>
+          </div>
+
+          <div className="row">
+            <Dialog>
+              <DialogTrigger asChild>
+                <Button variant="secondary">Open dialog</Button>
+              </DialogTrigger>
+              <DialogContent aria-describedby={undefined}>
+                <DialogTitle>Edit entry</DialogTitle>
+                <DialogDescription>
+                  Make changes to the entry. Press Esc to close.
+                </DialogDescription>
+                <div className="row row--padded">
+                  <DialogClose asChild>
+                    <Button variant="secondary">Cancel</Button>
+                  </DialogClose>
+                  <DialogClose asChild>
+                    <Button>Save</Button>
+                  </DialogClose>
+                </div>
+              </DialogContent>
+            </Dialog>
+
+            <Popover>
+              <PopoverTrigger asChild>
+                <Button variant="secondary">Quick actions</Button>
+              </PopoverTrigger>
+              <PopoverContent align="start">
+                <p className="text-sm text-text-secondary">Mark as watched, rate or move.</p>
+              </PopoverContent>
+            </Popover>
+          </div>
+
+          <div className="stack">
+            <ToastDemo />
+          </div>
+
+          <div className="skeleton-row" aria-label="Loading placeholder">
+            <Skeleton className="size-24" />
+            <div className="stack">
+              <Skeleton className="h-4 w-40" />
+              <Skeleton className="h-4 w-24" />
+            </div>
+          </div>
+        </section>
+      </main>
+    </ToastProvider>
   );
 }
 
