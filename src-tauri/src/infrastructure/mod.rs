@@ -1,7 +1,9 @@
 //! Infrastructure layer: persistence, providers, fs, keyring, logging.
 //!
 //! `db`, `migrations`, `repositories`, `providers`, `image_cache`,
-//! `backup`, `keyring`, `logging` land with M2/M7.
+//! `backup`, `keyring` land with M2/M7.
+
+pub mod logging;
 
 #[cfg(test)]
 pub mod test_support;

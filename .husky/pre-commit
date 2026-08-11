@@ -1,1 +1,5 @@
-﻿npx lint-staged
+#!/bin/sh
+# Run lint-staged via node directly.
+# On Windows, npm's npx/cmd shims spawn cmd.exe which loses node from PATH;
+# calling node directly bypasses that entirely.
+node "$(dirname "$0")/../node_modules/lint-staged/bin/lint-staged.js"
