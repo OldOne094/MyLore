@@ -1,17 +1,20 @@
 import { NavLink } from "react-router";
+import { useTranslation } from "react-i18next";
 import { NAV_ITEMS } from "@/navigation";
 import { cn } from "@/lib/cn";
 
 /* DESIGN_SYSTEM.md §6 — Primary nav rail: icon + text, active state highlighted.
-   Logical layout mirrors automatically in RTL. */
+   Logical layout mirrors automatically in RTL (MISSION-033). */
 
 export function NavRail() {
+  const { t } = useTranslation();
+
   return (
     <nav
-      aria-label="Primary"
-      className="flex h-full w-56 shrink-0 flex-col gap-1 border-r border-border-subtle bg-bg-surface p-3"
+      aria-label={t("nav.library")}
+      className="flex h-full w-56 shrink-0 flex-col gap-1 border-e border-border-subtle bg-bg-surface p-3"
     >
-      <span className="px-3 pb-2 pt-1 text-sm font-semibold text-accent">MyLore</span>
+      <span className="px-3 pb-2 pt-1 text-sm font-semibold text-accent">{t("shell.brand")}</span>
       {NAV_ITEMS.map((item) => (
         <NavLink
           key={item.path}
@@ -27,7 +30,7 @@ export function NavRail() {
           }
         >
           <item.icon size={18} aria-hidden="true" />
-          {item.label}
+          {t(`nav.${item.key}`)}
         </NavLink>
       ))}
     </nav>

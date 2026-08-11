@@ -5,12 +5,15 @@ import { initTheme } from "@/themes/theme";
 import { ThemeProvider } from "@/themes/ThemeProvider";
 import { ToastProvider } from "@/components/ui";
 import { router } from "@/router";
+import "@/i18n";
+import { initI18n } from "@/i18n";
 import "@/styles/tailwind.css";
 import "@/design-tokens/tokens.css";
 import "@/styles/global.css";
 
-// Apply the persisted (or system) theme before first paint to avoid a flash.
+// Apply persisted theme + locale before first paint to avoid a flash.
 initTheme();
+initI18n();
 
 ReactDOM.createRoot(document.getElementById("root") as HTMLElement).render(
   <React.StrictMode>

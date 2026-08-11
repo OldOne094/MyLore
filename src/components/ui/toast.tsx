@@ -56,7 +56,7 @@ export function ToastProvider({ children, duration = 5000 }: ToastProviderProps)
     <ToastContext.Provider value={value}>
       <ToastPrimitive.Provider duration={duration} swipeDirection="right">
         {children}
-        <ToastPrimitive.Viewport className="fixed bottom-0 right-0 z-50 flex w-full max-w-sm flex-col gap-2 p-4 outline-none" />
+        <ToastPrimitive.Viewport className="fixed bottom-0 end-0 z-50 flex w-full max-w-sm flex-col gap-2 p-4 outline-none" />
         {toasts.map((toast) => (
           <ToastPrimitive.Root
             key={toast.id}

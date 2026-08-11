@@ -5,6 +5,8 @@ import { createMemoryRouter, RouterProvider } from "react-router";
 import { ThemeProvider } from "@/themes/ThemeProvider";
 import { ToastProvider } from "@/components/ui";
 import { appRoutes } from "@/routes";
+import "@/i18n";
+import i18n from "@/i18n";
 
 function renderApp(initialEntry = "/") {
   const router = createMemoryRouter(appRoutes, { initialEntries: [initialEntry] });
@@ -20,9 +22,12 @@ function renderApp(initialEntry = "/") {
 const LIBRARY_HINT = "Your tracked titles appear here as you add them.";
 const STATS_HINT = "Time watched, pages read and your ratings distribution.";
 
-afterEach(() => {
+afterEach(async () => {
   localStorage.clear();
   document.documentElement.removeAttribute("data-theme");
+  document.documentElement.removeAttribute("dir");
+  document.documentElement.removeAttribute("lang");
+  await i18n.changeLanguage("en");
 });
 
 describe("App shell", () => {
@@ -51,7 +56,16 @@ describe("App shell", () => {
   it("switches the theme from the top bar", async () => {
     const user = userEvent.setup();
     renderApp("/library");
-    await user.click(screen.getByRole("button", { name: "dark" }));
+    await user.click(screen.getByRole("button", { name: "Dark" }));
     expect(document.documentElement.getAttribute("data-theme")).toBe("dark");
+  });
+
+  it("switches the language to Arabic with RTL", async () => {
+    const user = userEvent.setup();
+    renderApp("/library");
+    await user.click(screen.getByRole("button", { name: "ع" }));
+    expect(await screen.findByRole("link", { name: "المكتبة" })).toBeInTheDocument();
+    expect(document.documentElement.getAttribute("dir")).toBe("rtl");
+    expect(document.documentElement.getAttribute("lang")).toBe("ar");
   });
 });

@@ -10,72 +10,26 @@ import {
   type LucideIcon,
 } from "lucide-react";
 
-/* App navigation (MISSION-032). Single place for paths/labels/icons so the nav
-   rail, top bar and routes always agree. */
+/* App navigation (MISSION-032, keys MISSION-033). Single place for paths and
+   i18n keys so the nav rail, top bar and routes always agree. Text lives in
+   the translation resources under `nav.*`. */
 
 export interface NavItem {
   path: string;
-  label: string;
+  /** i18n key for the label/title (nav.<key>). */
+  key: string;
   icon: LucideIcon;
-  pageTitle: string;
-  hint: string;
+  /** i18n key for the empty-state hint (nav.hint_<key>). */
+  hintKey: string;
 }
 
 export const NAV_ITEMS: NavItem[] = [
-  {
-    path: "/library",
-    label: "Library",
-    icon: LibraryBig,
-    pageTitle: "Library",
-    hint: "Your tracked titles appear here as you add them.",
-  },
-  {
-    path: "/search",
-    label: "Search",
-    icon: Search,
-    pageTitle: "Search",
-    hint: "Find titles in your library or add new ones.",
-  },
-  {
-    path: "/discover",
-    label: "Discover",
-    icon: Compass,
-    pageTitle: "Discover",
-    hint: "Explore seasonal charts and recommendations.",
-  },
-  {
-    path: "/collections",
-    label: "Collections",
-    icon: FolderHeart,
-    pageTitle: "Collections",
-    hint: "Group titles into smart and manual collections.",
-  },
-  {
-    path: "/reviews",
-    label: "Reviews",
-    icon: Star,
-    pageTitle: "Reviews",
-    hint: "Write and manage your reviews here.",
-  },
-  {
-    path: "/stats",
-    label: "Stats",
-    icon: BarChart3,
-    pageTitle: "Stats",
-    hint: "Time watched, pages read and your ratings distribution.",
-  },
-  {
-    path: "/calendar",
-    label: "Calendar",
-    icon: Calendar,
-    pageTitle: "Calendar",
-    hint: "Airing schedules and upcoming release dates.",
-  },
-  {
-    path: "/settings",
-    label: "Settings",
-    icon: Settings,
-    pageTitle: "Settings",
-    hint: "Theme, language, data and provider preferences.",
-  },
+  { path: "/library", key: "library", icon: LibraryBig, hintKey: "nav.hint_library" },
+  { path: "/search", key: "search", icon: Search, hintKey: "nav.hint_search" },
+  { path: "/discover", key: "discover", icon: Compass, hintKey: "nav.hint_discover" },
+  { path: "/collections", key: "collections", icon: FolderHeart, hintKey: "nav.hint_collections" },
+  { path: "/reviews", key: "reviews", icon: Star, hintKey: "nav.hint_reviews" },
+  { path: "/stats", key: "stats", icon: BarChart3, hintKey: "nav.hint_stats" },
+  { path: "/calendar", key: "calendar", icon: Calendar, hintKey: "nav.hint_calendar" },
+  { path: "/settings", key: "settings", icon: Settings, hintKey: "nav.hint_settings" },
 ];
