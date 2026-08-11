@@ -1,8 +1,8 @@
 //! In-memory SQLite harness for unit tests (`cargo test`).
 //!
 //! `sqlite::memory:` gives each connection its own database, so the pool is
-//! limited to a single connection. A real file-backed pool with WAL lands with
-//! the Database milestone (M2).
+//! limited to a single connection. Use `crate::infrastructure::db::connect`
+//! for file-backed pools with WAL.
 
 use sqlx::sqlite::{SqliteConnectOptions, SqlitePool, SqlitePoolOptions};
 use std::{str::FromStr, time::Duration};

@@ -58,6 +58,7 @@ Legend — **Pri:** Core (must ship) · Important (should ship) · Optional (if 
 
 | Mission | Status |
 |---------|--------|
+| MISSION-011 sqlx pool + PRAGMAs + startup integrity check | **REVIEW** — `db::init` (FK/WAL/busy_timeout=5s/synchronous=Normal, max 5 conns) ✓ · `PRAGMA integrity_check` at startup ✓ · pool as managed state (`app.manage`) ✓ · `AppError::Database` ✓ · 10/10 tests (pragmas asserted, corrupt db rejected) ✓ · clippy -D warnings ✓ |
 | MISSION-010 Window shell: titlebar, min sizes, app id, CSP | **REVIEW** — productName/identifier `MyLore`/`com.mylore.app` ✓ · window 1100x760 min 900x600 centered ✓ · strict prod CSP (no unsafe-inline) + dev CSP ✓ · config guard test ✓ · cargo build validates ✓ · 7/7 tests ✓ |
 | MISSION-009 Typed IPC boundary + codegen | **REVIEW** — contract in `scripts/ipc-contract.json` ✓ · `npm run codegen` → `src/api/ipc.generated.ts` ✓ · drift-guard (Rust #[command] scan + --check) ✓ · App.tsx uses typed `greet` ✓ · 4/4 tests ✓ · lint/build ✓ |
 | MISSION-008 Logging (tracing → rolling file, no secrets) + `AppError` | **REVIEW** — clippy -D warnings ✓ · 6/6 tests ✓ · cargo build ✓ · rolling daily logs + stdout ✓ · AppError→frontend as string ✓ |

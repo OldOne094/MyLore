@@ -16,8 +16,14 @@ pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
         .setup(|app| {
-            let log_dir = app.path().app_data_dir()?.join("logs");
-            infrastructure::logging::init(&log_dir);
+            let data_dir = app.path().app_data_dir()?;
+            infrastructure::logging::init(&data_dir.join("logs"));
+
+            let db_path = data_dir.join("mylore.db");
+            let pool = tauri::async_runtime::block_on(infrastructure::db::init(&db_path))?;
+            tracing::info!(db = %db_path.display(), "database opened");
+            app.manage(pool);
+
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![commands::greet])

@@ -20,6 +20,15 @@ pub enum AppError {
 
     #[error("configuration error: {0}")]
     Config(String),
+
+    #[error("database error: {0}")]
+    Database(Box<sqlx::Error>),
+}
+
+impl From<sqlx::Error> for AppError {
+    fn from(source: sqlx::Error) -> Self {
+        Self::Database(Box::new(source))
+    }
 }
 
 impl AppError {
@@ -71,5 +80,11 @@ mod tests {
             .unwrap_err()
             .into();
         assert!(matches!(serde_err, AppError::Serde(_)));
+    }
+
+    #[test]
+    fn converts_from_database_error() {
+        let err = AppError::from(sqlx::Error::RowNotFound);
+        assert!(matches!(err, AppError::Database(_)));
     }
 }
