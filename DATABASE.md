@@ -157,8 +157,10 @@ CREATE TABLE media_external_id (
 CREATE TABLE media_relation (
   from_id   TEXT NOT NULL REFERENCES media(id) ON DELETE CASCADE,
   to_id     TEXT NOT NULL REFERENCES media(id) ON DELETE CASCADE,
-  relation  TEXT NOT NULL,        -- sequel|prequel|adaptation|same_universe|spin_off|other
-  PRIMARY KEY (from_id, to_id, relation)
+  relation  TEXT NOT NULL CHECK (relation IN
+              ('sequel','prequel','adaptation','same_universe','spin_off','other')),
+  PRIMARY KEY (from_id, to_id, relation),
+  CHECK (from_id <> to_id)
 );
 
 -- User-owned aggregates (P3 separation)
@@ -319,9 +321,9 @@ Cross-row invariants that SQLite cannot express are enforced by Rust validators
 ## 6. Migrations
 
 - Versioned `.sql` files (`migrations/0001_init.sql`, `0002_media.sql`, `0003_content_node.sql`,
-  …) run through `sqlx::migrate!` at startup, each **inside a transaction** (verified 2026:
-  sqlx-sqlite wraps migration SQL + bookkeeping in a single transaction; see `migrate.rs`).
-  Wired as `db::migrate` in MISSION-012.
+  `0004_media_identity.sql`, …) run through `sqlx::migrate!` at startup, each **inside a
+  transaction** (verified 2026: sqlx-sqlite wraps migration SQL + bookkeeping in a single
+  transaction; see `migrate.rs`). Wired as `db::migrate` in MISSION-012.
 - MISSION-017 adds `cover_asset_id`/`banner_asset_id` to `media` via `ALTER TABLE ADD COLUMN`
   (SQLite rejects writes through an FK pointing at a missing parent, so the columns must wait
   for the `asset` table).

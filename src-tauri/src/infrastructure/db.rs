@@ -75,7 +75,7 @@ pub async fn init(db_path: &Path) -> Result<SqlitePool, AppError> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::infrastructure::test_support::{cleanup_files, temp_db_path};
+    use crate::infrastructure::test_support::{cleanup_files, migrated_pool, temp_db_path};
 
     #[tokio::test]
     async fn connect_creates_database_and_applies_pragmas() {
@@ -373,6 +373,158 @@ mod tests {
             let result = sqlx::query(sql).execute(&pool).await;
             assert!(result.is_err(), "FK must reject {sql}");
         }
+
+        pool.close().await;
+        cleanup_files(&path);
+    }
+
+    #[tokio::test]
+    async fn external_id_and_relation_tables_created() {
+        let (pool, path) = migrated_pool("identity_schema.db").await;
+
+        for table in ["media_external_id", "media_relation"] {
+            let (found,): (i64,) = sqlx::query_as(
+                "SELECT COUNT(*) FROM sqlite_master WHERE type = 'table' AND name = ?",
+            )
+            .bind(table)
+            .fetch_one(&pool)
+            .await
+            .expect("check table exists");
+            assert_eq!(found, 1, "{table} table should exist after migration");
+        }
+
+        pool.close().await;
+        cleanup_files(&path);
+    }
+
+    #[tokio::test]
+    async fn external_id_unique_constraints_enforced() {
+        let (pool, path) = migrated_pool("ext_id_unique.db").await;
+        insert_media(&pool, "m-1").await;
+        insert_media(&pool, "m-2").await;
+
+        sqlx::query(
+            "INSERT INTO media_external_id (media_id, provider, ext_id) VALUES ('m-1', 'anilist', '123')",
+        )
+        .execute(&pool)
+        .await
+        .expect("insert external id");
+
+        let dup_provider = sqlx::query(
+            "INSERT INTO media_external_id (media_id, provider, ext_id) VALUES ('m-1', 'anilist', '456')",
+        )
+        .execute(&pool)
+        .await;
+        assert!(
+            dup_provider.is_err(),
+            "UNIQUE(media_id, provider) must reject a second id for the same provider"
+        );
+
+        let dup_identity = sqlx::query(
+            "INSERT INTO media_external_id (media_id, provider, ext_id) VALUES ('m-2', 'anilist', '123')",
+        )
+        .execute(&pool)
+        .await;
+        assert!(
+            dup_identity.is_err(),
+            "PK(provider, ext_id) must reject the same provider identity for two media"
+        );
+
+        sqlx::query(
+            "INSERT INTO media_external_id (media_id, provider, ext_id) VALUES ('m-1', 'tmdb', '789')",
+        )
+        .execute(&pool)
+        .await
+        .expect("a different provider for the same media is allowed");
+
+        pool.close().await;
+        cleanup_files(&path);
+    }
+
+    #[tokio::test]
+    async fn external_id_cascades_with_media() {
+        let (pool, path) = migrated_pool("ext_id_cascade.db").await;
+        insert_media(&pool, "m-1").await;
+        sqlx::query(
+            "INSERT INTO media_external_id (media_id, provider, ext_id) VALUES ('m-1', 'anilist', '123')",
+        )
+        .execute(&pool)
+        .await
+        .unwrap();
+
+        sqlx::query("DELETE FROM media WHERE id = 'm-1'")
+            .execute(&pool)
+            .await
+            .unwrap();
+
+        let (count,): (i64,) = sqlx::query_as("SELECT COUNT(*) FROM media_external_id")
+            .fetch_one(&pool)
+            .await
+            .unwrap();
+        assert_eq!(
+            count, 0,
+            "media_external_id should cascade-delete with media"
+        );
+
+        pool.close().await;
+        cleanup_files(&path);
+    }
+
+    #[tokio::test]
+    async fn media_relation_checks_and_fks_enforced() {
+        let (pool, path) = migrated_pool("relation.db").await;
+        insert_media(&pool, "m-1").await;
+        insert_media(&pool, "m-2").await;
+
+        sqlx::query(
+            "INSERT INTO media_relation (from_id, to_id, relation) VALUES ('m-1', 'm-2', 'sequel')",
+        )
+        .execute(&pool)
+        .await
+        .expect("a valid relation should be accepted");
+
+        let self_relation = sqlx::query(
+            "INSERT INTO media_relation (from_id, to_id, relation) VALUES ('m-1', 'm-1', 'sequel')",
+        )
+        .execute(&pool)
+        .await;
+        assert!(
+            self_relation.is_err(),
+            "CHECK(from_id <> to_id) must reject self-relations"
+        );
+
+        let bad_relation = sqlx::query(
+            "INSERT INTO media_relation (from_id, to_id, relation) VALUES ('m-1', 'm-2', 'friends')",
+        )
+        .execute(&pool)
+        .await;
+        assert!(
+            bad_relation.is_err(),
+            "relation CHECK must reject unknown values"
+        );
+
+        let missing_target = sqlx::query(
+            "INSERT INTO media_relation (from_id, to_id, relation) VALUES ('m-1', 'nope', 'other')",
+        )
+        .execute(&pool)
+        .await;
+        assert!(
+            missing_target.is_err(),
+            "FK must reject a relation to a missing media"
+        );
+
+        sqlx::query("DELETE FROM media WHERE id = 'm-2'")
+            .execute(&pool)
+            .await
+            .unwrap();
+        let (count,): (i64,) = sqlx::query_as("SELECT COUNT(*) FROM media_relation")
+            .fetch_one(&pool)
+            .await
+            .unwrap();
+        assert_eq!(
+            count, 0,
+            "media_relation should cascade-delete with either endpoint"
+        );
 
         pool.close().await;
         cleanup_files(&path);
