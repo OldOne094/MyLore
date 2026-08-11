@@ -11,7 +11,7 @@ export function NavRail() {
 
   return (
     <nav
-      aria-label={t("nav.library")}
+      aria-label={t("a11y.navTitle")}
       className="flex h-full w-56 shrink-0 flex-col gap-1 border-e border-border-subtle bg-bg-surface p-3"
     >
       <span className="px-3 pb-2 pt-1 text-sm font-semibold text-accent">{t("shell.brand")}</span>

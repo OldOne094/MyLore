@@ -92,6 +92,7 @@ export function CommandPalette() {
       <DialogContent
         className="max-w-xl"
         noPadding
+        closeLabel={t("a11y.close")}
         onOpenAutoFocus={(event) => event.preventDefault()}
       >
         <div className="flex items-center gap-3 border-b border-border-subtle px-4">

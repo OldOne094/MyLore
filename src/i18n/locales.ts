@@ -50,6 +50,13 @@ const en = {
     group_navigation: "Navigation",
     group_actions: "Actions",
   },
+  a11y: {
+    skipToContent: "Skip to content",
+    navTitle: "Primary navigation",
+    theme: "Theme",
+    language: "Language",
+    close: "Close",
+  },
 } as const;
 
 /* Arabic tree. Not annotated against `typeof en` because Arabic carries extra
@@ -107,6 +114,13 @@ const ar = {
     empty: "لا توجد أوامر مطابقة.",
     group_navigation: "التنقل",
     group_actions: "إجراءات",
+  },
+  a11y: {
+    skipToContent: "تخطَّ إلى المحتوى",
+    navTitle: "التنقل الرئيسي",
+    theme: "السمة",
+    language: "اللغة",
+    close: "إغلاق",
   },
 };
 

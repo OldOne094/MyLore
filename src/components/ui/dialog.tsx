@@ -16,9 +16,17 @@ export interface DialogContentProps extends ComponentPropsWithoutRef<
   children: ReactNode;
   /** Drop the default padding (e.g. for a command palette's flush layout). */
   noPadding?: boolean;
+  /** Accessible name for the close button (defaults to "Close"). */
+  closeLabel?: string;
 }
 
-export function DialogContent({ className, children, noPadding, ...props }: DialogContentProps) {
+export function DialogContent({
+  className,
+  children,
+  noPadding,
+  closeLabel = "Close",
+  ...props
+}: DialogContentProps) {
   return (
     <DialogPrimitive.Portal>
       <DialogPrimitive.Overlay className="fixed inset-0 z-50 bg-black/50 backdrop-blur-sm" />
@@ -35,7 +43,7 @@ export function DialogContent({ className, children, noPadding, ...props }: Dial
       >
         {children}
         <DialogPrimitive.Close
-          aria-label="Close"
+          aria-label={closeLabel}
           className="absolute end-4 top-4 flex size-8 items-center justify-center rounded-sm text-text-tertiary transition-colors duration-150 ease-out hover:bg-bg-hover hover:text-text-primary"
         >
           <X size={16} aria-hidden="true" />

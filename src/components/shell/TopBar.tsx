@@ -23,7 +23,7 @@ export function TopBar() {
 
       <div className="flex shrink-0 items-center gap-2">
         <LanguageSwitcher />
-        <div className="theme-switcher" aria-label={t("theme.system")}>
+        <div className="theme-switcher" aria-label={t("a11y.theme")}>
           {THEME_CHOICES.map((choice) => (
             <button
               key={choice}

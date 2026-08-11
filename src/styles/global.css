@@ -44,6 +44,30 @@ body {
   font-variant-numeric: tabular-nums;
 }
 
+/* Skip link (MISSION-037): hidden off-viewport, slides in on keyboard focus.
+   First tab stop in the shell — lets keyboard users jump past nav to content. */
+.skip-link {
+  position: fixed;
+  z-index: 60;
+  inset-block-start: var(--space-2);
+  inset-inline-start: var(--space-2);
+  padding: var(--space-2) var(--space-3);
+  border-radius: var(--radius-sm);
+  background-color: var(--accent);
+  color: var(--bg-surface);
+  font-size: var(--text-sm);
+  font-weight: var(--font-weight-medium);
+  text-decoration: none;
+  transform: translateY(-250%);
+  transition:
+    transform var(--duration-fast) var(--ease-out),
+    box-shadow var(--duration-fast) var(--ease-out);
+}
+
+.skip-link:focus-visible {
+  transform: translateY(0);
+}
+
 ::selection {
   background-color: var(--accent-soft);
   color: var(--text-primary);
