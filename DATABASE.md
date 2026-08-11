@@ -1,0 +1,320 @@
+# MyLore — Database Architecture
+
+> Phase 0 · SQLite + FTS5 schema proposal · August 2026
+> Companion: `DOMAIN_MODEL.md`, `ARCHITECTURE.md`
+
+---
+
+## 1. Storage Decision
+
+**SQLite via `sqlx` executed in the Rust backend.**
+
+Options evaluated:
+
+| Option | Verdict |
+|--------|---------|
+| `tauri-plugin-sql` (sqlx wrapper) | Good for simple apps; SQL runs in the webview via IPC, which spreads DB access across the frontend and complicates transactions/repositories and FTS control. **Not chosen as the primary path.** |
+| `sqlx` (async, sqlite) directly in Rust with managed state + migrations | Full control: transactions, FTS5, backup via `VACUUM INTO`, WAL, prepared statements, typed rows. **Chosen.** |
+| `rusqlite` (sync) | Simpler sync API; we want async on the Tokio runtime. `sqlx` chosen over it. |
+| `tauri-plugin-sql` as a *read-only* convenience for the frontend | Rejected: single access path is simpler and safer (one writer). |
+
+Notes (verified 2026): `sqlx` supports SQLite, FTS5 executes as normal SQL, migrations run inside
+transactions; Tauri manages the connection pool as app state. Rust >= 1.77.2 toolchain.
+
+Encryption: **not for MVP**. If required later, evaluate `SQLCipher` (needs a bundled/native
+sqlite build — a real cost). Revisit as an ADR when demand exists.
+
+---
+
+## 2. Connectivity & PRAGMAs
+
+- `PRAGMA foreign_keys = ON` (enforced per connection).
+- `PRAGMA journal_mode = WAL` — concurrent readers, better crash safety.
+- `PRAGMA busy_timeout = 5000`.
+- `PRAGMA synchronous = NORMAL` (WAL-safe, fast).
+- `PRAGMA integrity_check` at startup (fast) and before/after restore.
+- Single writer via a connection pool (sqlx `SqlitePool`, max_connections=1 for writes with
+  read replicas via multiple connections — WAL allows many readers).
+
+## 3. Schema (SQL, v1)
+
+Conventions: TEXT UUID PKs, `created_at`/`updated_at` on user-writable aggregates, FK with
+`ON DELETE` semantics chosen per aggregate, indexed FK columns, CHECK constraints for enums.
+
+```sql
+-- Metadata only. User data lives in separate aggregates (P3).
+CREATE TABLE media (
+  id              TEXT PRIMARY KEY,          -- UUID
+  content_type    TEXT NOT NULL,             -- book|novel|web_novel|manga|manhwa|manhua|anime|tv|movie|other
+  format          TEXT,                      -- optional refinement (light_novel, webtoon, ova, ...)
+  title_main      TEXT NOT NULL,
+  title_original  TEXT,
+  synopsis        TEXT,
+  pub_status      TEXT NOT NULL DEFAULT 'unknown', -- announced|ongoing|completed|hiatus|cancelled|unknown
+  start_date      TEXT,                      -- ISO date
+  end_date        TEXT,
+  release_year    INTEGER,
+  language        TEXT,
+  country         TEXT,
+  content_rating  TEXT,
+  pages           INTEGER,                   -- optional aggregate
+  duration_min    INTEGER,
+  ep_count        INTEGER,                   -- estimate/known count
+  ch_count        INTEGER,
+  cover_asset_id  TEXT REFERENCES asset(id) ON DELETE SET NULL,
+  banner_asset_id TEXT REFERENCES asset(id) ON DELETE SET NULL,
+  provider        TEXT,                      -- provenance of current metadata
+  provider_url    TEXT,
+  metadata_refreshed_at TEXT,
+  created_at      TEXT NOT NULL,
+  updated_at      TEXT NOT NULL
+);
+
+CREATE TABLE media_alt_title (
+  media_id  TEXT NOT NULL REFERENCES media(id) ON DELETE CASCADE,
+  lang      TEXT NOT NULL,
+  title     TEXT NOT NULL,
+  PRIMARY KEY (media_id, lang, title)
+);
+
+CREATE TABLE person (
+  id    TEXT PRIMARY KEY,
+  name  TEXT NOT NULL,
+  role  TEXT NOT NULL,          -- author|artist|director|studio|publisher|network
+  sort_order INTEGER NOT NULL DEFAULT 0
+);
+CREATE TABLE media_person (
+  media_id   TEXT NOT NULL REFERENCES media(id) ON DELETE CASCADE,
+  person_id  TEXT NOT NULL REFERENCES person(id) ON DELETE CASCADE,
+  PRIMARY KEY (media_id, person_id)
+);
+
+CREATE TABLE genre (id TEXT PRIMARY KEY, name TEXT NOT NULL UNIQUE);
+CREATE TABLE media_genre (
+  media_id TEXT NOT NULL REFERENCES media(id) ON DELETE CASCADE,
+  genre_id TEXT NOT NULL REFERENCES genre(id) ON DELETE CASCADE,
+  PRIMARY KEY (media_id, genre_id)
+);
+
+CREATE TABLE tag (
+  id        TEXT PRIMARY KEY,
+  name      TEXT NOT NULL,
+  scope     TEXT NOT NULL,       -- 'domain' (from providers) | 'personal'
+  source    TEXT
+);
+CREATE TABLE media_tag (
+  media_id TEXT NOT NULL REFERENCES media(id) ON DELETE CASCADE,
+  tag_id   TEXT NOT NULL REFERENCES tag(id) ON DELETE CASCADE,
+  PRIMARY KEY (media_id, tag_id)
+);
+
+-- Generic hierarchy tree (DOMAIN_MODEL §2.2)
+CREATE TABLE content_node (
+  id           TEXT PRIMARY KEY,
+  media_id     TEXT NOT NULL REFERENCES media(id) ON DELETE CASCADE,
+  parent_id    TEXT REFERENCES content_node(id) ON DELETE CASCADE,
+  kind         TEXT NOT NULL,    -- season|episode|volume|chapter|page_range|track|issue|node
+  position     INTEGER NOT NULL,
+  number       TEXT,             -- display number (e.g. "12.5")
+  title        TEXT,
+  release_date TEXT,
+  duration_min INTEGER,
+  page_count   INTEGER,
+  synopsis     TEXT,
+  external_id  TEXT,             -- provider node id (per media, single provider of nodes)
+  is_special   INTEGER NOT NULL DEFAULT 0,
+  created_at   TEXT NOT NULL
+);
+CREATE INDEX idx_node_media ON content_node(media_id, kind, position);
+CREATE INDEX idx_node_parent ON content_node(parent_id, position);
+
+-- External identity / deduplication (REQ-MEDIA-005)
+CREATE TABLE media_external_id (
+  media_id  TEXT NOT NULL REFERENCES media(id) ON DELETE CASCADE,
+  provider  TEXT NOT NULL,
+  ext_id    TEXT NOT NULL,
+  url       TEXT,
+  PRIMARY KEY (provider, ext_id),
+  UNIQUE (media_id, provider)
+);
+
+-- Media relationships (sequel/prequel/adaptation/...)
+CREATE TABLE media_relation (
+  from_id   TEXT NOT NULL REFERENCES media(id) ON DELETE CASCADE,
+  to_id     TEXT NOT NULL REFERENCES media(id) ON DELETE CASCADE,
+  relation  TEXT NOT NULL,        -- sequel|prequel|adaptation|same_universe|spin_off|other
+  PRIMARY KEY (from_id, to_id, relation)
+);
+
+-- User-owned aggregates (P3 separation)
+CREATE TABLE tracking (
+  media_id     TEXT PRIMARY KEY REFERENCES media(id) ON DELETE CASCADE,
+  core_status  TEXT NOT NULL,
+  custom_status_id TEXT REFERENCES status(id) ON DELETE SET NULL,
+  started_at   TEXT,
+  finished_at  TEXT,
+  repeat_count INTEGER NOT NULL DEFAULT 0,
+  current_node_id TEXT REFERENCES content_node(id) ON DELETE SET NULL,
+  current_position INTEGER,      -- fast "chapter 12" / "ep 5" without node rows
+  updated_at   TEXT NOT NULL
+);
+
+CREATE TABLE status (
+  id       TEXT PRIMARY KEY,
+  name     TEXT NOT NULL,
+  bucket   TEXT NOT NULL,        -- core bucket: planned|in_progress|completed|on_hold|dropped|repeat|wishlist
+  is_system INTEGER NOT NULL DEFAULT 0,
+  sort_order INTEGER NOT NULL DEFAULT 0
+);
+
+CREATE TABLE node_progress (
+  node_id    TEXT NOT NULL REFERENCES content_node(id) ON DELETE CASCADE,
+  state      TEXT NOT NULL,      -- unread|read|watched|skipped|partial
+  read_at    TEXT,
+  note       TEXT,
+  rating     INTEGER CHECK (rating BETWEEN 1 AND 10),
+  updated_at TEXT NOT NULL,
+  PRIMARY KEY (node_id)
+);
+
+CREATE TABLE review (
+  media_id     TEXT PRIMARY KEY REFERENCES media(id) ON DELETE CASCADE,
+  rating       INTEGER CHECK (rating BETWEEN 1 AND 10),
+  review       TEXT,
+  short_review TEXT,
+  notes        TEXT,
+  favorite     INTEGER NOT NULL DEFAULT 0,
+  is_spoiler   INTEGER NOT NULL DEFAULT 0,
+  created_at   TEXT NOT NULL,
+  updated_at   TEXT NOT NULL
+);
+
+CREATE TABLE collection (
+  id         TEXT PRIMARY KEY,
+  name       TEXT NOT NULL,
+  is_smart   INTEGER NOT NULL DEFAULT 0,
+  filter_def TEXT,               -- JSON filter definition for smart collections
+  sort_order INTEGER NOT NULL DEFAULT 0,
+  created_at TEXT NOT NULL
+);
+CREATE TABLE collection_member (
+  collection_id TEXT NOT NULL REFERENCES collection(id) ON DELETE CASCADE,
+  media_id      TEXT NOT NULL REFERENCES media(id) ON DELETE CASCADE,
+  position      INTEGER NOT NULL DEFAULT 0,
+  added_at      TEXT NOT NULL,
+  PRIMARY KEY (collection_id, media_id)
+);
+
+CREATE TABLE asset (
+  id            TEXT PRIMARY KEY,
+  kind          TEXT NOT NULL,       -- cover|banner|avatar|node_image
+  remote_url    TEXT,
+  local_path    TEXT,
+  status        TEXT NOT NULL DEFAULT 'remote', -- remote|cached|failed|missing
+  mime_type     TEXT,
+  width         INTEGER,
+  height        INTEGER,
+  etag          TEXT,
+  last_fetched_at TEXT,
+  created_at    TEXT NOT NULL
+);
+
+CREATE TABLE provider_setting (
+  provider  TEXT PRIMARY KEY,
+  enabled   INTEGER NOT NULL DEFAULT 1,
+  api_key   TEXT,               -- encrypted blob, see ARCHITECTURE §Security
+  options   TEXT,               -- JSON
+  updated_at TEXT NOT NULL
+);
+
+CREATE TABLE settings (
+  key   TEXT PRIMARY KEY,
+  value TEXT NOT NULL
+);
+
+-- Activity log for statistics, calendar, undo (append-only)
+CREATE TABLE activity (
+  id         TEXT PRIMARY KEY,
+  media_id   TEXT REFERENCES media(id) ON DELETE CASCADE,
+  node_id    TEXT REFERENCES content_node(id) ON DELETE CASCADE,
+  kind       TEXT NOT NULL,      -- added|started|progress|completed|repeat|reviewed|deleted|merged|imported
+  meta       TEXT,               -- JSON
+  created_at TEXT NOT NULL
+);
+CREATE INDEX idx_activity_media ON activity(media_id, created_at);
+
+-- Trash / recovery (REQ-MEDIA-007)
+CREATE TABLE trash (
+  id           TEXT PRIMARY KEY,
+  kind         TEXT NOT NULL,    -- media|merge|bulk
+  payload      TEXT NOT NULL,    -- full JSON before-image
+  deleted_at   TEXT NOT NULL,
+  restored     INTEGER NOT NULL DEFAULT 0
+);
+```
+
+## 4. Full-Text Search (FTS5)
+
+- **Index:** one FTS5 virtual table, **external-content** style is rejected in favor of a
+  maintained index table with triggers (simpler sync, full control over what is indexed):
+
+```sql
+CREATE VIRTUAL TABLE media_fts USING fts5(
+  title, alt_titles, synopsis, people, genres, tags, notes, review, external_ids,
+  content=''
+);
+-- contentless FTS5: rowid = media rowid; rebuilt/maintained by triggers on write.
+```
+
+- **Tokenization for multilingual titles** (REQ-SEARCH-003):
+  - `unicode61` handles Latin + Arabic reasonably (Arabic is space-delimited; we normalize
+    diacritics/Alef/Ya/Ta-marbuta before indexing & querying).
+  - CJK (ja/zh/ko) needs **`trigram` tokenizer** for substring matching; we add a normalized
+    CJK column and index it with `trigram`.
+  - Query pipeline: normalize user input the same way (case-fold, diacritic-fold, script folding),
+    then build FTS5 MATCH (prefix + phrase) with `rank` ordering (BM25).
+- Triggers on `media`, `media_alt_title`, `review`, `media_tag`, `media_person`,
+  `media_external_id` keep the index fresh; bulk import rebuilds the index in one pass
+  (`INSERT INTO media_fts(media_fts) VALUES('rebuild')`).
+
+## 5. Indexes & Query Support
+
+- `idx_node_media (media_id, kind, position)` — tree walks, per-type listings.
+- `tracking(core_status)`, `tracking(updated_at)` — dashboards, "continue" queries.
+- `media(content_type)`, `media(title_main)` — library filtering; `title_main` used for the
+  non-FTS fast path (startsWith).
+- `node_progress` PK on node_id — fast per-node status; aggregate progress is
+  `SELECT COUNT(*) FROM node_progress WHERE node_id IN (…chapters…) AND state='read'`.
+
+## 6. Migrations
+
+- Versioned `.sql` files (`migrations/0001_init.sql`, …) run through `sqlx::migrate!` at startup,
+  each **inside a transaction** (verified 2026: plugin behavior; we use sqlx directly).
+- Policy:
+  - Never edit an applied migration.
+  - Backward-compatible only (additive) for app updates; destructive changes happen in the next
+    major version behind a backup + explicit confirm.
+  - Before any migration run: automatic DB backup to the backup dir (crash/migration-failure
+    recovery, REQ-BACKUP-002).
+  - After migration: `PRAGMA integrity_check`; on failure, restore the pre-migration backup.
+- `schema_version` tracked by sqlx `_sqlx_migrations` table.
+
+## 7. Backup & Restore
+
+- **Backup format:** a single portable `.mylore` archive = SQLite file (via `VACUUM INTO` for a
+  consistent online snapshot) + `assets/` manifest + `meta.json` (app version, schema version,
+  createdAt, checksums). Zip container.
+- **Restore:** validate archive (checksums, `PRAGMA integrity_check`), move current DB aside to
+  a `quarantine/` folder (never overwrite silently), open new DB, verify, then delete quarantine
+  on success — fully reversible.
+- **Automatic:** schedule in preferences (on startup, interval, before migration); rotation keeps
+  N latest + one monthly; old backups pruned.
+- Import/export of the archive is a first-class UI flow.
+
+## 8. Integrity & Concurrency Summary
+
+- FK enforced (PRAGMA), CHECK constraints, UNIQUE identities.
+- Multi-row operations in transactions; batch import in a single transaction with savepoints for
+  per-item rollback and a result report.
+- WAL + busy_timeout prevent lock contention; a 5s timeout surfaces a typed error, never a hang.
+- `updated_at` maintained on aggregates to support future sync conflict policy.
