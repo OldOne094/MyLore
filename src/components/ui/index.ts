@@ -8,6 +8,7 @@ export {
   DialogTitle,
   DialogTrigger,
 } from "./dialog";
+export { EmptyState, type EmptyStateProps } from "./empty-state";
 export { InputField, TextareaField, type InputFieldProps, type TextareaFieldProps } from "./field";
 export { Popover, PopoverClose, PopoverContent, PopoverTrigger } from "./popover";
 export { Skeleton } from "./skeleton";

@@ -1,71 +1,57 @@
 import { describe, expect, it, afterEach } from "vitest";
-import { render, screen, waitFor } from "@testing-library/react";
+import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import App from "@/App";
+import { createMemoryRouter, RouterProvider } from "react-router";
 import { ThemeProvider } from "@/themes/ThemeProvider";
-import { THEME_STORAGE_KEY } from "@/themes/theme";
+import { ToastProvider } from "@/components/ui";
+import { appRoutes } from "@/routes";
 
-function renderApp() {
+function renderApp(initialEntry = "/") {
+  const router = createMemoryRouter(appRoutes, { initialEntries: [initialEntry] });
   return render(
     <ThemeProvider>
-      <App />
+      <ToastProvider>
+        <RouterProvider router={router} />
+      </ToastProvider>
     </ThemeProvider>,
   );
 }
+
+const LIBRARY_HINT = "Your tracked titles appear here as you add them.";
+const STATS_HINT = "Time watched, pages read and your ratings distribution.";
 
 afterEach(() => {
   localStorage.clear();
   document.documentElement.removeAttribute("data-theme");
 });
 
-describe("App", () => {
-  it("renders the primitives scaffold heading", () => {
-    renderApp();
-    expect(screen.getByText("Design-system primitives")).toBeInTheDocument();
+describe("App shell", () => {
+  it("redirects the root to the first nav section", async () => {
+    renderApp("/");
+    expect(await screen.findByText(LIBRARY_HINT)).toBeInTheDocument();
   });
 
-  it("switches the applied theme and persists the choice", async () => {
+  it("navigates between sections via the nav rail", async () => {
     const user = userEvent.setup();
-    renderApp();
+    renderApp("/library");
+    await user.click(screen.getByRole("link", { name: "Stats" }));
+    expect(await screen.findByText(STATS_HINT)).toBeInTheDocument();
+  });
 
-    expect(document.documentElement.getAttribute("data-theme")).toBe("light");
+  it("highlights the active nav item", async () => {
+    renderApp("/library");
+    expect(screen.getByRole("link", { name: "Library" })).toHaveClass("bg-accent-soft");
+  });
 
+  it("shows the status bar", () => {
+    renderApp("/library");
+    expect(screen.getByText("0 titles")).toBeInTheDocument();
+  });
+
+  it("switches the theme from the top bar", async () => {
+    const user = userEvent.setup();
+    renderApp("/library");
     await user.click(screen.getByRole("button", { name: "dark" }));
     expect(document.documentElement.getAttribute("data-theme")).toBe("dark");
-    expect(localStorage.getItem(THEME_STORAGE_KEY)).toBe("dark");
-
-    await user.click(screen.getByRole("button", { name: "light" }));
-    expect(document.documentElement.getAttribute("data-theme")).toBe("light");
-  });
-
-  it("validates the field and clears the error on input", async () => {
-    const user = userEvent.setup();
-    renderApp();
-
-    await user.click(screen.getByRole("button", { name: "Save" }));
-    expect(await screen.findByRole("alert")).toHaveTextContent("Name is required");
-
-    await user.type(screen.getByLabelText("Library name"), "Shelf");
-    expect(screen.queryByRole("alert")).not.toBeInTheDocument();
-  });
-
-  it("opens and closes the dialog", async () => {
-    const user = userEvent.setup();
-    renderApp();
-
-    await user.click(screen.getByRole("button", { name: "Open dialog" }));
-    expect(screen.getByRole("dialog")).toBeInTheDocument();
-    expect(screen.getByText("Edit entry")).toBeInTheDocument();
-
-    await user.click(screen.getByRole("button", { name: "Cancel" }));
-    await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
-  });
-
-  it("shows a success toast", async () => {
-    const user = userEvent.setup();
-    renderApp();
-
-    await user.click(screen.getByRole("button", { name: "Success toast" }));
-    expect(await screen.findByText("Saved")).toBeInTheDocument();
   });
 });
