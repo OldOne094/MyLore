@@ -349,7 +349,8 @@ mod tests {
         let same_title = candidate("m-2", "One Piece", &[]);
         let incoming = title("One Piece");
         let incoming_ext = [ext("anilist", "21")];
-        let ranked = rank_candidates(&incoming, &incoming_ext, &[same_title, with_id]);        assert_eq!(ranked[0].media_id, media_id("m-1"));
+        let ranked = rank_candidates(&incoming, &incoming_ext, &[same_title, with_id]);
+        assert_eq!(ranked[0].media_id, media_id("m-1"));
         assert_eq!(ranked[0].kind, IdentityKind::Exact);
     }
 
