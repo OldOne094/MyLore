@@ -23,8 +23,12 @@ pub const BUSY_TIMEOUT_MS: u64 = 5000;
 /// Maximum number of pooled connections.
 const MAX_CONNECTIONS: u32 = 5;
 
-/// Open (creating if missing) the SQLite database with FK, WAL and
-/// busy-timeout pragmas applied on every connection.
+/// Open (creating if missing) the SQLite database with FK, WAL,
+/// busy-timeout and recursive-trigger pragmas applied on every connection.
+///
+/// `recursive_triggers = ON` makes `ON DELETE CASCADE` deletions re-fire the
+/// triggers of child tables, so e.g. deleting media refreshes the FTS index
+/// (0007_media_fts.sql) even when the row is removed by a cascade.
 pub async fn connect(db_path: &Path) -> Result<SqlitePool, AppError> {
     let options = SqliteConnectOptions::new()
         .filename(db_path)
@@ -32,7 +36,8 @@ pub async fn connect(db_path: &Path) -> Result<SqlitePool, AppError> {
         .foreign_keys(true)
         .journal_mode(SqliteJournalMode::Wal)
         .busy_timeout(Duration::from_millis(BUSY_TIMEOUT_MS))
-        .synchronous(SqliteSynchronous::Normal);
+        .synchronous(SqliteSynchronous::Normal)
+        .pragma("recursive_triggers", "ON");
 
     SqlitePoolOptions::new()
         .max_connections(MAX_CONNECTIONS)

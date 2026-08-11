@@ -17,7 +17,8 @@ pub async fn in_memory_pool() -> SqlitePool {
     let options = SqliteConnectOptions::from_str("sqlite::memory:")
         .expect("valid sqlite memory uri")
         .foreign_keys(true)
-        .busy_timeout(Duration::from_secs(5));
+        .busy_timeout(Duration::from_secs(5))
+        .pragma("recursive_triggers", "ON");
 
     SqlitePoolOptions::new()
         .max_connections(1)

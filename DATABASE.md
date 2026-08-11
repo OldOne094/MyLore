@@ -32,6 +32,9 @@ sqlite build — a real cost). Revisit as an ADR when demand exists.
 - `PRAGMA journal_mode = WAL` — concurrent readers, better crash safety.
 - `PRAGMA busy_timeout = 5000`.
 - `PRAGMA synchronous = NORMAL` (WAL-safe, fast).
+- `PRAGMA recursive_triggers = ON` — cascade deletes re-fire child-table triggers, so
+  e.g. deleting a `person` refreshes the FTS index even though the `media_person` link is
+  removed by the cascade (MISSION-018).
 - `PRAGMA integrity_check` at startup (fast) and before/after restore.
 - Single writer via a connection pool (sqlx `SqlitePool`, max_connections=1 for writes with
   read replicas via multiple connections — WAL allows many readers).
@@ -290,27 +293,38 @@ CREATE TABLE trash (
 
 ## 4. Full-Text Search (FTS5)
 
-- **Index:** one FTS5 virtual table, **external-content** style is rejected in favor of a
-  maintained index table with triggers (simpler sync, full control over what is indexed):
+- **Index (migration 0007, MISSION-018):** two FTS5 virtual tables sharing one assembled
+  document per media, `rowid = media rowid`, built from the `v_media_fts_source` view:
 
 ```sql
 CREATE VIRTUAL TABLE media_fts USING fts5(
-  title, alt_titles, synopsis, people, genres, tags, notes, review, external_ids,
-  content=''
+  title, alt_titles, synopsis, people, genres, tags, notes, review, external_ids
 );
--- contentless FTS5: rowid = media rowid; rebuilt/maintained by triggers on write.
+CREATE VIRTUAL TABLE media_fts_cjk USING fts5(
+  cjk,
+  tokenize = 'trigram'
+);
 ```
 
+- **Stored content, not contentless.** FTS5's special `'delete'` command on a contentless table
+  either requires the deleted values (which refresh triggers cannot know) or silently leaves
+  orphaned index terms, so a refresh would keep stale matches. Stored content lets triggers use
+  plain `DELETE ... WHERE rowid = ?`, which removes the terms correctly (verified 2026).
+- **Refresh triggers:** 21 triggers (insert/delete/update on `media`, `media_alt_title`,
+  `media_person`, `media_genre`, `media_tag`, `review`, `media_external_id`) delete + reinsert
+  the media's document. Cascade deletes re-fire them because connections run with
+  `PRAGMA recursive_triggers = ON`.
+- **`infrastructure::fts::rebuild`** wipes both tables and repopulates them from the view in one
+  transaction — the repair/migration path (bulk import may call it instead of per-row triggers).
 - **Tokenization for multilingual titles** (REQ-SEARCH-003):
   - `unicode61` handles Latin + Arabic reasonably (Arabic is space-delimited; we normalize
     diacritics/Alef/Ya/Ta-marbuta before indexing & querying).
-  - CJK (ja/zh/ko) needs **`trigram` tokenizer** for substring matching; we add a normalized
-    CJK column and index it with `trigram`.
-  - Query pipeline: normalize user input the same way (case-fold, diacritic-fold, script folding),
-    then build FTS5 MATCH (prefix + phrase) with `rank` ordering (BM25).
-- Triggers on `media`, `media_alt_title`, `review`, `media_tag`, `media_person`,
-  `media_external_id` keep the index fresh; bulk import rebuilds the index in one pass
-  (`INSERT INTO media_fts(media_fts) VALUES('rebuild')`).
+  - CJK (ja/zh/ko) needs **`trigram` tokenizer** for substring matching; the `cjk` column is the
+    full assembled document, indexed as 3-grams.
+  - Arabic folding happens in SQL at index time (view); the **query side must apply the same
+    fold** (case-fold, diacritic-fold, script folding) before `MATCH`.
+  - Query pipeline: normalize user input the same way, then build FTS5 MATCH (prefix + phrase)
+    with `rank` ordering (BM25).
 
 ## 5. Indexes & Query Support
 
@@ -328,7 +342,7 @@ Cross-row invariants that SQLite cannot express are enforced by Rust validators
 
 ## 6. Migrations
 
-- Versioned `.sql` files (`migrations/0001_init.sql` … `0006_user_aggregates.sql`, …) run through
+- Versioned `.sql` files (`migrations/0001_init.sql` … `0007_media_fts.sql`, …) run through
   `sqlx::migrate!` at startup, each **inside a transaction** (verified 2026: sqlx-sqlite wraps
   migration SQL + bookkeeping in a single transaction; see `migrate.rs`). Wired as `db::migrate`
   in MISSION-012.

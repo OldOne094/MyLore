@@ -5,6 +5,7 @@
 
 pub mod content_node;
 pub mod db;
+pub mod fts;
 pub mod logging;
 
 #[cfg(test)]
