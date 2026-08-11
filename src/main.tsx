@@ -1,10 +1,12 @@
 import React from "react";
 import ReactDOM from "react-dom/client";
 import { RouterProvider } from "react-router";
+import { QueryClientProvider } from "@tanstack/react-query";
 import { initTheme } from "@/themes/theme";
 import { ThemeProvider } from "@/themes/ThemeProvider";
 import { ToastProvider } from "@/components/ui";
 import { PreferencesProvider } from "@/preferences/PreferencesProvider";
+import { queryClient } from "@/api/queryClient";
 import { router } from "@/router";
 import "@/i18n";
 import { initI18n } from "@/i18n";
@@ -18,12 +20,14 @@ initI18n();
 
 ReactDOM.createRoot(document.getElementById("root") as HTMLElement).render(
   <React.StrictMode>
-    <ThemeProvider>
-      <PreferencesProvider>
-        <ToastProvider>
-          <RouterProvider router={router} />
-        </ToastProvider>
-      </PreferencesProvider>
-    </ThemeProvider>
+    <QueryClientProvider client={queryClient}>
+      <ThemeProvider>
+        <PreferencesProvider>
+          <ToastProvider>
+            <RouterProvider router={router} />
+          </ToastProvider>
+        </PreferencesProvider>
+      </ThemeProvider>
+    </QueryClientProvider>
   </React.StrictMode>,
 );
