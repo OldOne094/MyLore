@@ -13,6 +13,7 @@
 //!   - `status`       — status engine: transitions, custom statuses, auto-rules
 //!   - `normalize`    — title fold (case/unicode/diacritics, script-aware)
 //!   - `identity`     — exact + fuzzy identity matching, candidate ranking
+//!   - `stats`        — dashboard statistics (counts, hours, completion, rating)
 //!   - `value_objects`/`enums` — immutable values and `CHECK`-aligned enums
 
 pub mod content_node;
@@ -23,6 +24,7 @@ pub mod media;
 pub mod normalize;
 pub mod progress;
 pub mod review;
+pub mod stats;
 pub mod status;
 pub mod tracking;
 pub mod value_objects;
