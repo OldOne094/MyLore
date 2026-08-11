@@ -1,0 +1,116 @@
+/* MyLore design tokens (DESIGN_SYSTEM.md) — MISSION-030.
+   Single source of truth for the palette, type, spacing, radius, elevation and
+   motion. Components consume ONLY these variables — no ad-hoc values. */
+
+:root {
+  /* Fonts (DESIGN_SYSTEM.md §3) */
+  --font-ui:
+    "Segoe UI", -apple-system, BlinkMacSystemFont, "SF Pro Text", "SF Pro Display", Roboto,
+    "Noto Sans", "Noto Sans Arabic", "Cairo", system-ui, sans-serif;
+  --font-mono: "SF Mono", "Cascadia Code", "JetBrains Mono", Consolas, monospace;
+
+  /* Type scale (rem) — DESIGN_SYSTEM.md §3 */
+  --text-2xs: 0.75rem; /* 12 */
+  --text-sm: 0.8125rem; /* 13 */
+  --text-base: 0.875rem; /* 14 */
+  --text-md: 1rem; /* 16 */
+  --text-lg: 1.25rem; /* 20 */
+  --text-xl: 1.75rem; /* 28 */
+  --text-2xl: 2.25rem; /* 36 */
+  --leading-tight: 1.2;
+  --leading-snug: 1.4;
+  --leading-normal: 1.6;
+  --font-weight-normal: 400;
+  --font-weight-medium: 500;
+  --font-weight-semibold: 600;
+  --font-weight-bold: 700;
+
+  /* Spacing (4px unit) — DESIGN_SYSTEM.md §4 */
+  --space-1: 0.25rem; /* 4  */
+  --space-2: 0.5rem; /* 8  */
+  --space-3: 0.75rem; /* 12 */
+  --space-4: 1rem; /* 16 */
+  --space-5: 1.5rem; /* 24 */
+  --space-6: 2rem; /* 32 */
+  --space-7: 3rem; /* 48 */
+
+  /* Radius — DESIGN_SYSTEM.md §4 */
+  --radius-sm: 0.375rem; /* 6  */
+  --radius-md: 0.625rem; /* 10 */
+  --radius-lg: 1rem; /* 16 */
+  --radius-full: 999px;
+
+  /* Focus ring: 2px accent with 3px transparent gap (DESIGN_SYSTEM.md §4) */
+  --focus-ring-width: 2px;
+  --focus-ring-offset: 3px;
+
+  /* Motion (DESIGN_SYSTEM.md §7): 120–200ms ease-out */
+  --duration-fast: 120ms;
+  --duration-base: 160ms;
+  --duration-slow: 200ms;
+  --ease-out: cubic-bezier(0.16, 1, 0.3, 1);
+
+  /* Density (DESIGN_SYSTEM.md §8) */
+  --control-height: 2.25rem;
+  --control-height-compact: 2rem;
+}
+
+/* Light theme (default) — DESIGN_SYSTEM.md §2 */
+:root,
+:root[data-theme="light"] {
+  --bg-base: #fafaf9;
+  --bg-surface: #ffffff;
+  --bg-raised: #ffffff;
+  --bg-hover: #f1f1ef;
+  --border-subtle: #e5e4e0;
+  --border-strong: #d4d3ce;
+  --text-primary: #1c1b1a;
+  --text-secondary: #57564f;
+  --text-tertiary: #85847c;
+  --accent: #b4541f;
+  --accent-hover: #9c4719;
+  --accent-soft: #f7e7dc;
+  --ok: #2f7d32;
+  --warn: #9a6700;
+  --danger: #c62828;
+  --info: #1565c0;
+  --shadow-sm: 0 1px 2px rgb(28 27 26 / 0.08);
+  --shadow-lg: 0 2px 8px rgb(28 27 26 / 0.08), 0 12px 32px rgb(28 27 26 / 0.16);
+  color-scheme: light;
+}
+
+/* Dark theme — DESIGN_SYSTEM.md §2 */
+:root[data-theme="dark"] {
+  --bg-base: #141417;
+  --bg-surface: #1c1c21;
+  --bg-raised: #24242a;
+  --bg-hover: #2a2a31;
+  --border-subtle: #2e2e36;
+  --border-strong: #3a3a44;
+  --text-primary: #f2f1ef;
+  --text-secondary: #a8a7a0;
+  --text-tertiary: #71716c;
+  --accent: #e08a4c;
+  --accent-hover: #eea060;
+  --accent-soft: #3a2a1f;
+  --ok: #7bc47f;
+  --warn: #d9a441;
+  --danger: #e57373;
+  --info: #64b5f6;
+  --shadow-sm: 0 1px 2px rgb(0 0 0 / 0.4);
+  --shadow-lg: 0 2px 8px rgb(0 0 0 / 0.5), 0 12px 32px rgb(0 0 0 / 0.6);
+  color-scheme: dark;
+}
+
+/* Status → color mapping, tokenized (DESIGN_SYSTEM.md §2) so custom statuses
+   map consistently. Reference tokens keep contrast AA in both themes. */
+:root,
+:root[data-theme="light"],
+:root[data-theme="dark"] {
+  --status-planned: var(--text-tertiary);
+  --status-inprogress: var(--accent);
+  --status-completed: var(--ok);
+  --status-onhold: var(--warn);
+  --status-dropped: var(--danger);
+  --status-repeat: var(--info);
+}
