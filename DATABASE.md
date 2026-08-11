@@ -340,6 +340,26 @@ Cross-row invariants that SQLite cannot express are enforced by Rust validators
 (`infrastructure::content_node`, MISSION-014): a node's parent must belong to the same
 `media_id`, and the parent chain must stay acyclic.
 
+### 5.1 Repositories (MISSION-019)
+
+Typed persistence layer under `infrastructure::repositories`, one module per aggregate, each
+operating on the shared `SqlitePool`:
+
+- **media** — full-aggregate create/get/update (row + alt titles, person/genre/tag links,
+  external ids, relations in one tx), delete (FK cascade + FTS triggers), `find_by_external_id`
+  (dedup), `list` (filter: content_type/pub_status/genre/tag/favorite; sort: title/created/updated/
+  release_year; paginate) + `count`, and `search` (FTS5 unicode61 + trigram, Arabic-fold applied
+  to the query via `fts::normalize_query`).
+- **node** — create/reparent/update/delete/children/list with the `content_node` validators
+  enforced before writes (rejects cross-media parents and cycles).
+- **tracking** — `tracking` row upsert/get/delete plus `node_progress` upsert/read and
+  `count_nodes_in_state` aggregates.
+- **review**, **collection** (CRUD + member add/remove/replace), **asset**, **activity**
+  (append-only log).
+
+Repositories are clock-free (timestamps are supplied by callers) and never write to the FTS
+tables — triggers keep the index fresh.
+
 ## 6. Migrations
 
 - Versioned `.sql` files (`migrations/0001_init.sql` … `0007_media_fts.sql`, …) run through

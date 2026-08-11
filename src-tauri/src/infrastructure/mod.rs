@@ -7,6 +7,7 @@ pub mod content_node;
 pub mod db;
 pub mod fts;
 pub mod logging;
+pub mod repositories;
 
 #[cfg(test)]
 pub mod test_support;

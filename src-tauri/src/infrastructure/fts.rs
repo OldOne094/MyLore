@@ -2,12 +2,34 @@
 //!
 //! The index is kept fresh by triggers (0007_media_fts.sql), so under normal
 //! operation repositories never touch it. `rebuild` exists for repair and
-//! migration safety: it wipes both contentless tables and repopulates them
-//! from `v_media_fts_source`, matching the migration's backfill.
+//! migration safety: it wipes both FTS5 tables and repopulates them from
+//! `v_media_fts_source`, matching the migration's backfill. `normalize_query`
+//! is the query-side counterpart of the view's SQL fold and must be applied to
+//! user input before `MATCH`.
 
 use sqlx::sqlite::SqlitePool;
 
 use crate::error::AppError;
+
+/// Normalize a search query the same way the index fold normalizes documents.
+///
+/// Must mirror the `replace(...)` chain in `v_media_fts_source` (migration
+/// 0007): lowercase, map Alef variants to ا, ى to ي, ة to ه, and strip Arabic
+/// diacritics/tanween. Without it, searching for a voweled or hamza-variant
+/// title would miss the folded index entries.
+pub fn normalize_query(text: &str) -> String {
+    let mut out = String::with_capacity(text.len());
+    for ch in text.chars() {
+        match ch {
+            'أ' | 'إ' | 'آ' | 'ٱ' => out.push('ا'),
+            'ى' => out.push('ي'),
+            'ة' => out.push('ه'),
+            'ً' | 'ٌ' | 'ٍ' | 'َ' | 'ُ' | 'ِ' | 'ّ' | 'ْ' => {}
+            ch => out.push(ch.to_lowercase().next().unwrap_or(ch)),
+        }
+    }
+    out
+}
 
 /// Rebuild the FTS index from the media tables.
 ///
@@ -17,9 +39,6 @@ pub async fn rebuild(pool: &SqlitePool) -> Result<(), AppError> {
     let mut tx = pool.begin().await?;
 
     sqlx::query("DELETE FROM media_fts")
-        .execute(&mut *tx)
-        .await?;
-    sqlx::query("DELETE FROM media_fts_cjk")
         .execute(&mut *tx)
         .await?;
     sqlx::query("DELETE FROM media_fts_cjk")
