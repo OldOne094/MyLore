@@ -10,6 +10,8 @@ pub mod logging;
 pub mod repositories;
 
 #[cfg(test)]
+mod integration_tests;
+#[cfg(test)]
 pub mod test_support;
 
 /// Placeholder to keep the crate skeleton compiling until M2/M7 land.
