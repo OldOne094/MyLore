@@ -9,12 +9,14 @@
 //!   - `content_node` — generic node tree + per-node progress
 //!   - `tracking`     — per-media user state
 //!   - `review`       — user rating / review / notes / favorite
+//!   - `progress`     — derived progress templates + aggregation engine
 //!   - `value_objects`/`enums` — immutable values and `CHECK`-aligned enums
 
 pub mod content_node;
 pub mod enums;
 pub mod error;
 pub mod media;
+pub mod progress;
 pub mod review;
 pub mod tracking;
 pub mod value_objects;
