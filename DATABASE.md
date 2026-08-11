@@ -360,6 +360,26 @@ operating on the shared `SqlitePool`:
 Repositories are clock-free (timestamps are supplied by callers) and never write to the FTS
 tables — triggers keep the index fresh.
 
+### 5.2 Benchmarks (MISSION-021)
+
+Baselines measured on a Windows 11 dev machine, `cargo bench --bench database` (release).
+Each insert sample runs against a fresh in-memory migrated database (full schema + seeds), so
+numbers are independent of prior samples. Full results in `src-tauri/benches/database.rs`.
+
+| Scenario | 1k | 10k | Notes |
+|----------|-----|-----|-------|
+| Insert — repo path (`media::create`, per-row tx) | ~349 ms (~0.35 ms/row) | ~3.66 s | manual-add path; includes FTS triggers |
+| Insert — bulk raw, one transaction | ~184 ms | ~1.90 s | ~2× faster than repo path |
+| Search — FTS5 `media::search` | — | **~110 µs** at 10k/50k/100k rows | flat with row count; selective (~1% hit) and no-match both ≈ 100–115 µs |
+
+- **Search is index-bound, not data-bound:** latency is ~110 µs at 10k and unchanged at 100k
+  rows — FTS5 `rank` queries cost O(log n); there is no scan penalty at library scale.
+- **Bulk import (MISSION-066) should batch in one transaction:** raw one-tx inserts are ~2×
+  faster than a per-row repository loop (1.90 s vs 3.76 s for 10k), in addition to providing
+  atomicity + a per-item savepoint report.
+- The repo path is the floor for single adds (~0.35 ms/row); a single `media::create` round-trip
+  is far under the interaction budget even with 100k-row indexes present.
+
 ## 6. Migrations
 
 - Versioned `.sql` files (`migrations/0001_init.sql` … `0007_media_fts.sql`, …) run through
