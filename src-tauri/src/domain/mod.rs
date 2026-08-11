@@ -11,12 +11,14 @@
 //!   - `review`       — user rating / review / notes / favorite
 //!   - `progress`     — derived progress templates + aggregation engine
 //!   - `status`       — status engine: transitions, custom statuses, auto-rules
+//!   - `normalize`    — title fold (case/unicode/diacritics, script-aware)
 //!   - `value_objects`/`enums` — immutable values and `CHECK`-aligned enums
 
 pub mod content_node;
 pub mod enums;
 pub mod error;
 pub mod media;
+pub mod normalize;
 pub mod progress;
 pub mod review;
 pub mod status;
