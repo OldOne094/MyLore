@@ -529,4 +529,244 @@ mod tests {
         pool.close().await;
         cleanup_files(&path);
     }
+
+    #[tokio::test]
+    async fn tracking_status_node_progress_tables_created() {
+        let (pool, path) = migrated_pool("tracking_schema.db").await;
+
+        for table in ["tracking", "status", "node_progress"] {
+            let (found,): (i64,) = sqlx::query_as(
+                "SELECT COUNT(*) FROM sqlite_master WHERE type = 'table' AND name = ?",
+            )
+            .bind(table)
+            .fetch_one(&pool)
+            .await
+            .expect("check table exists");
+            assert_eq!(found, 1, "{table} table should exist after migration");
+        }
+
+        for index in ["idx_tracking_core_status", "idx_tracking_updated_at"] {
+            let (found,): (i64,) = sqlx::query_as(
+                "SELECT COUNT(*) FROM sqlite_master WHERE type = 'index' AND name = ?",
+            )
+            .bind(index)
+            .fetch_one(&pool)
+            .await
+            .expect("check index");
+            assert_eq!(found, 1, "{index} should exist after migration");
+        }
+
+        pool.close().await;
+        cleanup_files(&path);
+    }
+
+    #[tokio::test]
+    async fn core_statuses_are_seeded() {
+        let (pool, path) = migrated_pool("status_seeds.db").await;
+
+        let (system_count,): (i64,) =
+            sqlx::query_as("SELECT COUNT(*) FROM status WHERE is_system = 1")
+                .fetch_one(&pool)
+                .await
+                .unwrap();
+        assert_eq!(system_count, 7, "all seven core statuses should be seeded");
+
+        for (id, bucket) in [
+            ("planned", "planned"),
+            ("in_progress", "in_progress"),
+            ("completed", "completed"),
+            ("on_hold", "on_hold"),
+            ("dropped", "dropped"),
+            ("repeat", "repeat"),
+            ("wishlist", "wishlist"),
+        ] {
+            let (matches,): (i64,) = sqlx::query_as(
+                "SELECT COUNT(*) FROM status WHERE id = ? AND bucket = ? AND is_system = 1",
+            )
+            .bind(id)
+            .bind(bucket)
+            .fetch_one(&pool)
+            .await
+            .unwrap();
+            assert_eq!(matches, 1, "core status {id} should be seeded");
+        }
+
+        pool.close().await;
+        cleanup_files(&path);
+    }
+
+    #[tokio::test]
+    async fn tracking_checks_and_cascade_enforced() {
+        let (pool, path) = migrated_pool("tracking_checks.db").await;
+        insert_media(&pool, "m-1").await;
+
+        sqlx::query(
+            "INSERT INTO tracking (media_id, core_status, updated_at)
+             VALUES ('m-1', 'in_progress', '2026-01-01')",
+        )
+        .execute(&pool)
+        .await
+        .expect("valid core_status");
+
+        let bad_status = sqlx::query(
+            "INSERT INTO tracking (media_id, core_status, updated_at)
+             VALUES ('m-1', 'watching', '2026-01-01')",
+        )
+        .execute(&pool)
+        .await;
+        assert!(
+            bad_status.is_err(),
+            "CHECK must reject an unknown core_status"
+        );
+
+        insert_media(&pool, "m-2").await;
+        let negative_repeat = sqlx::query(
+            "INSERT INTO tracking (media_id, core_status, repeat_count, updated_at)
+             VALUES ('m-2', 'planned', -1, '2026-01-01')",
+        )
+        .execute(&pool)
+        .await;
+        assert!(
+            negative_repeat.is_err(),
+            "CHECK(repeat_count >= 0) must reject negative repeat count"
+        );
+
+        sqlx::query(
+            "INSERT INTO tracking (media_id, core_status, repeat_count, updated_at)
+             VALUES ('m-2', 'planned', 2, '2026-01-01')",
+        )
+        .execute(&pool)
+        .await
+        .expect("insert valid tracking row for m-2");
+
+        let missing_media = sqlx::query(
+            "INSERT INTO tracking (media_id, core_status, updated_at)
+             VALUES ('nope', 'planned', '2026-01-01')",
+        )
+        .execute(&pool)
+        .await;
+        assert!(missing_media.is_err(), "FK must reject unknown media");
+
+        sqlx::query("DELETE FROM media WHERE id = 'm-1'")
+            .execute(&pool)
+            .await
+            .unwrap();
+        let (count,): (i64,) = sqlx::query_as("SELECT COUNT(*) FROM tracking")
+            .fetch_one(&pool)
+            .await
+            .unwrap();
+        assert_eq!(count, 1, "tracking should cascade-delete with media");
+
+        pool.close().await;
+        cleanup_files(&path);
+    }
+
+    #[tokio::test]
+    async fn tracking_custom_status_fk_sets_null_on_delete() {
+        let (pool, path) = migrated_pool("tracking_custom.db").await;
+        insert_media(&pool, "m-1").await;
+        sqlx::query(
+            "INSERT INTO status (id, name, bucket) VALUES ('re-reading', 'Re-reading', 'repeat')",
+        )
+        .execute(&pool)
+        .await
+        .unwrap();
+        sqlx::query(
+            "INSERT INTO tracking (media_id, core_status, custom_status_id, updated_at)
+             VALUES ('m-1', 'repeat', 're-reading', '2026-01-01')",
+        )
+        .execute(&pool)
+        .await
+        .unwrap();
+
+        sqlx::query("DELETE FROM status WHERE id = 're-reading'")
+            .execute(&pool)
+            .await
+            .unwrap();
+
+        let (custom,): (Option<String>,) =
+            sqlx::query_as("SELECT custom_status_id FROM tracking WHERE media_id = 'm-1'")
+                .fetch_one(&pool)
+                .await
+                .unwrap();
+        assert_eq!(
+            custom, None,
+            "deleting a custom status must SET NULL on tracking"
+        );
+
+        pool.close().await;
+        cleanup_files(&path);
+    }
+
+    #[tokio::test]
+    async fn node_progress_checks_and_cascade_enforced() {
+        let (pool, path) = migrated_pool("node_progress.db").await;
+        insert_media(&pool, "m-1").await;
+        sqlx::query(
+            "INSERT INTO content_node (id, media_id, kind, position, created_at)
+             VALUES ('n-1', 'm-1', 'chapter', 1, '2026-01-01')",
+        )
+        .execute(&pool)
+        .await
+        .unwrap();
+
+        sqlx::query(
+            "INSERT INTO node_progress (node_id, state, rating, updated_at)
+             VALUES ('n-1', 'read', 8, '2026-01-01')",
+        )
+        .execute(&pool)
+        .await
+        .expect("valid node progress");
+
+        let bad_state = sqlx::query(
+            "INSERT INTO node_progress (node_id, state, updated_at)
+             VALUES ('n-1', 'finished', '2026-01-01')",
+        )
+        .execute(&pool)
+        .await;
+        assert!(bad_state.is_err(), "CHECK must reject an unknown state");
+
+        insert_media(&pool, "m-2").await;
+        sqlx::query(
+            "INSERT INTO content_node (id, media_id, kind, position, created_at)
+             VALUES ('n-2', 'm-2', 'chapter', 1, '2026-01-01')",
+        )
+        .execute(&pool)
+        .await
+        .unwrap();
+        for rating in [0i64, 11] {
+            let out_of_range = sqlx::query(
+                "INSERT INTO node_progress (node_id, state, rating, updated_at)
+                 VALUES ('n-2', 'read', ?, '2026-01-01')",
+            )
+            .bind(rating)
+            .execute(&pool)
+            .await;
+            assert!(out_of_range.is_err(), "rating CHECK must reject {rating}");
+        }
+
+        let dup = sqlx::query(
+            "INSERT INTO node_progress (node_id, state, updated_at)
+             VALUES ('n-1', 'partial', '2026-01-01')",
+        )
+        .execute(&pool)
+        .await;
+        assert!(dup.is_err(), "node_progress PK is per node");
+
+        sqlx::query("DELETE FROM content_node WHERE id = 'n-2'")
+            .execute(&pool)
+            .await
+            .unwrap();
+        let (count,): (i64,) = sqlx::query_as("SELECT COUNT(*) FROM node_progress")
+            .fetch_one(&pool)
+            .await
+            .unwrap();
+        assert_eq!(
+            count, 1,
+            "node_progress should cascade-delete with its node"
+        );
+
+        pool.close().await;
+        cleanup_files(&path);
+    }
 }

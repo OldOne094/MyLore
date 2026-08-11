@@ -166,27 +166,33 @@ CREATE TABLE media_relation (
 -- User-owned aggregates (P3 separation)
 CREATE TABLE tracking (
   media_id     TEXT PRIMARY KEY REFERENCES media(id) ON DELETE CASCADE,
-  core_status  TEXT NOT NULL,
+  core_status  TEXT NOT NULL CHECK (core_status IN
+                 ('planned','in_progress','completed','on_hold','dropped','repeat','wishlist')),
   custom_status_id TEXT REFERENCES status(id) ON DELETE SET NULL,
   started_at   TEXT,
   finished_at  TEXT,
-  repeat_count INTEGER NOT NULL DEFAULT 0,
+  repeat_count INTEGER NOT NULL DEFAULT 0 CHECK (repeat_count >= 0),
   current_node_id TEXT REFERENCES content_node(id) ON DELETE SET NULL,
   current_position INTEGER,      -- fast "chapter 12" / "ep 5" without node rows
   updated_at   TEXT NOT NULL
 );
+CREATE INDEX idx_tracking_core_status ON tracking(core_status);
+CREATE INDEX idx_tracking_updated_at ON tracking(updated_at);
 
 CREATE TABLE status (
   id       TEXT PRIMARY KEY,
   name     TEXT NOT NULL,
-  bucket   TEXT NOT NULL,        -- core bucket: planned|in_progress|completed|on_hold|dropped|repeat|wishlist
+  bucket   TEXT NOT NULL CHECK (bucket IN
+             ('planned','in_progress','completed','on_hold','dropped','repeat','wishlist')),
   is_system INTEGER NOT NULL DEFAULT 0,
   sort_order INTEGER NOT NULL DEFAULT 0
 );
+-- Seeded core statuses (is_system=1): planned, in_progress, completed,
+-- on_hold, dropped, repeat, wishlist (MISSION-016).
 
 CREATE TABLE node_progress (
   node_id    TEXT NOT NULL REFERENCES content_node(id) ON DELETE CASCADE,
-  state      TEXT NOT NULL,      -- unread|read|watched|skipped|partial
+  state      TEXT NOT NULL CHECK (state IN ('unread','read','watched','skipped','partial')),
   read_at    TEXT,
   note       TEXT,
   rating     INTEGER CHECK (rating BETWEEN 1 AND 10),
@@ -321,9 +327,9 @@ Cross-row invariants that SQLite cannot express are enforced by Rust validators
 ## 6. Migrations
 
 - Versioned `.sql` files (`migrations/0001_init.sql`, `0002_media.sql`, `0003_content_node.sql`,
-  `0004_media_identity.sql`, …) run through `sqlx::migrate!` at startup, each **inside a
-  transaction** (verified 2026: sqlx-sqlite wraps migration SQL + bookkeeping in a single
-  transaction; see `migrate.rs`). Wired as `db::migrate` in MISSION-012.
+  `0004_media_identity.sql`, `0005_tracking.sql`, …) run through `sqlx::migrate!` at startup,
+  each **inside a transaction** (verified 2026: sqlx-sqlite wraps migration SQL + bookkeeping in a
+  single transaction; see `migrate.rs`). Wired as `db::migrate` in MISSION-012.
 - MISSION-017 adds `cover_asset_id`/`banner_asset_id` to `media` via `ALTER TABLE ADD COLUMN`
   (SQLite rejects writes through an FK pointing at a missing parent, so the columns must wait
   for the `asset` table).
