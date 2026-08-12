@@ -97,15 +97,33 @@ pub enum MediaSort {
 #[derive(Debug, Default, Clone)]
 pub struct MediaFilter {
     pub content_type: Option<String>,
+    pub format: Option<String>,
     pub pub_status: Option<String>,
     pub genre: Option<String>,
     pub tag: Option<String>,
+    pub year: Option<i64>,
     pub favorite: Option<bool>,
     pub search: Option<String>,
     pub sort: MediaSort,
     pub ascending: bool,
     pub limit: Option<u32>,
     pub offset: Option<u32>,
+}
+
+/// One selectable facet value (`genre`/`tag` rows carry an id + display name).
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize)]
+pub struct FacetOption {
+    pub id: String,
+    pub name: String,
+}
+
+/// Distinct filter values present in the library, for the filter panel.
+#[derive(Debug, Default, Clone, serde::Serialize)]
+pub struct MediaFacets {
+    pub formats: Vec<String>,
+    pub genres: Vec<FacetOption>,
+    pub tags: Vec<FacetOption>,
+    pub years: Vec<i64>,
 }
 
 const MEDIA_COLUMNS: &str = "id, content_type, format, title_main, title_original, synopsis, \
@@ -384,6 +402,54 @@ pub async fn count(pool: &SqlitePool, filter: &MediaFilter) -> Result<i64, AppEr
     Ok(n)
 }
 
+/// Distinct format/genre/tag/year values present in the library, for the
+/// filter panel. Every value comes from actual rows so options never drift
+/// from data.
+pub async fn facets(pool: &SqlitePool) -> Result<MediaFacets, AppError> {
+    let formats = sqlx::query_as::<_, (String,)>(
+        "SELECT DISTINCT format FROM media WHERE format IS NOT NULL ORDER BY format COLLATE NOCASE",
+    )
+    .fetch_all(pool)
+    .await?
+    .into_iter()
+    .map(|(format,)| format)
+    .collect();
+
+    let genres = sqlx::query_as::<_, (String, String)>(
+        "SELECT id, name FROM genre ORDER BY name COLLATE NOCASE",
+    )
+    .fetch_all(pool)
+    .await?
+    .into_iter()
+    .map(|(id, name)| FacetOption { id, name })
+    .collect();
+
+    let tags = sqlx::query_as::<_, (String, String)>(
+        "SELECT id, name FROM tag WHERE scope = 'domain' ORDER BY name COLLATE NOCASE",
+    )
+    .fetch_all(pool)
+    .await?
+    .into_iter()
+    .map(|(id, name)| FacetOption { id, name })
+    .collect();
+
+    let years = sqlx::query_as::<_, (i64,)>(
+        "SELECT DISTINCT release_year FROM media WHERE release_year IS NOT NULL ORDER BY release_year DESC",
+    )
+    .fetch_all(pool)
+    .await?
+    .into_iter()
+    .map(|(year,)| year)
+    .collect();
+
+    Ok(MediaFacets {
+        formats,
+        genres,
+        tags,
+        years,
+    })
+}
+
 /// Full-text search over both tokenizers, best matches first.
 ///
 /// The query is folded like the index (lowercase + Arabic normalization), then
@@ -466,9 +532,17 @@ fn push_where<'args>(qb: &mut QueryBuilder<'args, sqlx::Sqlite>, filter: &'args 
         push(qb, "m.content_type = ".to_string());
         qb.push_bind(content_type);
     }
+    if let Some(format) = &filter.format {
+        push(qb, "m.format = ".to_string());
+        qb.push_bind(format);
+    }
     if let Some(pub_status) = &filter.pub_status {
         push(qb, "m.pub_status = ".to_string());
         qb.push_bind(pub_status);
+    }
+    if let Some(year) = filter.year {
+        push(qb, "m.release_year = ".to_string());
+        qb.push_bind(year);
     }
     match filter.favorite {
         Some(true) => push(qb, "r.favorite = 1".to_string()),

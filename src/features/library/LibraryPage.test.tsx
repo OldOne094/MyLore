@@ -12,6 +12,7 @@ vi.mock("@tauri-apps/api/core", () => ({
 
 import { invoke } from "@tauri-apps/api/core";
 import { LibraryPage } from "./LibraryPage";
+import type { MediaFacets } from "./api";
 
 const TITLES = [
   {
@@ -34,6 +35,21 @@ const TITLES = [
   },
 ];
 
+const FACETS: MediaFacets = {
+  formats: ["light_novel", "webtoon"],
+  genres: [{ id: "fantasy", name: "Fantasy" }],
+  tags: [{ id: "isekai", name: "Isekai" }],
+  years: [2026, 2011],
+};
+
+function mockLibrary(items: unknown, facets: MediaFacets = FACETS) {
+  vi.mocked(invoke).mockImplementation((command: string) => {
+    if (command === "media_facets") return Promise.resolve(facets);
+    if (command === "media_list") return Promise.resolve(items);
+    return Promise.resolve(null);
+  });
+}
+
 function renderPage() {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   return render(
@@ -52,14 +68,14 @@ afterEach(async () => {
 
 describe("LibraryPage", () => {
   it("renders the empty state when there are no titles", async () => {
-    vi.mocked(invoke).mockResolvedValue([]);
+    mockLibrary([]);
     renderPage();
     expect(await screen.findByText("Your library is empty")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Add title" })).toBeInTheDocument();
   });
 
   it("renders a grid of cards for existing titles", async () => {
-    vi.mocked(invoke).mockResolvedValue(TITLES);
+    mockLibrary(TITLES);
     renderPage();
 
     expect(await screen.findByText("Steins;Gate")).toBeInTheDocument();
@@ -73,7 +89,7 @@ describe("LibraryPage", () => {
   });
 
   it("requests the library listing with default args", async () => {
-    vi.mocked(invoke).mockResolvedValue([]);
+    mockLibrary([]);
     renderPage();
     await screen.findByText("Your library is empty");
 
@@ -84,8 +100,13 @@ describe("LibraryPage", () => {
   });
 
   it("shows a retry action when loading fails", async () => {
-    vi.mocked(invoke).mockRejectedValueOnce("boom");
-    vi.mocked(invoke).mockResolvedValueOnce(TITLES);
+    vi.mocked(invoke)
+      .mockImplementationOnce((command: string) =>
+        command === "media_facets" ? Promise.resolve(FACETS) : Promise.reject("boom"),
+      )
+      .mockImplementation((command: string) =>
+        command === "media_facets" ? Promise.resolve(FACETS) : Promise.resolve(TITLES),
+      );
     renderPage();
 
     const retry = await screen.findByRole("button", { name: "Retry" });
@@ -95,7 +116,7 @@ describe("LibraryPage", () => {
   });
 
   it("exposes the view switcher and defaults to the grid", async () => {
-    vi.mocked(invoke).mockResolvedValue(TITLES);
+    mockLibrary(TITLES);
     renderPage();
     await screen.findByText("Steins;Gate");
 
@@ -107,7 +128,7 @@ describe("LibraryPage", () => {
   });
 
   it("switches between List and Compact views", async () => {
-    vi.mocked(invoke).mockResolvedValue(TITLES);
+    mockLibrary(TITLES);
     renderPage();
     await screen.findByText("Steins;Gate");
 
@@ -141,12 +162,72 @@ describe("LibraryPage", () => {
       cover_asset_id: null,
       updated_at: "2026-01-01T00:00:00Z",
     }));
-    vi.mocked(invoke).mockResolvedValue(many);
+    mockLibrary(many);
     renderPage();
     expect(await screen.findByText("Title 0")).toBeInTheDocument();
 
     const rendered = screen.getAllByRole("article").length;
     expect(rendered).toBeGreaterThan(0);
     expect(rendered).toBeLessThan(300);
+  });
+
+  it("filters the library by content type through media_list", async () => {
+    mockLibrary(TITLES);
+    renderPage();
+    await screen.findByText("Steins;Gate");
+
+    await userEvent.click(screen.getByRole("button", { name: "Filter" }));
+    await userEvent.click(await screen.findByRole("button", { name: "Anime" }));
+
+    expect(invoke).toHaveBeenCalledWith(
+      "media_list",
+      expect.objectContaining({ content_type: "anime" }),
+    );
+  });
+
+  it("sorts by last updated through media_list", async () => {
+    mockLibrary(TITLES);
+    renderPage();
+    await screen.findByText("Steins;Gate");
+
+    await userEvent.click(screen.getByRole("button", { name: "Sort" }));
+    await userEvent.click(await screen.findByRole("button", { name: "Last updated" }));
+
+    expect(invoke).toHaveBeenCalledWith(
+      "media_list",
+      expect.objectContaining({ sort: "updated_at", ascending: true }),
+    );
+  });
+
+  it("groups the grid by content type with section headers", async () => {
+    mockLibrary(TITLES);
+    renderPage();
+    await screen.findByText("Steins;Gate");
+
+    await userEvent.click(screen.getByRole("button", { name: "Group by" }));
+    await userEvent.click(await screen.findByRole("button", { name: "Content type" }));
+
+    expect(screen.getAllByText("Anime").length).toBeGreaterThanOrEqual(2);
+    expect(screen.getAllByText("Novel").length).toBeGreaterThanOrEqual(2);
+    expect(screen.getAllByRole("article")).toHaveLength(2);
+  });
+
+  it("shows a no-results state when filters match nothing", async () => {
+    vi.mocked(invoke).mockImplementation((command: string, args?: unknown) => {
+      if (command === "media_facets") return Promise.resolve(FACETS);
+      if (command === "media_list") {
+        const content_type = (args as { content_type?: string } | undefined)?.content_type;
+        return Promise.resolve(content_type === "anime" ? [] : TITLES);
+      }
+      return Promise.resolve(null);
+    });
+    renderPage();
+    await screen.findByText("Steins;Gate");
+
+    await userEvent.click(screen.getByRole("button", { name: "Filter" }));
+    await userEvent.click(await screen.findByRole("button", { name: "Anime" }));
+
+    expect(await screen.findByText("No matching titles")).toBeInTheDocument();
+    expect(screen.queryByText("Steins;Gate")).not.toBeInTheDocument();
   });
 });

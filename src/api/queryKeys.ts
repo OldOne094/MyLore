@@ -4,12 +4,18 @@
    commands; consumers arrive with later missions. */
 
 export interface MediaListFilters {
-  contentType?: string;
-  status?: string;
-  format?: string;
-  tag?: string;
-  favorite?: boolean;
-  sort?: string;
+  content_type?: string | null;
+  format?: string | null;
+  pub_status?: string | null;
+  genre?: string | null;
+  tag?: string | null;
+  year?: number | null;
+  favorite?: boolean | null;
+  search?: string | null;
+  sort?: string | null;
+  ascending?: boolean | null;
+  limit?: number | null;
+  offset?: number | null;
 }
 
 export const queryKeys = {
@@ -21,6 +27,7 @@ export const queryKeys = {
     all: () => ["media"] as const,
     lists: () => ["media", "list"] as const,
     list: (filters: MediaListFilters) => ["media", "list", filters] as const,
+    facets: () => ["media", "facets"] as const,
     details: () => ["media", "detail"] as const,
     detail: (id: number) => ["media", "detail", id] as const,
   },

@@ -30,9 +30,11 @@ export function media_create(args: {
 /** List library entries with optional filters. Resolves with summary rows or rejects with an AppError string. */
 export function media_list(args: {
   content_type: string | null;
+  format: string | null;
   pub_status: string | null;
   genre: string | null;
   tag: string | null;
+  year: number | null;
   favorite: boolean | null;
   search: string | null;
   sort: string | null;
@@ -61,4 +63,19 @@ export function media_list(args: {
       updated_at: string;
     }[]
   >("media_list", args);
+}
+
+/** Distinct filter values present in the library. Resolves with facet options or rejects with an AppError string. */
+export function media_facets(): Promise<{
+  formats: string[];
+  genres: { id: string; name: string }[];
+  tags: { id: string; name: string }[];
+  years: number[];
+}> {
+  return invoke<{
+    formats: string[];
+    genres: { id: string; name: string }[];
+    tags: { id: string; name: string }[];
+    years: number[];
+  }>("media_facets");
 }

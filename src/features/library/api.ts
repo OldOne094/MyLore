@@ -3,7 +3,7 @@
    typed mutation that invalidates every library list on success. */
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { media_create, media_list } from "@/api";
+import { media_create, media_facets, media_list } from "@/api";
 import { queryKeys } from "@/api";
 import type { AddMediaInput } from "./types";
 
@@ -34,11 +34,27 @@ export interface MediaListItem {
   updated_at: string;
 }
 
+/** A selectable facet value (`genre`/`tag` rows carry an id + display name). */
+export interface MediaFacetOption {
+  id: string;
+  name: string;
+}
+
+/** Distinct filter values present in the library (MISSION-041). */
+export interface MediaFacets {
+  formats: string[];
+  genres: MediaFacetOption[];
+  tags: MediaFacetOption[];
+  years: number[];
+}
+
 export interface MediaListArgs {
   content_type: string | null;
+  format: string | null;
   pub_status: string | null;
   genre: string | null;
   tag: string | null;
+  year: number | null;
   favorite: boolean | null;
   search: string | null;
   sort: string | null;
@@ -50,9 +66,11 @@ export interface MediaListArgs {
 /** Default library listing: everything, title ascending. */
 export const MEDIA_LIST_DEFAULT_ARGS: MediaListArgs = {
   content_type: null,
+  format: null,
   pub_status: null,
   genre: null,
   tag: null,
+  year: null,
   favorite: null,
   search: null,
   sort: "title",
@@ -90,9 +108,17 @@ export function useAddMedia() {
 }
 
 /** Read the library grid; keyed under the list fan-out so adds invalidate it. */
-export function useMediaListQuery() {
+export function useMediaListQuery(args: MediaListArgs = MEDIA_LIST_DEFAULT_ARGS) {
   return useQuery({
-    queryKey: queryKeys.media.lists(),
-    queryFn: () => media_list(MEDIA_LIST_DEFAULT_ARGS),
+    queryKey: queryKeys.media.list(args),
+    queryFn: () => media_list(args),
+  });
+}
+
+/** Distinct filter values present in the library (MISSION-041). */
+export function useMediaFacetsQuery() {
+  return useQuery({
+    queryKey: queryKeys.media.facets(),
+    queryFn: () => media_facets(),
   });
 }

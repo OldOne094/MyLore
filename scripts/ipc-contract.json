@@ -32,9 +32,11 @@
       "name": "media_list",
       "args": {
         "content_type": "string | null",
+        "format": "string | null",
         "pub_status": "string | null",
         "genre": "string | null",
         "tag": "string | null",
+        "year": "number | null",
         "favorite": "boolean | null",
         "search": "string | null",
         "sort": "string | null",
@@ -44,6 +46,12 @@
       },
       "returns": "{ id: string; content_type: string; title: string; pub_status: string; release_year: number | null; cover_asset_id: string | null; updated_at: string }[]",
       "doc": "List library entries with optional filters. Resolves with summary rows or rejects with an AppError string."
+    },
+    {
+      "name": "media_facets",
+      "args": {},
+      "returns": "{ formats: string[]; genres: { id: string; name: string }[]; tags: { id: string; name: string }[]; years: number[] }",
+      "doc": "Distinct filter values present in the library. Resolves with facet options or rejects with an AppError string."
     }
   ],
   "events": []

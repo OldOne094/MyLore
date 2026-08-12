@@ -1,15 +1,19 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { useTranslation } from "react-i18next";
 import { useVirtualizer } from "@tanstack/react-virtual";
 import { cn } from "@/lib/cn";
 import type { MediaListItem } from "./api";
 import { MediaCard } from "./MediaCard";
 import { MediaRow } from "./MediaRow";
 import type { LibraryView } from "./LibraryViewSwitcher";
+import { buildLibraryRows, type LibraryGroupBy, type LibraryRow } from "./grouping";
 
-/* MISSION-040 — Virtualized library rendering. Three densities: Grid (2:3
+/* MISSION-040/041 — Virtualized library rendering. Three densities: Grid (2:3
    poster cards), List (comfortable rows), Compact (dense rows). Every view
    windows through @tanstack/react-virtual against the local scroll container,
-   so 10,000+ entries render without jank (REQ-PERF library line). */
+   so 10,000+ entries render without jank (REQ-PERF library line). MISSION-041
+   adds group-by: the flat row model interleaves group-header rows with item
+   rows, all virtualized together. */
 
 /* Matches the Tailwind grid breakpoints: <640 → 2, ≥640 → 3, ≥768 → 4, ≥1024 → 6. */
 const GRID_BREAKPOINTS: ReadonlyArray<{ minWidth: number; columns: number }> = [
@@ -17,6 +21,8 @@ const GRID_BREAKPOINTS: ReadonlyArray<{ minWidth: number; columns: number }> = [
   { minWidth: 768, columns: 4 },
   { minWidth: 640, columns: 3 },
 ];
+
+const HEADER_SIZE = 36;
 
 function columnsForWidth(width: number): number {
   for (const breakpoint of GRID_BREAKPOINTS) {
@@ -44,20 +50,40 @@ function useGridColumns(scrollRef: React.RefObject<HTMLDivElement | null>): numb
 export interface VirtualizedLibraryProps {
   view: LibraryView;
   items: MediaListItem[];
+  groupBy?: LibraryGroupBy;
   className?: string;
 }
 
-export function VirtualizedLibrary({ view, items, className }: VirtualizedLibraryProps) {
+export function VirtualizedLibrary({
+  view,
+  items,
+  groupBy = "none",
+  className,
+}: VirtualizedLibraryProps) {
+  const { t } = useTranslation();
   const scrollRef = useRef<HTMLDivElement>(null);
   const columns = useGridColumns(scrollRef);
 
-  const rowCount = view === "grid" ? Math.ceil(items.length / columns) : items.length;
   const rowSize = view === "grid" ? 320 : view === "compact" ? 40 : 64;
 
+  const rows: LibraryRow[] = useMemo(() => {
+    const labelFor = (group: LibraryGroupBy, raw: string): string => {
+      if (group === "year" && raw === "unknown") return t("library.groupUnknown");
+      if (group === "content_type") return t(`contentType.${raw}`);
+      if (group === "pub_status") return t(`pubStatus.${raw}`);
+      return raw;
+    };
+    const itemColumns = view === "grid" ? columns : 1;
+    return buildLibraryRows(items, groupBy, itemColumns, labelFor);
+  }, [items, groupBy, view, columns, t]);
+
+  const rowsRef = useRef(rows);
+  rowsRef.current = rows;
+
   const virtualizer = useVirtualizer({
-    count: rowCount,
+    count: rows.length,
     getScrollElement: () => scrollRef.current,
-    estimateSize: () => rowSize,
+    estimateSize: (index) => (rowsRef.current[index]?.kind === "header" ? HEADER_SIZE : rowSize),
     overscan: view === "grid" ? 2 : 8,
   });
 
@@ -70,12 +96,27 @@ export function VirtualizedLibrary({ view, items, className }: VirtualizedLibrar
     >
       <div className="relative w-full" style={{ height: virtualizer.getTotalSize() }}>
         {virtualizer.getVirtualItems().map((row) => {
-          if (view === "grid") {
-            const start = row.index * columns;
-            const rowItems = items.slice(start, start + columns);
+          const entry = rows[row.index];
+          if (entry.kind === "header") {
             return (
               <div
-                key={row.key}
+                key={entry.key}
+                ref={virtualizer.measureElement}
+                data-index={row.index}
+                className="absolute inset-x-0 top-0 flex items-center px-6"
+                style={{ height: HEADER_SIZE, transform: `translateY(${row.start}px)` }}
+              >
+                <span className="text-xs font-semibold uppercase tracking-wider text-text-secondary">
+                  {entry.label}
+                </span>
+              </div>
+            );
+          }
+
+          if (view === "grid") {
+            return (
+              <div
+                key={entry.key}
                 ref={virtualizer.measureElement}
                 data-index={row.index}
                 className="absolute inset-x-0 top-0 grid gap-4 px-6 pb-6 pt-6"
@@ -84,18 +125,18 @@ export function VirtualizedLibrary({ view, items, className }: VirtualizedLibrar
                   transform: `translateY(${row.start}px)`,
                 }}
               >
-                {rowItems.map((item) => (
+                {entry.items.map((item) => (
                   <MediaCard key={item.id} item={item} />
                 ))}
               </div>
             );
           }
 
-          const item = items[row.index];
+          const item = entry.items[0];
           if (!item) return null;
           return (
             <div
-              key={row.key}
+              key={entry.key}
               ref={virtualizer.measureElement}
               data-index={row.index}
               className={cn("absolute inset-x-0 top-0 px-6", view === "compact" ? "pb-1" : "pb-2")}

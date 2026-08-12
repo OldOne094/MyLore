@@ -39,10 +39,10 @@ describe("query client", () => {
 describe("query keys", () => {
   it("builds namespaced, fan-out friendly keys", () => {
     expect(queryKeys.media.all()).toEqual(["media"]);
-    expect(queryKeys.media.list({ status: "watching" })).toEqual([
+    expect(queryKeys.media.list({ pub_status: "watching" })).toEqual([
       "media",
       "list",
-      { status: "watching" },
+      { pub_status: "watching" },
     ]);
     expect(queryKeys.media.detail(7)).toEqual(["media", "detail", 7]);
     expect(queryKeys.system.greeting("Ada")).toEqual(["system", "greet", "Ada"]);

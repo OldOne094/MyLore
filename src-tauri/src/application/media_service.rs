@@ -19,8 +19,8 @@ use crate::domain::media::{Media, MediaRuntime};
 use crate::domain::value_objects::{LanguageCode, MediaId};
 use crate::error::AppError;
 use crate::infrastructure::repositories::media::{
-    list as list_rows, MediaFilter, MediaRecord, MediaSort, MediaSummary, AltTitle, ExternalId,
-    MediaRelation,
+    facets as media_facets, list as list_rows, MediaFacets, MediaFilter, MediaRecord, MediaSort,
+    MediaSummary, AltTitle, ExternalId, MediaRelation,
 };
 
 /// Command input for a manual add (MISSION-038).
@@ -51,9 +51,11 @@ pub struct MediaService {
 #[derive(Debug, Default, Clone)]
 pub struct MediaListInput {
     pub content_type: Option<String>,
+    pub format: Option<String>,
     pub pub_status: Option<String>,
     pub genre: Option<String>,
     pub tag: Option<String>,
+    pub year: Option<i64>,
     pub favorite: Option<bool>,
     pub search: Option<String>,
     pub sort: Option<String>,
@@ -159,9 +161,11 @@ impl MediaService {
         };
         let filter = MediaFilter {
             content_type: input.content_type,
+            format: input.format,
             pub_status: input.pub_status,
             genre: input.genre,
             tag: input.tag,
+            year: input.year,
             favorite: input.favorite,
             search: input.search,
             sort,
@@ -172,6 +176,11 @@ impl MediaService {
 
         let rows = list_rows(&self.pool, &filter).await?;
         Ok(rows.into_iter().map(media_list_item).collect())
+    }
+
+    /// Distinct filter values present in the library (MISSION-041).
+    pub async fn list_facets(&self) -> Result<MediaFacets, AppError> {
+        media_facets(&self.pool).await
     }
 }
 
@@ -386,6 +395,66 @@ mod tests {
             .expect("list anime");
         assert_eq!(items.len(), 1);
         assert_eq!(items[0].title, "Skyline Echoes");
+    }
+
+    #[tokio::test]
+    async fn list_media_filters_by_format_and_year() {
+        let (pool, _path) = migrated_pool("media_service_list_format_year.db").await;
+        let service = MediaService::new(pool.clone());
+
+        let mut light_novel = input();
+        light_novel.title = "The Silent Witching Hour".into();
+        light_novel.format = Some("light_novel".into());
+        light_novel.release_year = Some(2025);
+        let mut webtoon = input();
+        webtoon.title = "Crimson Web".into();
+        webtoon.format = Some("webtoon".into());
+        webtoon.release_year = Some(2026);
+        service.add_media(light_novel).await.expect("add first");
+        service.add_media(webtoon).await.expect("add second");
+
+        let by_format = service
+            .list_media(MediaListInput {
+                format: Some("webtoon".into()),
+                ..MediaListInput::default()
+            })
+            .await
+            .expect("list by format");
+        assert_eq!(by_format.len(), 1);
+        assert_eq!(by_format[0].title, "Crimson Web");
+
+        let by_year = service
+            .list_media(MediaListInput {
+                year: Some(2025),
+                ..MediaListInput::default()
+            })
+            .await
+            .expect("list by year");
+        assert_eq!(by_year.len(), 1);
+        assert_eq!(by_year[0].title, "The Silent Witching Hour");
+    }
+
+    #[tokio::test]
+    async fn list_facets_returns_distinct_present_values() {
+        let (pool, _path) = migrated_pool("media_service_facets.db").await;
+        let service = MediaService::new(pool.clone());
+
+        let mut one = input();
+        one.title = "First Light".into();
+        one.format = Some("light_novel".into());
+        one.release_year = Some(2025);
+        let mut two = input();
+        two.title = "Second Wave".into();
+        two.format = Some("webtoon".into());
+        two.release_year = Some(2026);
+        service.add_media(one).await.expect("add one");
+        service.add_media(two).await.expect("add two");
+
+        let facets = service.list_facets().await.expect("facets");
+        assert_eq!(facets.formats, vec!["light_novel".to_string(), "webtoon".to_string()]);
+        assert_eq!(facets.years, vec![2026, 2025]);
+        assert!(!facets.genres.is_empty(), "seeded genres present");
+        assert!(!facets.tags.is_empty(), "seeded domain tags present");
     }
 
     #[tokio::test]

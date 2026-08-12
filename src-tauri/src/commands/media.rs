@@ -6,7 +6,9 @@ use tauri::command;
 use tauri::State;
 use tracing::info;
 
-use crate::application::media_service::{AddMediaInput, MediaListItem, MediaListInput, MediaService};
+use crate::application::media_service::{
+    AddMediaInput, MediaListItem, MediaListInput, MediaService,
+};
 use crate::error::AppError;
 
 /// Create a media entry from manual input. Resolves with the new media id.
@@ -58,9 +60,11 @@ pub async fn media_create(
 pub async fn media_list(
     state: State<'_, SqlitePool>,
     content_type: Option<String>,
+    format: Option<String>,
     pub_status: Option<String>,
     genre: Option<String>,
     tag: Option<String>,
+    year: Option<i64>,
     favorite: Option<bool>,
     search: Option<String>,
     sort: Option<String>,
@@ -72,9 +76,11 @@ pub async fn media_list(
     let service = MediaService::new(state.inner().clone());
     let input = MediaListInput {
         content_type,
+        format,
         pub_status,
         genre,
         tag,
+        year,
         favorite,
         search,
         sort,
@@ -83,4 +89,14 @@ pub async fn media_list(
         offset,
     };
     service.list_media(input).await
+}
+
+/// Distinct filter values present in the library (MISSION-041).
+#[command]
+pub async fn media_facets(
+    state: State<'_, SqlitePool>,
+) -> Result<crate::infrastructure::repositories::media::MediaFacets, AppError> {
+    info!("media_facets invoked");
+    let service = MediaService::new(state.inner().clone());
+    service.list_facets().await
 }

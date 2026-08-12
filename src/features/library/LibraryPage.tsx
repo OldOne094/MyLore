@@ -1,15 +1,27 @@
 import { useState } from "react";
-import { Library, Plus, RefreshCcw } from "lucide-react";
+import { Library, Plus, RefreshCcw, SlidersHorizontal } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { Button, EmptyState, Skeleton } from "@/components/ui";
-import { useMediaListQuery } from "./api";
+import { useMediaFacetsQuery, useMediaListQuery } from "./api";
 import { AddMediaDialog } from "./AddMediaDialog";
 import { LibraryViewSwitcher, type LibraryView } from "./LibraryViewSwitcher";
 import { VirtualizedLibrary } from "./VirtualizedLibrary";
+import { LibraryFilterBar } from "./LibraryFilterBar";
+import {
+  activeFilterCount,
+  DEFAULT_FILTERS,
+  DEFAULT_SORT,
+  filtersToArgs,
+  type LibraryFilters,
+  type LibrarySort,
+} from "./filters";
+import type { LibraryGroupBy } from "./grouping";
 
-/* MISSION-040 — Library landing view: the add flow when empty, a toolbar with
-   the Grid / List / Compact density switcher when populated, per-view skeletons
-   while loading, and a retry on failure. Rendering is virtualized. */
+/* MISSION-040/041 — Library landing view: the add flow when empty, a toolbar
+   with the Grid / List / Compact density switcher when populated, filter
+   panel (type/format/status/genre/tag/year/favorite) + sort menu + group-by,
+   per-view skeletons while loading, and a retry on failure. Rendering is
+   virtualized. */
 
 function AddTitleTrigger() {
   const { t } = useTranslation();
@@ -75,8 +87,14 @@ function EmptyLibrary() {
 
 export function LibraryPage() {
   const { t } = useTranslation();
-  const { data, isLoading, isError, refetch } = useMediaListQuery();
   const [view, setView] = useState<LibraryView>("grid");
+  const [filters, setFilters] = useState<LibraryFilters>(DEFAULT_FILTERS);
+  const [sort, setSort] = useState<LibrarySort>(DEFAULT_SORT);
+  const [groupBy, setGroupBy] = useState<LibraryGroupBy>("none");
+
+  const queryArgs = filtersToArgs(filters, sort);
+  const { data, isLoading, isError, refetch } = useMediaListQuery(queryArgs);
+  const { data: facets } = useMediaFacetsQuery();
 
   if (isLoading) return <LibrarySkeleton view={view} />;
 
@@ -97,7 +115,8 @@ export function LibraryPage() {
   }
 
   const items = data ?? [];
-  if (items.length === 0) return <EmptyLibrary />;
+  const hasActiveFilters = activeFilterCount(filters) > 0;
+  if (items.length === 0 && !hasActiveFilters) return <EmptyLibrary />;
 
   return (
     <section aria-label={t("nav.library")} className="flex h-full min-h-0 flex-col">
@@ -110,7 +129,29 @@ export function LibraryPage() {
           <LibraryViewSwitcher view={view} onChange={setView} />
         </div>
       </div>
-      <VirtualizedLibrary view={view} items={items} />
+      <LibraryFilterBar
+        filters={filters}
+        sort={sort}
+        groupBy={groupBy}
+        facets={facets}
+        onFiltersChange={setFilters}
+        onSortChange={setSort}
+        onGroupByChange={setGroupBy}
+      />
+      {items.length === 0 ? (
+        <EmptyState
+          icon={SlidersHorizontal}
+          title={t("library.noResultsTitle")}
+          hint={t("library.noResultsHint")}
+          action={
+            <Button variant="secondary" onClick={() => setFilters(DEFAULT_FILTERS)}>
+              {t("library.filtersClear")}
+            </Button>
+          }
+        />
+      ) : (
+        <VirtualizedLibrary view={view} items={items} groupBy={groupBy} />
+      )}
     </section>
   );
 }
