@@ -34,9 +34,6 @@ const en = {
     hint_calendar: "Airing schedules and upcoming release dates.",
     hint_settings: "Theme, language, data and provider preferences.",
   },
-  page: {
-    status_bar: "Status bar",
-  },
   settings: {
     theme: "Theme",
     themeHint: "Light, dark, or follow the system appearance.",
@@ -160,9 +157,6 @@ const ar = {
     hint_stats: "ساعات المشاهدة والصفحات المقروءة وتوزيع تقييماتك.",
     hint_calendar: "جداول العرض وتواريخ الإصدار القادمة.",
     hint_settings: "تفضيلات السمة واللغة والبيانات والموزِّعين.",
-  },
-  page: {
-    status_bar: "شريط الحالة",
   },
   settings: {
     theme: "السمة",

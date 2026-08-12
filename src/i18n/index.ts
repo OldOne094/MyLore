@@ -11,6 +11,9 @@ import { resources, type AppLanguage } from "./locales";
 export const LOCALE_STORAGE_KEY = "mylore.lang";
 export const SUPPORTED_LANGUAGES: AppLanguage[] = ["en", "ar"];
 
+/** Compact locale button labels shared by the switchers (TopBar, Settings). */
+export const LANGUAGE_SHORT_LABELS: Record<AppLanguage, string> = { en: "EN", ar: "ع" };
+
 export function isAppLanguage(value: unknown): value is AppLanguage {
   return SUPPORTED_LANGUAGES.includes(value as AppLanguage);
 }

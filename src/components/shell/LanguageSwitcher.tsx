@@ -1,10 +1,8 @@
-import { SUPPORTED_LANGUAGES, useLanguage, type AppLanguage } from "@/i18n";
+import { LANGUAGE_SHORT_LABELS, SUPPORTED_LANGUAGES, useLanguage } from "@/i18n";
 import { useTranslation } from "react-i18next";
 import { cn } from "@/lib/cn";
 
 /* Locale switcher (MISSION-033) — segmented control like the theme switcher. */
-
-const SHORT_LABELS: Record<AppLanguage, string> = { en: "EN", ar: "ع" };
 
 export function LanguageSwitcher() {
   const { language, setLanguage } = useLanguage();
@@ -12,6 +10,7 @@ export function LanguageSwitcher() {
 
   return (
     <div
+      role="group"
       className="inline-flex items-center gap-1 rounded-full border border-border-subtle bg-bg-surface p-1"
       aria-label={t("a11y.language")}
     >
@@ -26,7 +25,7 @@ export function LanguageSwitcher() {
           aria-pressed={language === code}
           onClick={() => setLanguage(code)}
         >
-          {SHORT_LABELS[code]}
+          {LANGUAGE_SHORT_LABELS[code]}
         </button>
       ))}
     </div>

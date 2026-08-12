@@ -76,7 +76,9 @@ describe("settings page", () => {
   it("changes the theme and persists it to the preferences store", async () => {
     const user = userEvent.setup();
     renderSettings();
-    const themeGroup = await screen.findByRole("group", { name: "Theme" });
+    const themeGroup = await within(screen.getByRole("main")).findByRole("group", {
+      name: "Theme",
+    });
     await user.click(within(themeGroup).getByRole("button", { name: "Dark" }));
     expect(document.documentElement.getAttribute("data-theme")).toBe("dark");
     expect(localStorage.getItem("mylore.theme")).toBe("dark");
@@ -88,7 +90,9 @@ describe("settings page", () => {
   it("changes the language with RTL and persists it", async () => {
     const user = userEvent.setup();
     renderSettings();
-    const languageGroup = await screen.findByRole("group", { name: "Language" });
+    const languageGroup = await within(screen.getByRole("main")).findByRole("group", {
+      name: "Language",
+    });
     await user.click(within(languageGroup).getByRole("button", { name: "ع" }));
     expect(document.documentElement.getAttribute("dir")).toBe("rtl");
     expect(document.documentElement.getAttribute("lang")).toBe("ar");
