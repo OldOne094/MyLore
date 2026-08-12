@@ -111,3 +111,15 @@ pub async fn media_get(
     let service = MediaService::new(state.inner().clone());
     service.get_media(&id).await
 }
+
+/// Local full-text search over the library (MISSION-043). Resolves with summary
+/// rows or rejects with an AppError string.
+#[command]
+pub async fn media_search(
+    state: State<'_, SqlitePool>,
+    query: String,
+) -> Result<Vec<MediaListItem>, AppError> {
+    info!(query, "media_search invoked");
+    let service = MediaService::new(state.inner().clone());
+    service.search_media(&query).await
+}

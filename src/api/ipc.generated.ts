@@ -146,3 +146,28 @@ export function media_get(args: { id: string }): Promise<{
     relations: { to_id: string; relation: string }[];
   } | null>("media_get", args);
 }
+
+/** Local full-text search over the library. Resolves with summary rows or rejects with an AppError string. */
+export function media_search(args: { query: string }): Promise<
+  {
+    id: string;
+    content_type: string;
+    title: string;
+    pub_status: string;
+    release_year: number | null;
+    cover_asset_id: string | null;
+    updated_at: string;
+  }[]
+> {
+  return invoke<
+    {
+      id: string;
+      content_type: string;
+      title: string;
+      pub_status: string;
+      release_year: number | null;
+      cover_asset_id: string | null;
+      updated_at: string;
+    }[]
+  >("media_search", args);
+}

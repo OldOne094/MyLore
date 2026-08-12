@@ -103,3 +103,26 @@ describe("screen-reader labels", () => {
     expect(screen.getByRole("link", { name: "تخطَّ إلى المحتوى" })).toBeInTheDocument();
   });
 });
+
+describe("header search (MISSION-043)", () => {
+  it("exposes the search box and navigates to /search?q= on submit", async () => {
+    const user = userEvent.setup();
+    renderApp();
+    const input = screen.getByRole("searchbox", { name: "Search your library" });
+    await user.type(input, "Steins;Gate");
+    await user.keyboard("{Enter}");
+    expect(await screen.findByRole("heading", { name: "Search", level: 1 })).toBeInTheDocument();
+    expect(await screen.findByRole("searchbox", { name: "Search your library" })).toHaveValue(
+      "Steins;Gate",
+    );
+    expect(invoke).toHaveBeenCalledWith("media_search", { query: "Steins;Gate" });
+  });
+
+  it("does not navigate for a blank query", async () => {
+    const user = userEvent.setup();
+    renderApp();
+    await user.type(screen.getByRole("searchbox", { name: "Search your library" }), "   ");
+    await user.keyboard("{Enter}");
+    expect(screen.getByRole("heading", { name: "Library", level: 1 })).toBeInTheDocument();
+  });
+});

@@ -36,7 +36,7 @@ function openPalette() {
 }
 
 const LIBRARY_HINT = "Your tracked titles appear here as you add them.";
-const SEARCH_HINT = "Find titles in your library or add new ones.";
+const SEARCH_HINT = "Type a title, author, genre or tag to find it in your library.";
 const SETTINGS_HINT = "Light, dark, or follow the system appearance.";
 
 beforeEach(() => {

@@ -187,6 +187,16 @@ impl MediaService {
     pub async fn get_media(&self, id: &str) -> Result<Option<MediaRecord>, AppError> {
         crate::infrastructure::repositories::media::get(&self.pool, id).await
     }
+
+    /// Local full-text search over titles/alt titles/people/genres/tags etc.
+    /// (MISSION-043). Empty/whitespace queries resolve to no results.
+    pub async fn search_media(&self, query: &str) -> Result<Vec<MediaListItem>, AppError> {
+        if query.trim().is_empty() {
+            return Ok(Vec::new());
+        }
+        let rows = crate::infrastructure::repositories::media::search(&self.pool, query).await?;
+        Ok(rows.into_iter().map(media_list_item).collect())
+    }
 }
 
 /// Map a repository summary row onto the serializable DTO.
@@ -513,6 +523,37 @@ mod tests {
             .await
             .expect("get")
             .is_none());
+    }
+
+    #[tokio::test]
+    async fn search_media_returns_matching_summaries() {
+        let (pool, _path) = migrated_pool("media_service_search.db").await;
+        let service = MediaService::new(pool.clone());
+
+        let mut one = input();
+        one.title = "Sword of the Dawn".into();
+        service.add_media(one).await.expect("add one");
+
+        let mut two = input();
+        two.title = "Beneath the Iron Sky".into();
+        service.add_media(two).await.expect("add two");
+
+        let hits = service.search_media("sword").await.expect("search");
+        assert_eq!(hits.len(), 1);
+        assert_eq!(hits[0].title, "Sword of the Dawn");
+    }
+
+    #[tokio::test]
+    async fn search_media_blank_query_resolves_empty() {
+        let (pool, _path) = migrated_pool("media_service_search_blank.db").await;
+        let service = MediaService::new(pool.clone());
+        service.add_media(input()).await.expect("add media");
+
+        assert!(service
+            .search_media("   ")
+            .await
+            .expect("search")
+            .is_empty());
     }
 
     #[tokio::test]

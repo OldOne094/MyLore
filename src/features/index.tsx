@@ -15,7 +15,7 @@ function placeholder(path: string) {
 }
 
 export { LibraryPage } from "@/features/library/LibraryPage";
-export const SearchPage = placeholder("/search");
+export { SearchPage } from "@/features/search/SearchPage";
 export const DiscoverPage = placeholder("/discover");
 export const CollectionsPage = placeholder("/collections");
 export const ReviewsPage = placeholder("/reviews");
