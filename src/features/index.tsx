@@ -14,7 +14,7 @@ function placeholder(path: string) {
   };
 }
 
-export const LibraryPage = placeholder("/library");
+export { LibraryPage } from "@/features/library/LibraryPage";
 export const SearchPage = placeholder("/search");
 export const DiscoverPage = placeholder("/discover");
 export const CollectionsPage = placeholder("/collections");

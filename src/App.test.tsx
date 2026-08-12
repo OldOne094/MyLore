@@ -1,7 +1,8 @@
-import { describe, expect, it, afterEach } from "vitest";
+import { beforeEach, describe, expect, it, afterEach, vi } from "vitest";
 import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { createMemoryRouter, RouterProvider } from "react-router";
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { ThemeProvider } from "@/themes/ThemeProvider";
 import { ToastProvider } from "@/components/ui";
 import { PreferencesProvider } from "@/preferences/PreferencesProvider";
@@ -9,23 +10,37 @@ import { appRoutes } from "@/routes";
 import "@/i18n";
 import i18n from "@/i18n";
 
+vi.mock("@tauri-apps/api/core", () => ({
+  invoke: vi.fn(),
+}));
+
+import { invoke } from "@tauri-apps/api/core";
+
 function renderApp(initialEntry = "/") {
+  const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   const router = createMemoryRouter(appRoutes, { initialEntries: [initialEntry] });
   return render(
-    <ThemeProvider>
-      <PreferencesProvider>
-        <ToastProvider>
-          <RouterProvider router={router} />
-        </ToastProvider>
-      </PreferencesProvider>
-    </ThemeProvider>,
+    <QueryClientProvider client={client}>
+      <ThemeProvider>
+        <PreferencesProvider>
+          <ToastProvider>
+            <RouterProvider router={router} />
+          </ToastProvider>
+        </PreferencesProvider>
+      </ThemeProvider>
+    </QueryClientProvider>,
   );
 }
 
-const LIBRARY_HINT = "Your tracked titles appear here as you add them.";
+const EMPTY_LIBRARY = "Your library is empty";
 const STATS_HINT = "Time watched, pages read and your ratings distribution.";
 
+beforeEach(() => {
+  vi.mocked(invoke).mockResolvedValue([]);
+});
+
 afterEach(async () => {
+  vi.mocked(invoke).mockReset();
   localStorage.clear();
   document.documentElement.removeAttribute("data-theme");
   document.documentElement.removeAttribute("dir");
@@ -36,7 +51,7 @@ afterEach(async () => {
 describe("App shell", () => {
   it("redirects the root to the first nav section", async () => {
     renderApp("/");
-    expect(await screen.findByText(LIBRARY_HINT)).toBeInTheDocument();
+    expect(await screen.findByText(EMPTY_LIBRARY)).toBeInTheDocument();
   });
 
   it("navigates between sections via the nav rail", async () => {

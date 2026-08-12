@@ -6,6 +6,8 @@ use tracing::info;
 
 use crate::error::AppError;
 
+pub mod media;
+
 /// Placeholder greeting command from the create-tauri-app scaffold.
 #[command]
 pub fn greet(name: &str) -> Result<String, AppError> {

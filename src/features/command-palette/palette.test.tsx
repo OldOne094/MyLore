@@ -1,6 +1,7 @@
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { createMemoryRouter, RouterProvider } from "react-router";
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { ThemeProvider } from "@/themes/ThemeProvider";
 import { ToastProvider } from "@/components/ui";
 import { PreferencesProvider } from "@/preferences/PreferencesProvider";
@@ -8,16 +9,25 @@ import { appRoutes } from "@/routes";
 import "@/i18n";
 import i18n from "@/i18n";
 
+vi.mock("@tauri-apps/api/core", () => ({
+  invoke: vi.fn(),
+}));
+
+import { invoke } from "@tauri-apps/api/core";
+
 function renderApp(initialEntry = "/library") {
+  const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   const router = createMemoryRouter(appRoutes, { initialEntries: [initialEntry] });
   return render(
-    <ThemeProvider>
-      <PreferencesProvider>
-        <ToastProvider>
-          <RouterProvider router={router} />
-        </ToastProvider>
-      </PreferencesProvider>
-    </ThemeProvider>,
+    <QueryClientProvider client={client}>
+      <ThemeProvider>
+        <PreferencesProvider>
+          <ToastProvider>
+            <RouterProvider router={router} />
+          </ToastProvider>
+        </PreferencesProvider>
+      </ThemeProvider>
+    </QueryClientProvider>,
   );
 }
 
@@ -29,7 +39,12 @@ const LIBRARY_HINT = "Your tracked titles appear here as you add them.";
 const SEARCH_HINT = "Find titles in your library or add new ones.";
 const SETTINGS_HINT = "Light, dark, or follow the system appearance.";
 
+beforeEach(() => {
+  vi.mocked(invoke).mockResolvedValue([]);
+});
+
 afterEach(async () => {
+  vi.mocked(invoke).mockReset();
   localStorage.clear();
   document.documentElement.removeAttribute("data-theme");
   document.documentElement.removeAttribute("dir");
