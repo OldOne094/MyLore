@@ -1,12 +1,15 @@
+import { useState } from "react";
 import { Library, Plus, RefreshCcw } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { Button, EmptyState, Skeleton } from "@/components/ui";
 import { useMediaListQuery } from "./api";
 import { AddMediaDialog } from "./AddMediaDialog";
-import { MediaCard } from "./MediaCard";
+import { LibraryViewSwitcher, type LibraryView } from "./LibraryViewSwitcher";
+import { VirtualizedLibrary } from "./VirtualizedLibrary";
 
-/* MISSION-041 — Library landing view: the add flow when empty, a responsive
-   grid when titles exist, skeletons while loading, and a retry on failure. */
+/* MISSION-040 — Library landing view: the add flow when empty, a toolbar with
+   the Grid / List / Compact density switcher when populated, per-view skeletons
+   while loading, and a retry on failure. Rendering is virtualized. */
 
 function AddTitleTrigger() {
   const { t } = useTranslation();
@@ -22,11 +25,29 @@ function AddTitleTrigger() {
   );
 }
 
-function LibraryGridSkeleton() {
+function LibrarySkeleton({ view }: { view: LibraryView }) {
+  if (view !== "grid") {
+    const dense = view === "compact";
+    return (
+      <div role="status" aria-label="Loading library" className="px-6 pt-6">
+        {Array.from({ length: 8 }, (_, index) => (
+          <div
+            key={index}
+            className={`mb-2 flex items-center gap-3 rounded-md bg-bg-surface ${dense ? "px-2 py-1" : "px-3 py-2"}`}
+          >
+            <Skeleton className={dense ? "size-7" : "size-10"} />
+            <Skeleton className="h-4 flex-1" />
+            <Skeleton className="h-3 w-16" />
+          </div>
+        ))}
+      </div>
+    );
+  }
+
   return (
     <div
-      aria-label="Loading library"
       role="status"
+      aria-label="Loading library"
       className="grid grid-cols-2 gap-4 p-6 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6"
     >
       {Array.from({ length: 12 }, (_, index) => (
@@ -55,8 +76,9 @@ function EmptyLibrary() {
 export function LibraryPage() {
   const { t } = useTranslation();
   const { data, isLoading, isError, refetch } = useMediaListQuery();
+  const [view, setView] = useState<LibraryView>("grid");
 
-  if (isLoading) return <LibraryGridSkeleton />;
+  if (isLoading) return <LibrarySkeleton view={view} />;
 
   if (isError) {
     return (
@@ -78,12 +100,17 @@ export function LibraryPage() {
   if (items.length === 0) return <EmptyLibrary />;
 
   return (
-    <section aria-label={t("nav.library")}>
-      <div className="grid grid-cols-2 gap-4 p-6 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6">
-        {items.map((item) => (
-          <MediaCard key={item.id} item={item} />
-        ))}
+    <section aria-label={t("nav.library")} className="flex h-full min-h-0 flex-col">
+      <div className="flex shrink-0 flex-wrap items-center justify-between gap-3 border-b border-border-subtle px-5 py-3">
+        <span className="text-sm tabular-nums text-text-secondary">
+          {t("shell.status.counts", { count: items.length })}
+        </span>
+        <div className="flex shrink-0 items-center gap-2">
+          <AddTitleTrigger />
+          <LibraryViewSwitcher view={view} onChange={setView} />
+        </div>
       </div>
+      <VirtualizedLibrary view={view} items={items} />
     </section>
   );
 }

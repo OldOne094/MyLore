@@ -115,6 +115,10 @@ const en = {
     theme: "Theme",
     language: "Language",
     close: "Close",
+    viewSwitcher: "Library view",
+    viewGrid: "Grid view",
+    viewList: "List view",
+    viewCompact: "Compact list",
   },
 } as const;
 
@@ -239,6 +243,10 @@ const ar = {
     theme: "السمة",
     language: "اللغة",
     close: "إغلاق",
+    viewSwitcher: "عرض المكتبة",
+    viewGrid: "عرض شبكي",
+    viewList: "عرض قائمة",
+    viewCompact: "قائمة مضغوطة",
   },
 };
 

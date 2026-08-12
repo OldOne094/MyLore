@@ -93,4 +93,60 @@ describe("LibraryPage", () => {
 
     await waitFor(() => expect(screen.getByText("Steins;Gate")).toBeInTheDocument());
   });
+
+  it("exposes the view switcher and defaults to the grid", async () => {
+    vi.mocked(invoke).mockResolvedValue(TITLES);
+    renderPage();
+    await screen.findByText("Steins;Gate");
+
+    expect(screen.getByRole("group", { name: "Library view" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Grid view" })).toHaveAttribute(
+      "aria-pressed",
+      "true",
+    );
+  });
+
+  it("switches between List and Compact views", async () => {
+    vi.mocked(invoke).mockResolvedValue(TITLES);
+    renderPage();
+    await screen.findByText("Steins;Gate");
+
+    await userEvent.click(screen.getByRole("button", { name: "List view" }));
+    expect(screen.getByRole("button", { name: "List view" })).toHaveAttribute(
+      "aria-pressed",
+      "true",
+    );
+    expect(screen.getByRole("button", { name: "Grid view" })).toHaveAttribute(
+      "aria-pressed",
+      "false",
+    );
+    expect(screen.getAllByRole("article")).toHaveLength(2);
+
+    await userEvent.click(screen.getByRole("button", { name: "Compact list" }));
+    expect(screen.getByRole("button", { name: "Compact list" })).toHaveAttribute(
+      "aria-pressed",
+      "true",
+    );
+    expect(screen.getAllByRole("article")).toHaveLength(2);
+    expect(screen.getByText("Steins;Gate")).toBeInTheDocument();
+  });
+
+  it("windows large libraries instead of rendering every row", async () => {
+    const many = Array.from({ length: 300 }, (_, index) => ({
+      id: `m-${index}`,
+      content_type: "manga",
+      title: `Title ${index}`,
+      pub_status: "ongoing",
+      release_year: 2020,
+      cover_asset_id: null,
+      updated_at: "2026-01-01T00:00:00Z",
+    }));
+    vi.mocked(invoke).mockResolvedValue(many);
+    renderPage();
+    expect(await screen.findByText("Title 0")).toBeInTheDocument();
+
+    const rendered = screen.getAllByRole("article").length;
+    expect(rendered).toBeGreaterThan(0);
+    expect(rendered).toBeLessThan(300);
+  });
 });
