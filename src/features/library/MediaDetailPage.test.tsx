@@ -1,0 +1,137 @@
+import { afterEach, describe, expect, it, vi } from "vitest";
+import { render, screen, within } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { MemoryRouter, Route, Routes } from "react-router";
+import { ToastProvider } from "@/components/ui";
+import "@/i18n";
+import i18n from "@/i18n";
+
+vi.mock("@tauri-apps/api/core", () => ({
+  invoke: vi.fn(),
+}));
+
+import { invoke } from "@tauri-apps/api/core";
+import { MediaDetailPage } from "./MediaDetailPage";
+import type { MediaDetail } from "./api";
+
+const DETAIL: MediaDetail = {
+  id: "m-111",
+  content_type: "anime",
+  format: "tv",
+  title_main: "Steins;Gate",
+  title_original: "シュタインズ・ゲート",
+  synopsis: "A group of friends accidentally discovers time travel.",
+  pub_status: "completed",
+  start_date: null,
+  end_date: null,
+  release_year: 2011,
+  language: "ja",
+  country: "JP",
+  content_rating: null,
+  pages: null,
+  duration_min: 24,
+  ep_count: 24,
+  ch_count: null,
+  cover_asset_id: null,
+  banner_asset_id: null,
+  provider: null,
+  provider_url: null,
+  metadata_refreshed_at: null,
+  created_at: "2026-01-01T00:00:00Z",
+  updated_at: "2026-01-02T00:00:00Z",
+  alt_titles: [{ lang: "", title: "Stein's;Gate" }],
+  people: [],
+  genres: ["science_fiction", "thriller"],
+  tags: [],
+  external_ids: [],
+  relations: [],
+};
+
+function renderPage(id = "m-111") {
+  const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+  return render(
+    <QueryClientProvider client={client}>
+      <ToastProvider>
+        <MemoryRouter initialEntries={[`/library/${id}`]}>
+          <Routes>
+            <Route path="/library/:id" element={<MediaDetailPage />} />
+          </Routes>
+        </MemoryRouter>
+      </ToastProvider>
+    </QueryClientProvider>,
+  );
+}
+
+afterEach(async () => {
+  vi.mocked(invoke).mockReset();
+  await i18n.changeLanguage("en");
+});
+
+describe("MediaDetailPage", () => {
+  it("renders the hero with title, meta badges and a link back to the library", async () => {
+    vi.mocked(invoke).mockResolvedValue(DETAIL);
+    renderPage();
+
+    expect(await screen.findByRole("heading", { name: "Steins;Gate" })).toBeInTheDocument();
+    expect(screen.getByText("シュタインズ・ゲート")).toBeInTheDocument();
+    expect(screen.getByText("Anime")).toBeInTheDocument();
+    expect(screen.getAllByText("Completed").length).toBeGreaterThanOrEqual(1);
+    expect(screen.getAllByText("2011").length).toBeGreaterThanOrEqual(1);
+    expect(
+      screen.getByText("A group of friends accidentally discovers time travel."),
+    ).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "Back to library" })).toHaveAttribute(
+      "href",
+      "/library",
+    );
+    expect(invoke).toHaveBeenCalledWith("media_get", { id: "m-111" });
+  });
+
+  it("defaults to the overview tab and renders the aggregate facts", async () => {
+    vi.mocked(invoke).mockResolvedValue(DETAIL);
+    renderPage();
+    await screen.findByRole("heading", { name: "Steins;Gate" });
+
+    const overview = screen.getByRole("tab", { name: "Overview" });
+    expect(overview).toHaveAttribute("aria-selected", "true");
+    expect(overview.parentElement).toHaveAttribute("role", "tablist");
+
+    const panel = screen.getByRole("tabpanel");
+    expect(within(panel).getByText("Science Fiction")).toBeInTheDocument();
+    expect(within(panel).getByText("Thriller")).toBeInTheDocument();
+    expect(within(panel).getByText("24")).toBeInTheDocument();
+    expect(within(panel).getByText("ja")).toBeInTheDocument();
+    expect(within(panel).getByText("JP")).toBeInTheDocument();
+  });
+
+  it("switches tabs with the keyboard and shows the shell placeholders", async () => {
+    vi.mocked(invoke).mockResolvedValue(DETAIL);
+    renderPage();
+    await screen.findByRole("heading", { name: "Steins;Gate" });
+
+    const tabs = screen.getByRole("tab", { name: "Tracking" });
+    await userEvent.click(tabs);
+    expect(tabs).toHaveAttribute("aria-selected", "true");
+    expect(screen.getByRole("tabpanel")).toHaveTextContent("Tracking tools land here");
+
+    await userEvent.click(screen.getByRole("tab", { name: "Review" }));
+    expect(screen.getByRole("tabpanel")).toHaveTextContent("Reviews land here");
+  });
+
+  it("shows an error state with retry when loading fails", async () => {
+    vi.mocked(invoke).mockRejectedValueOnce("boom").mockResolvedValueOnce(DETAIL);
+    renderPage();
+
+    const retry = await screen.findByRole("button", { name: "Retry" });
+    await userEvent.click(retry);
+
+    expect(await screen.findByRole("heading", { name: "Steins;Gate" })).toBeInTheDocument();
+  });
+
+  it("shows the not-found state when the id resolves to null", async () => {
+    vi.mocked(invoke).mockResolvedValue(null);
+    renderPage("m-missing");
+    expect(await screen.findByText("Title not found")).toBeInTheDocument();
+  });
+});

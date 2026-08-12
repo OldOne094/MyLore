@@ -1,3 +1,4 @@
+import { Link } from "react-router";
 import { useTranslation } from "react-i18next";
 import { Badge } from "@/components/ui";
 import { cn } from "@/lib/cn";
@@ -5,7 +6,8 @@ import type { MediaListItem } from "./api";
 import { STATUS_VARIANTS, TYPE_ICONS } from "./mediaMeta";
 
 /* MISSION-040 — Library list rows. `dense` is the Compact tier (DESIGN_SYSTEM
-   §8): smaller paddings (8→4), 13px text, hidden meta badges, smaller thumb. */
+   §8): smaller paddings (8→4), 13px text, hidden meta badges, smaller thumb.
+   MISSION-042 makes the row a link to the media detail page. */
 
 export interface MediaRowProps {
   item: MediaListItem;
@@ -17,7 +19,9 @@ export function MediaRow({ item, dense = false }: MediaRowProps) {
   const Icon = TYPE_ICONS[item.content_type] ?? TYPE_ICONS.other;
 
   return (
-    <article
+    <Link
+      to={`/library/${item.id}`}
+      aria-label={item.title}
       className={cn(
         "flex w-full items-center gap-3 rounded-md border border-transparent bg-bg-surface transition-colors duration-150 ease-out hover:border-border-subtle hover:bg-bg-hover",
         dense ? "px-2 py-1" : "px-3 py-2",
@@ -56,6 +60,6 @@ export function MediaRow({ item, dense = false }: MediaRowProps) {
           {item.release_year}
         </span>
       ) : null}
-    </article>
+    </Link>
   );
 }

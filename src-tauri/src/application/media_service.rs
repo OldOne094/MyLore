@@ -19,8 +19,8 @@ use crate::domain::media::{Media, MediaRuntime};
 use crate::domain::value_objects::{LanguageCode, MediaId};
 use crate::error::AppError;
 use crate::infrastructure::repositories::media::{
-    facets as media_facets, list as list_rows, MediaFacets, MediaFilter, MediaRecord, MediaSort,
-    MediaSummary, AltTitle, ExternalId, MediaRelation,
+    facets as media_facets, list as list_rows, AltTitle, ExternalId, MediaFacets, MediaFilter,
+    MediaRecord, MediaRelation, MediaSort, MediaSummary,
 };
 
 /// Command input for a manual add (MISSION-038).
@@ -182,6 +182,11 @@ impl MediaService {
     pub async fn list_facets(&self) -> Result<MediaFacets, AppError> {
         media_facets(&self.pool).await
     }
+
+    /// Read the full aggregate for one media (MISSION-042).
+    pub async fn get_media(&self, id: &str) -> Result<Option<MediaRecord>, AppError> {
+        crate::infrastructure::repositories::media::get(&self.pool, id).await
+    }
 }
 
 /// Map a repository summary row onto the serializable DTO.
@@ -216,10 +221,19 @@ fn to_record(media: &Media) -> MediaRecord {
         title_original: media.title.original().map(str::to_string),
         synopsis: media.synopsis.clone(),
         pub_status: media.status.as_str().to_string(),
-        start_date: media.start_date.as_ref().map(|date| date.as_str().to_string()),
-        end_date: media.end_date.as_ref().map(|date| date.as_str().to_string()),
+        start_date: media
+            .start_date
+            .as_ref()
+            .map(|date| date.as_str().to_string()),
+        end_date: media
+            .end_date
+            .as_ref()
+            .map(|date| date.as_str().to_string()),
         release_year: media.release_year.map(Into::into),
-        language: media.language.as_ref().map(|lang| lang.as_str().to_string()),
+        language: media
+            .language
+            .as_ref()
+            .map(|lang| lang.as_str().to_string()),
         country: media.country.clone(),
         content_rating: media.content_rating.clone(),
         pages: media.runtime.pages.map(Into::into),
@@ -242,7 +256,11 @@ fn to_record(media: &Media) -> MediaRecord {
                 title: title.clone(),
             })
             .collect(),
-        people: media.people.iter().map(|person| person.name.clone()).collect(),
+        people: media
+            .people
+            .iter()
+            .map(|person| person.name.clone())
+            .collect(),
         genres: media.genres.clone(),
         tags: media.tags.clone(),
         external_ids: media
@@ -297,7 +315,10 @@ mod tests {
         let id = service.add_media(input()).await.expect("add media");
         assert!(id.as_str().starts_with("m-"));
 
-        let stored = media::get(&pool, id.as_str()).await.expect("get").expect("stored");
+        let stored = media::get(&pool, id.as_str())
+            .await
+            .expect("get")
+            .expect("stored");
         assert_eq!(stored.title_main, "Sword of the Dawn");
         assert_eq!(stored.content_type, "novel");
         assert_eq!(stored.pub_status, "ongoing");
@@ -313,7 +334,10 @@ mod tests {
 
         let mut bad = input();
         bad.title = "  ".into();
-        let err = service.add_media(bad).await.expect_err("blank title rejected");
+        let err = service
+            .add_media(bad)
+            .await
+            .expect_err("blank title rejected");
         assert!(matches!(err, AppError::Validation(_)));
     }
 
@@ -324,7 +348,10 @@ mod tests {
 
         let mut bad = input();
         bad.content_type = "podcast".into();
-        let err = service.add_media(bad).await.expect_err("unknown type rejected");
+        let err = service
+            .add_media(bad)
+            .await
+            .expect_err("unknown type rejected");
         assert!(matches!(err, AppError::Validation(_)));
     }
 
@@ -336,7 +363,10 @@ mod tests {
         let mut minimal = input();
         minimal.pub_status = None;
         let id = service.add_media(minimal).await.expect("add media");
-        let stored = media::get(&pool, id.as_str()).await.expect("get").expect("stored");
+        let stored = media::get(&pool, id.as_str())
+            .await
+            .expect("get")
+            .expect("stored");
         assert_eq!(stored.pub_status, "unknown");
     }
 
@@ -347,7 +377,10 @@ mod tests {
 
         let mut bad = input();
         bad.pages = Some(-3);
-        let err = service.add_media(bad).await.expect_err("negative pages rejected");
+        let err = service
+            .add_media(bad)
+            .await
+            .expect_err("negative pages rejected");
         assert!(matches!(err, AppError::Validation(_)));
     }
 
@@ -363,7 +396,10 @@ mod tests {
         service.add_media(first).await.expect("add first");
         service.add_media(second).await.expect("add second");
 
-        let items = service.list_media(MediaListInput::default()).await.expect("list");
+        let items = service
+            .list_media(MediaListInput::default())
+            .await
+            .expect("list");
         assert_eq!(items.len(), 2);
         assert_eq!(items[0].title, "Anzu and the Paper Moon");
         assert_eq!(items[1].title, "Beneath the Iron Sky");
@@ -435,6 +471,51 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn get_media_returns_full_aggregate() {
+        let (pool, _path) = migrated_pool("media_service_get.db").await;
+        let service = MediaService::new(pool.clone());
+
+        let mut media_input = input();
+        media_input.genres = vec!["fantasy".into(), "science_fiction".into()];
+        let id = service.add_media(media_input).await.expect("add media");
+
+        let detail = service
+            .get_media(id.as_str())
+            .await
+            .expect("get")
+            .expect("stored");
+        assert_eq!(detail.title_main, "Sword of the Dawn");
+        assert_eq!(detail.title_original, None);
+        assert_eq!(detail.content_type, "novel");
+        assert_eq!(detail.format, Some("light_novel".to_string()));
+        assert_eq!(detail.pub_status, "ongoing");
+        assert_eq!(detail.release_year, Some(2026));
+        assert_eq!(detail.language, Some("ja".to_string()));
+        assert_eq!(detail.country, Some("JP".to_string()));
+        assert_eq!(detail.pages, Some(320));
+        assert_eq!(
+            detail.synopsis.as_deref(),
+            Some("A blade that learns to dream.")
+        );
+        assert_eq!(
+            detail.genres,
+            vec!["fantasy".to_string(), "science_fiction".to_string()]
+        );
+        assert!(detail.created_at <= detail.updated_at);
+    }
+
+    #[tokio::test]
+    async fn get_media_returns_none_for_unknown_id() {
+        let (pool, _path) = migrated_pool("media_service_get_missing.db").await;
+        let service = MediaService::new(pool.clone());
+        assert!(service
+            .get_media("m-does-not-exist")
+            .await
+            .expect("get")
+            .is_none());
+    }
+
+    #[tokio::test]
     async fn list_facets_returns_distinct_present_values() {
         let (pool, _path) = migrated_pool("media_service_facets.db").await;
         let service = MediaService::new(pool.clone());
@@ -451,7 +532,10 @@ mod tests {
         service.add_media(two).await.expect("add two");
 
         let facets = service.list_facets().await.expect("facets");
-        assert_eq!(facets.formats, vec!["light_novel".to_string(), "webtoon".to_string()]);
+        assert_eq!(
+            facets.formats,
+            vec!["light_novel".to_string(), "webtoon".to_string()]
+        );
         assert_eq!(facets.years, vec![2026, 2025]);
         assert!(!facets.genres.is_empty(), "seeded genres present");
         assert!(!facets.tags.is_empty(), "seeded domain tags present");

@@ -7,7 +7,7 @@ use tauri::State;
 use tracing::info;
 
 use crate::application::media_service::{
-    AddMediaInput, MediaListItem, MediaListInput, MediaService,
+    AddMediaInput, MediaListInput, MediaListItem, MediaService,
 };
 use crate::error::AppError;
 
@@ -99,4 +99,15 @@ pub async fn media_facets(
     info!("media_facets invoked");
     let service = MediaService::new(state.inner().clone());
     service.list_facets().await
+}
+
+/// Read the full aggregate for one media (MISSION-042).
+#[command]
+pub async fn media_get(
+    state: State<'_, SqlitePool>,
+    id: String,
+) -> Result<Option<crate::infrastructure::repositories::media::MediaRecord>, AppError> {
+    info!(id, "media_get invoked");
+    let service = MediaService::new(state.inner().clone());
+    service.get_media(&id).await
 }

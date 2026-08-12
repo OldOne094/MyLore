@@ -137,7 +137,14 @@ async function main() {
     process.exit(1);
   }
 
-  const formatted = await prettier.format(render(contract), { filepath: OUT_PATH });
+  const config = await prettier.resolveConfig(OUT_PATH);
+  let formatted = render(contract);
+  const options = { parser: "typescript", ...config };
+  while (true) {
+    const next = await prettier.format(formatted, options);
+    if (next === formatted) break;
+    formatted = next;
+  }
   if (checkMode) {
     const existing = readFileSync(OUT_PATH, "utf8");
     if (existing === formatted) {

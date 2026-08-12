@@ -3,7 +3,7 @@
    typed mutation that invalidates every library list on success. */
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { media_create, media_facets, media_list } from "@/api";
+import { media_create, media_facets, media_get, media_list } from "@/api";
 import { queryKeys } from "@/api";
 import type { AddMediaInput } from "./types";
 
@@ -38,6 +38,40 @@ export interface MediaListItem {
 export interface MediaFacetOption {
   id: string;
   name: string;
+}
+
+/** Full aggregate returned by `media_get`, backing the detail page (MISSION-042). */
+export interface MediaDetail {
+  id: string;
+  content_type: string;
+  format: string | null;
+  title_main: string;
+  title_original: string | null;
+  synopsis: string | null;
+  pub_status: string;
+  start_date: string | null;
+  end_date: string | null;
+  release_year: number | null;
+  language: string | null;
+  country: string | null;
+  content_rating: string | null;
+  pages: number | null;
+  duration_min: number | null;
+  ep_count: number | null;
+  ch_count: number | null;
+  cover_asset_id: string | null;
+  banner_asset_id: string | null;
+  provider: string | null;
+  provider_url: string | null;
+  metadata_refreshed_at: string | null;
+  created_at: string;
+  updated_at: string;
+  alt_titles: { lang: string; title: string }[];
+  people: string[];
+  genres: string[];
+  tags: string[];
+  external_ids: { provider: string; ext_id: string; url: string | null }[];
+  relations: { to_id: string; relation: string }[];
 }
 
 /** Distinct filter values present in the library (MISSION-041). */
@@ -120,5 +154,13 @@ export function useMediaFacetsQuery() {
   return useQuery({
     queryKey: queryKeys.media.facets(),
     queryFn: () => media_facets(),
+  });
+}
+
+/** Read the full aggregate for one media (MISSION-042). */
+export function useMediaDetailQuery(id: string) {
+  return useQuery({
+    queryKey: queryKeys.media.detail(id),
+    queryFn: () => media_get({ id }),
   });
 }

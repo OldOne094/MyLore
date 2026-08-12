@@ -14,14 +14,14 @@ use crate::error::AppError;
 use crate::infrastructure::fts;
 
 /// An alternative title of a media.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, serde::Serialize)]
 pub struct AltTitle {
     pub lang: String,
     pub title: String,
 }
 
 /// An external identity on a provider.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, serde::Serialize)]
 pub struct ExternalId {
     pub provider: String,
     pub ext_id: String,
@@ -29,14 +29,14 @@ pub struct ExternalId {
 }
 
 /// An outgoing relation from a media to another media.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, serde::Serialize)]
 pub struct MediaRelation {
     pub to_id: String,
     pub relation: String,
 }
 
 /// Full media aggregate: core columns plus every link set.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, serde::Serialize)]
 pub struct MediaRecord {
     pub id: String,
     pub content_type: String,

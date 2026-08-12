@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import {
@@ -14,6 +14,10 @@ import {
   PopoverContent,
   PopoverTrigger,
   Skeleton,
+  Tabs,
+  TabsContent,
+  TabsList,
+  TabsTrigger,
 } from "./index";
 
 describe("Button", () => {
@@ -125,5 +129,52 @@ describe("Skeleton", () => {
   it("renders a hidden placeholder", () => {
     render(<Skeleton className="h-4 w-24" />);
     expect(document.querySelector('[aria-hidden="true"]')).toHaveClass("animate-pulse");
+  });
+});
+
+describe("Tabs", () => {
+  function renderTabs() {
+    const onValueChange = vi.fn();
+    render(
+      <Tabs value="overview" onValueChange={onValueChange}>
+        <TabsList ariaLabel="Sections">
+          <TabsTrigger value="overview">Overview</TabsTrigger>
+          <TabsTrigger value="tracking">Tracking</TabsTrigger>
+        </TabsList>
+        <TabsContent value="overview">Overview body</TabsContent>
+        <TabsContent value="tracking">Tracking body</TabsContent>
+      </Tabs>,
+    );
+    return { onValueChange };
+  }
+
+  it("wires tab semantics and shows only the active panel", () => {
+    const { onValueChange } = renderTabs();
+
+    const active = screen.getByRole("tab", { name: "Overview" });
+    expect(active).toHaveAttribute("aria-selected", "true");
+    expect(active).toHaveAttribute("aria-controls");
+    expect(screen.getByRole("tablist")).toHaveAttribute("aria-label", "Sections");
+    expect(screen.getByRole("tabpanel")).toHaveTextContent("Overview body");
+    expect(screen.queryByText("Tracking body")).not.toBeInTheDocument();
+    expect(onValueChange).not.toHaveBeenCalled();
+  });
+
+  it("selects a tab on click", async () => {
+    const { onValueChange } = renderTabs();
+    await userEvent.click(screen.getByRole("tab", { name: "Tracking" }));
+    expect(onValueChange).toHaveBeenCalledWith("tracking");
+  });
+
+  it("moves focus with arrow keys without changing selection", async () => {
+    const { onValueChange } = renderTabs();
+    const active = screen.getByRole("tab", { name: "Overview" });
+    active.focus();
+    await userEvent.keyboard("{ArrowRight}");
+    expect(screen.getByRole("tab", { name: "Tracking" })).toHaveFocus();
+    expect(onValueChange).not.toHaveBeenCalled();
+
+    await userEvent.keyboard("{ArrowLeft}");
+    expect(screen.getByRole("tab", { name: "Overview" })).toHaveFocus();
   });
 });

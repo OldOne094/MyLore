@@ -44,7 +44,7 @@ describe("query keys", () => {
       "list",
       { pub_status: "watching" },
     ]);
-    expect(queryKeys.media.detail(7)).toEqual(["media", "detail", 7]);
+    expect(queryKeys.media.detail("m-7")).toEqual(["media", "detail", "m-7"]);
     expect(queryKeys.system.greeting("Ada")).toEqual(["system", "greet", "Ada"]);
   });
 });

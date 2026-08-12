@@ -29,7 +29,7 @@ export const queryKeys = {
     list: (filters: MediaListFilters) => ["media", "list", filters] as const,
     facets: () => ["media", "facets"] as const,
     details: () => ["media", "detail"] as const,
-    detail: (id: number) => ["media", "detail", id] as const,
+    detail: (id: string) => ["media", "detail", id] as const,
   },
   tracking: {
     all: () => ["tracking"] as const,

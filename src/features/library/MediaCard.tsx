@@ -1,10 +1,12 @@
+import { Link } from "react-router";
 import { useTranslation } from "react-i18next";
 import { Badge } from "@/components/ui";
 import type { MediaListItem } from "./api";
 import { STATUS_VARIANTS, TYPE_ICONS } from "./mediaMeta";
 
 /* MISSION-040 — Single library card in the grid. Poster placeholder until real
-   cover art arrives (cover_asset_id is unresolved for now). */
+   cover art arrives (cover_asset_id is unresolved for now). MISSION-042 makes
+   the card a link to the media detail page. */
 
 export interface MediaCardProps {
   item: MediaListItem;
@@ -15,7 +17,11 @@ export function MediaCard({ item }: MediaCardProps) {
   const Icon = TYPE_ICONS[item.content_type] ?? TYPE_ICONS.other;
 
   return (
-    <article className="flex flex-col gap-2 rounded-lg border border-border-subtle bg-bg-surface p-2.5 transition-colors duration-150 ease-out hover:border-border-strong">
+    <Link
+      to={`/library/${item.id}`}
+      aria-label={item.title}
+      className="flex flex-col gap-2 rounded-lg border border-border-subtle bg-bg-surface p-2.5 transition-colors duration-150 ease-out hover:border-border-strong"
+    >
       <div className="flex aspect-[2/3] w-full items-center justify-center overflow-hidden rounded-sm bg-bg-hover text-text-tertiary">
         <Icon size={28} aria-hidden="true" />
       </div>
@@ -31,6 +37,6 @@ export function MediaCard({ item }: MediaCardProps) {
           ) : null}
         </div>
       </div>
-    </article>
+    </Link>
   );
 }

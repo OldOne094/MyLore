@@ -2,6 +2,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { MemoryRouter } from "react-router";
 import { ToastProvider } from "@/components/ui";
 import "@/i18n";
 import i18n from "@/i18n";
@@ -55,10 +56,17 @@ function renderPage() {
   return render(
     <QueryClientProvider client={client}>
       <ToastProvider>
-        <LibraryPage />
+        <MemoryRouter>
+          <LibraryPage />
+        </MemoryRouter>
       </ToastProvider>
     </QueryClientProvider>,
   );
+}
+
+/** Cards and rows are links to the detail page (MISSION-042). */
+function libraryCards() {
+  return screen.getAllByRole("link", { name: /^Steins;Gate$|^Sword of the Dawn$|^Title \d+$/ });
 }
 
 afterEach(async () => {
@@ -80,7 +88,7 @@ describe("LibraryPage", () => {
 
     expect(await screen.findByText("Steins;Gate")).toBeInTheDocument();
     expect(screen.getByText("Sword of the Dawn")).toBeInTheDocument();
-    expect(screen.getAllByRole("article")).toHaveLength(2);
+    expect(libraryCards()).toHaveLength(2);
     expect(screen.getByText("Anime")).toBeInTheDocument();
     expect(screen.getByText("Novel")).toBeInTheDocument();
     expect(screen.getByText("Completed")).toBeInTheDocument();
@@ -141,14 +149,14 @@ describe("LibraryPage", () => {
       "aria-pressed",
       "false",
     );
-    expect(screen.getAllByRole("article")).toHaveLength(2);
+    expect(libraryCards()).toHaveLength(2);
 
     await userEvent.click(screen.getByRole("button", { name: "Compact list" }));
     expect(screen.getByRole("button", { name: "Compact list" })).toHaveAttribute(
       "aria-pressed",
       "true",
     );
-    expect(screen.getAllByRole("article")).toHaveLength(2);
+    expect(libraryCards()).toHaveLength(2);
     expect(screen.getByText("Steins;Gate")).toBeInTheDocument();
   });
 
@@ -166,7 +174,7 @@ describe("LibraryPage", () => {
     renderPage();
     expect(await screen.findByText("Title 0")).toBeInTheDocument();
 
-    const rendered = screen.getAllByRole("article").length;
+    const rendered = libraryCards().length;
     expect(rendered).toBeGreaterThan(0);
     expect(rendered).toBeLessThan(300);
   });
@@ -209,7 +217,7 @@ describe("LibraryPage", () => {
 
     expect(screen.getAllByText("Anime").length).toBeGreaterThanOrEqual(2);
     expect(screen.getAllByText("Novel").length).toBeGreaterThanOrEqual(2);
-    expect(screen.getAllByRole("article")).toHaveLength(2);
+    expect(libraryCards()).toHaveLength(2);
   });
 
   it("shows a no-results state when filters match nothing", async () => {
