@@ -5,6 +5,7 @@
 //! `collection_service` land with their milestones (M6–M11).
 
 pub mod media_service;
+pub mod trash_service;
 
 /// Placeholder to keep the crate skeleton compiling until M3 services land.
 pub struct Placeholder;

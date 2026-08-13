@@ -171,3 +171,25 @@ export function media_search(args: { query: string }): Promise<
     }[]
   >("media_search", args);
 }
+
+/** Soft-delete a media: store its before-image in trash, cascade the row away. Resolves with the trash id (accepted by trash_restore for undo) or rejects with an AppError string. */
+export function media_delete(args: { id: string }): Promise<string> {
+  return invoke<string>("media_delete", args);
+}
+
+/** List active (not restored) trash entries. Resolves with trash items or rejects with an AppError string. */
+export function trash_list(): Promise<
+  { id: string; kind: string; title: string; deleted_at: string }[]
+> {
+  return invoke<{ id: string; kind: string; title: string; deleted_at: string }[]>("trash_list");
+}
+
+/** Restore a soft-deleted aggregate from its trash before-image. Resolves or rejects with an AppError string. */
+export function trash_restore(args: { id: string }): Promise<void> {
+  return invoke<void>("trash_restore", args);
+}
+
+/** Permanently forget a trash entry. Resolves or rejects with an AppError string. */
+export function trash_purge(args: { id: string }): Promise<void> {
+  return invoke<void>("trash_purge", args);
+}

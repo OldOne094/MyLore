@@ -1,7 +1,7 @@
 import { useState } from "react";
-import { ArrowLeft, FileText, ListTree, RefreshCcw, Star, Activity } from "lucide-react";
+import { ArrowLeft, FileText, ListTree, RefreshCcw, Star, Activity, Trash2 } from "lucide-react";
 import { useTranslation } from "react-i18next";
-import { Link, useParams } from "react-router";
+import { Link, useNavigate, useParams } from "react-router";
 import {
   Badge,
   Button,
@@ -11,8 +11,10 @@ import {
   TabsContent,
   TabsList,
   TabsTrigger,
+  useToast,
 } from "@/components/ui";
 import { useMediaDetailQuery } from "./api";
+import { useDeleteMedia, useRestoreTrashItem } from "@/features/trash/api";
 import { STATUS_VARIANTS, TYPE_ICONS } from "./mediaMeta";
 
 /* MISSION-042 — Media detail page. Hero (cover, title, meta badges, actions)
@@ -66,8 +68,37 @@ function MetaCell({ label, value }: { label: string; value: string }) {
 export function MediaDetailPage() {
   const { t } = useTranslation();
   const { id } = useParams<{ id: string }>();
+  const navigate = useNavigate();
+  const toast = useToast();
   const [tab, setTab] = useState<DetailTab>("overview");
   const { data, isPending, isError, refetch } = useMediaDetailQuery(id ?? "");
+  const deleteMedia = useDeleteMedia();
+  const restoreTrashItem = useRestoreTrashItem();
+
+  const handleDelete = () => {
+    if (!data) return;
+    deleteMedia.mutate(data.id, {
+      onSuccess: (trashId) => {
+        navigate("/library");
+        toast.success({
+          title: t("trash.deletedToast", { count: 1 }),
+          action: {
+            label: t("trash.undo"),
+            onClick: () => {
+              void restoreTrashItem.mutateAsync(trashId).then(
+                () =>
+                  toast.success({
+                    title: t("trash.restoredToast", { title: data.title_main }),
+                  }),
+                () => toast.error({ title: t("trash.restoreErrorToast") }),
+              );
+            },
+          },
+        });
+      },
+      onError: () => toast.error({ title: t("trash.deleteErrorToast") }),
+    });
+  };
 
   if (isPending) return <DetailSkeleton />;
 
@@ -112,11 +143,23 @@ export function MediaDetailPage() {
           </div>
 
           <div className="flex min-w-0 flex-1 flex-col gap-3">
-            <div>
-              <h1 className="text-2xl font-semibold text-text-primary">{title}</h1>
-              {data.title_original ? (
-                <p className="mt-1 text-sm text-text-tertiary">{data.title_original}</p>
-              ) : null}
+            <div className="flex items-start justify-between gap-3">
+              <div>
+                <h1 className="text-2xl font-semibold text-text-primary">{title}</h1>
+                {data.title_original ? (
+                  <p className="mt-1 text-sm text-text-tertiary">{data.title_original}</p>
+                ) : null}
+              </div>
+              <Button
+                variant="secondary"
+                size="sm"
+                onClick={handleDelete}
+                disabled={deleteMedia.isPending || restoreTrashItem.isPending}
+                aria-label={t("trash.deleteAria", { title })}
+              >
+                <Trash2 size={14} aria-hidden="true" />
+                {t("trash.delete")}
+              </Button>
             </div>
             <div className="flex flex-wrap items-center gap-2">
               <Badge variant="accent">{t(`contentType.${data.content_type}`)}</Badge>

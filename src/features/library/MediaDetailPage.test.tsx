@@ -134,4 +134,33 @@ describe("MediaDetailPage", () => {
     renderPage("m-missing");
     expect(await screen.findByText("Title not found")).toBeInTheDocument();
   });
+
+  it("deletes a title, navigates back and offers an undo toast", async () => {
+    vi.mocked(invoke).mockImplementation((cmd: string) => {
+      if (cmd === "media_get") return Promise.resolve(DETAIL);
+      if (cmd === "media_delete") return Promise.resolve("t-1");
+      return Promise.resolve(undefined);
+    });
+    renderPage();
+    await screen.findByRole("heading", { name: "Steins;Gate" });
+
+    await userEvent.click(screen.getByRole("button", { name: "Delete Steins;Gate" }));
+
+    expect(invoke).toHaveBeenCalledWith("media_delete", { id: "m-111" });
+    expect(await screen.findByText("1 title moved to trash")).toBeInTheDocument();
+
+    await userEvent.click(screen.getByRole("button", { name: "Undo" }));
+    expect(invoke).toHaveBeenCalledWith("trash_restore", { id: "t-1" });
+    expect(await screen.findByText("Restored “Steins;Gate”")).toBeInTheDocument();
+  });
+
+  it("shows an error toast when the delete fails", async () => {
+    vi.mocked(invoke).mockResolvedValueOnce(DETAIL).mockRejectedValueOnce("boom");
+    renderPage();
+    await screen.findByRole("heading", { name: "Steins;Gate" });
+
+    await userEvent.click(screen.getByRole("button", { name: "Delete Steins;Gate" }));
+
+    expect(await screen.findByText("Couldn't delete the title")).toBeInTheDocument();
+  });
 });

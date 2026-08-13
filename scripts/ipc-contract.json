@@ -64,6 +64,30 @@
       "args": { "query": "string" },
       "returns": "{ id: string; content_type: string; title: string; pub_status: string; release_year: number | null; cover_asset_id: string | null; updated_at: string }[]",
       "doc": "Local full-text search over the library. Resolves with summary rows or rejects with an AppError string."
+    },
+    {
+      "name": "media_delete",
+      "args": { "id": "string" },
+      "returns": "string",
+      "doc": "Soft-delete a media: store its before-image in trash, cascade the row away. Resolves with the trash id (accepted by trash_restore for undo) or rejects with an AppError string."
+    },
+    {
+      "name": "trash_list",
+      "args": {},
+      "returns": "{ id: string; kind: string; title: string; deleted_at: string }[]",
+      "doc": "List active (not restored) trash entries. Resolves with trash items or rejects with an AppError string."
+    },
+    {
+      "name": "trash_restore",
+      "args": { "id": "string" },
+      "returns": "void",
+      "doc": "Restore a soft-deleted aggregate from its trash before-image. Resolves or rejects with an AppError string."
+    },
+    {
+      "name": "trash_purge",
+      "args": { "id": "string" },
+      "returns": "void",
+      "doc": "Permanently forget a trash entry. Resolves or rejects with an AppError string."
     }
   ],
   "events": []

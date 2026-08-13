@@ -7,6 +7,7 @@ import {
   Search,
   Settings,
   Star,
+  Trash2,
   type LucideIcon,
 } from "lucide-react";
 
@@ -32,4 +33,5 @@ export const NAV_ITEMS: NavItem[] = [
   { path: "/stats", key: "stats", icon: BarChart3, hintKey: "nav.hint_stats" },
   { path: "/calendar", key: "calendar", icon: Calendar, hintKey: "nav.hint_calendar" },
   { path: "/settings", key: "settings", icon: Settings, hintKey: "nav.hint_settings" },
+  { path: "/trash", key: "trash", icon: Trash2, hintKey: "nav.hint_trash" },
 ];

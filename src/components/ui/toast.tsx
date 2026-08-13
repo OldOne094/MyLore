@@ -1,6 +1,14 @@
 import * as ToastPrimitive from "@radix-ui/react-toast";
 import { X } from "lucide-react";
-import { createContext, useCallback, useContext, useMemo, useState, type ReactNode } from "react";
+import {
+  createContext,
+  useCallback,
+  useContext,
+  useMemo,
+  useRef,
+  useState,
+  type ReactNode,
+} from "react";
 import { cn } from "@/lib/cn";
 
 /* DESIGN_SYSTEM.md §6 — Toast: success / error / info, optional undo action,
@@ -41,9 +49,10 @@ export interface ToastProviderProps {
 
 export function ToastProvider({ children, duration = 5000 }: ToastProviderProps) {
   const [toasts, setToasts] = useState<ToastData[]>([]);
+  const nextId = useRef(1);
 
   const push = useCallback((data: Omit<ToastData, "id">) => {
-    setToasts((current) => [...current, { ...data, id: Date.now() }]);
+    setToasts((current) => [...current, { ...data, id: nextId.current++ }]);
   }, []);
 
   const dismiss = useCallback((id: number) => {

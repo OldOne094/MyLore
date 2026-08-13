@@ -53,6 +53,11 @@ export const queryKeys = {
     all: () => ["search"] as const,
     local: (query: string) => ["search", "local", query] as const,
   },
+  trash: {
+    all: () => ["trash"] as const,
+    lists: () => ["trash", "list"] as const,
+    list: () => ["trash", "list"] as const,
+  },
   settings: {
     all: () => ["settings"] as const,
     preferences: () => ["settings", "preferences"] as const,

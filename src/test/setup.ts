@@ -11,6 +11,17 @@ class ResizeObserverMock {
 
 globalThis.ResizeObserver ??= ResizeObserverMock as unknown as typeof ResizeObserver;
 
+// Radix Toast tracks pointer capture; jsdom elements lack hasPointerCapture.
+if (!Element.prototype.hasPointerCapture) {
+  Element.prototype.hasPointerCapture = () => false;
+}
+if (!Element.prototype.setPointerCapture) {
+  Element.prototype.setPointerCapture = () => {};
+}
+if (!Element.prototype.releasePointerCapture) {
+  Element.prototype.releasePointerCapture = () => {};
+}
+
 // @tanstack/react-virtual reads the scroll container's offsetHeight to size its
 // viewport and returns an empty range when it measures 0 (jsdom has no layout).
 // Report a viewport height for the library's scroll container and an estimate

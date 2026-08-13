@@ -9,6 +9,7 @@ import {
   SearchPage,
   SettingsPage,
   StatsPage,
+  TrashPage,
 } from "@/features";
 import { MediaDetailPage } from "@/features/library/MediaDetailPage";
 import { NAV_ITEMS } from "@/navigation";
@@ -30,6 +31,7 @@ export const appRoutes: RouteObject[] = [
       { path: "stats", element: <StatsPage /> },
       { path: "calendar", element: <CalendarPage /> },
       { path: "settings", element: <SettingsPage /> },
+      { path: "trash", element: <TrashPage /> },
     ],
   },
 ];

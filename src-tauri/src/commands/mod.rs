@@ -7,6 +7,7 @@ use tracing::info;
 use crate::error::AppError;
 
 pub mod media;
+pub mod trash;
 
 /// Placeholder greeting command from the create-tauri-app scaffold.
 #[command]
