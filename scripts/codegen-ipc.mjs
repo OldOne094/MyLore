@@ -121,6 +121,10 @@ function render(contract) {
     sections.push('import { emit, listen, type UnlistenFn } from "@tauri-apps/api/event";');
   }
   sections.push("");
+  for (const type of contract.types ?? []) {
+    sections.push(`export interface ${type.name} {\n  ${type.shape}\n}`);
+  }
+  if ((contract.types ?? []).length > 0) sections.push("");
   for (const command of contract.commands) sections.push(commandWrapper(command), "");
   for (const event of contract.events ?? []) sections.push(eventHelpers(event), "");
   return `${sections.join("\n").trimEnd()}\n`;

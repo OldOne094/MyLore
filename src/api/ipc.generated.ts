@@ -3,6 +3,20 @@
 
 import { invoke } from "@tauri-apps/api/core";
 
+export interface ContentNode {
+  id: string;
+  kind: string;
+  position: number;
+  number: string | null;
+  title: string | null;
+  release_date: string | null;
+  duration_min: number | null;
+  page_count: number | null;
+  synopsis: string | null;
+  is_special: boolean;
+  children: ContentNode[];
+}
+
 /** Placeholder greeting command (create-tauri-app scaffold). Resolves with the greeting or rejects with an AppError string. */
 export function greet(args: { name: string }): Promise<string> {
   return invoke<string>("greet", args);
@@ -170,6 +184,11 @@ export function media_search(args: { query: string }): Promise<
       updated_at: string;
     }[]
   >("media_search", args);
+}
+
+/** Read the full content tree for one media (seasons→episodes, volumes→chapters). Resolves with the nested tree, roots ordered by position, or rejects with an AppError string. */
+export function media_nodes(args: { id: string }): Promise<ContentNode[]> {
+  return invoke<ContentNode[]>("media_nodes", args);
 }
 
 /** Soft-delete a media: store its before-image in trash, cascade the row away. Resolves with the trash id (accepted by trash_restore for undo) or rejects with an AppError string. */

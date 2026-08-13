@@ -30,6 +30,7 @@ export const queryKeys = {
     facets: () => ["media", "facets"] as const,
     details: () => ["media", "detail"] as const,
     detail: (id: string) => ["media", "detail", id] as const,
+    nodes: (id: string) => ["media", "nodes", id] as const,
   },
   tracking: {
     all: () => ["tracking"] as const,

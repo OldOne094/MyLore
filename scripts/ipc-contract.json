@@ -1,6 +1,12 @@
 {
-  "$comment": "Single source of truth for the typed IPC boundary. Edit this file, then run `npm run codegen` to regenerate src/api/ipc.generated.ts. Type expressions: string | number | boolean | null | any | unknown | void | `T[]` | `Record<string, T>` | anything else passes through raw TS.",
+  "$comment": "Single source of truth for the typed IPC boundary. Edit this file, then run `npm run codegen` to regenerate src/api/ipc.generated.ts. Type expressions: string | number | boolean | null | any | unknown | void | `T[]` | `Record<string, T>` | anything else passes through raw TS. Named interfaces shared across commands live in `types` (name + raw TS body, may reference each other for recursion).",
   "version": 1,
+  "types": [
+    {
+      "name": "ContentNode",
+      "shape": "id: string; kind: string; position: number; number: string | null; title: string | null; release_date: string | null; duration_min: number | null; page_count: number | null; synopsis: string | null; is_special: boolean; children: ContentNode[]"
+    }
+  ],
   "commands": [
     {
       "name": "greet",
@@ -64,6 +70,12 @@
       "args": { "query": "string" },
       "returns": "{ id: string; content_type: string; title: string; pub_status: string; release_year: number | null; cover_asset_id: string | null; updated_at: string }[]",
       "doc": "Local full-text search over the library. Resolves with summary rows or rejects with an AppError string."
+    },
+    {
+      "name": "media_nodes",
+      "args": { "id": "string" },
+      "returns": "ContentNode[]",
+      "doc": "Read the full content tree for one media (seasons→episodes, volumes→chapters). Resolves with the nested tree, roots ordered by position, or rejects with an AppError string."
     },
     {
       "name": "media_delete",

@@ -8,6 +8,7 @@ use crate::error::AppError;
 
 pub mod bulk;
 pub mod media;
+pub mod node;
 pub mod trash;
 
 /// Placeholder greeting command from the create-tauri-app scaffold.

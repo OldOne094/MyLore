@@ -14,6 +14,7 @@ vi.mock("@tauri-apps/api/core", () => ({
 import { invoke } from "@tauri-apps/api/core";
 import { MediaDetailPage } from "./MediaDetailPage";
 import type { MediaDetail } from "./api";
+import type { ContentNode } from "@/api";
 
 const DETAIL: MediaDetail = {
   id: "m-111",
@@ -68,6 +69,36 @@ afterEach(async () => {
   await i18n.changeLanguage("en");
 });
 
+const NODES: ContentNode[] = [
+  {
+    id: "s1",
+    kind: "season",
+    position: 1,
+    number: "1",
+    title: null,
+    release_date: null,
+    duration_min: null,
+    page_count: null,
+    synopsis: null,
+    is_special: false,
+    children: [
+      {
+        id: "e1",
+        kind: "episode",
+        position: 1,
+        number: "1",
+        title: "Time Traveler",
+        release_date: null,
+        duration_min: 24,
+        page_count: null,
+        synopsis: null,
+        is_special: false,
+        children: [],
+      },
+    ],
+  },
+];
+
 describe("MediaDetailPage", () => {
   it("renders the hero with title, meta badges and a link back to the library", async () => {
     vi.mocked(invoke).mockResolvedValue(DETAIL);
@@ -117,6 +148,28 @@ describe("MediaDetailPage", () => {
 
     await userEvent.click(screen.getByRole("tab", { name: "Review" }));
     expect(screen.getByRole("tabpanel")).toHaveTextContent("Reviews land here");
+  });
+
+  it("renders the content tree in the Details tab", async () => {
+    vi.mocked(invoke).mockImplementation((cmd: string) => {
+      if (cmd === "media_get") return Promise.resolve(DETAIL);
+      if (cmd === "media_nodes") return Promise.resolve(NODES);
+      return Promise.resolve(undefined);
+    });
+    renderPage();
+    await screen.findByRole("heading", { name: "Steins;Gate" });
+
+    await userEvent.click(screen.getByRole("tab", { name: "Details" }));
+
+    expect(
+      await screen.findByRole("tree", { name: "Steins;Gate content tree" }),
+    ).toBeInTheDocument();
+    expect(screen.getByRole("treeitem", { name: "Season 1" })).toBeInTheDocument();
+    expect(screen.getByRole("treeitem", { name: "Episode 1 · Time Traveler" })).toHaveAttribute(
+      "aria-level",
+      "2",
+    );
+    expect(invoke).toHaveBeenCalledWith("media_nodes", { id: "m-111" });
   });
 
   it("shows an error state with retry when loading fails", async () => {

@@ -3,7 +3,7 @@
    typed mutation that invalidates every library list on success. */
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { media_create, media_facets, media_get, media_list } from "@/api";
+import { media_create, media_facets, media_get, media_list, media_nodes } from "@/api";
 import { queryKeys } from "@/api";
 import type { AddMediaInput } from "./types";
 
@@ -162,5 +162,13 @@ export function useMediaDetailQuery(id: string) {
   return useQuery({
     queryKey: queryKeys.media.detail(id),
     queryFn: () => media_get({ id }),
+  });
+}
+
+/** Read the content tree of one media (MISSION-046). */
+export function useMediaNodesQuery(id: string) {
+  return useQuery({
+    queryKey: queryKeys.media.nodes(id),
+    queryFn: () => media_nodes({ id }),
   });
 }

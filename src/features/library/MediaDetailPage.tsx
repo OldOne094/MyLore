@@ -14,6 +14,7 @@ import {
   useToast,
 } from "@/components/ui";
 import { useMediaDetailQuery } from "./api";
+import { NodeTree } from "./NodeTree";
 import { useDeleteMedia, useRestoreTrashItem } from "@/features/trash/api";
 import { STATUS_VARIANTS, TYPE_ICONS } from "./mediaMeta";
 
@@ -236,7 +237,7 @@ export function MediaDetailPage() {
           </TabsContent>
 
           <TabsContent value="details" className="pt-6">
-            <p className="text-sm text-text-secondary">{t("detail.detailsPlaceholder")}</p>
+            <NodeTree mediaId={data.id} mediaTitle={title} />
           </TabsContent>
 
           <TabsContent value="tracking" className="pt-6">

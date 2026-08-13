@@ -34,6 +34,7 @@ pub fn run() {
             commands::media::media_facets,
             commands::media::media_get,
             commands::media::media_search,
+            commands::node::media_nodes,
             commands::trash::media_delete,
             commands::trash::trash_list,
             commands::trash::trash_restore,
