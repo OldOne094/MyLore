@@ -231,6 +231,16 @@ const en = {
     issue: "Issue",
     node: "Item",
   },
+  progress: {
+    toggleRead: "Mark {{label}} as read",
+    toggleWatched: "Mark {{label}} as watched",
+    unmark: "Mark {{label}} as unread",
+    skip: "Mark {{label}} as skipped",
+    unskip: "Mark {{label}} as unread",
+    rangeHint: "Shift-click a row to mark every item between it and the last one.",
+    setErrorToast: "Couldn't update progress",
+    rangeErrorToast: "Couldn't update the range",
+  },
   search: {
     placeholder: "Search your library…",
     inputLabel: "Search your library",
@@ -550,6 +560,16 @@ const ar = {
     track: "مسار",
     issue: "عدد",
     node: "عنصر",
+  },
+  progress: {
+    toggleRead: "حدّد {{label}} كمقروء",
+    toggleWatched: "حدّد {{label}} كمُشاهد",
+    unmark: "حدّد {{label}} كغير مقروء",
+    skip: "اعتبر {{label}} متجاوزاً",
+    unskip: "حدّد {{label}} كغير مقروء",
+    rangeHint: "اضغط مع Shift على صف لتحديد كل العناصر بينه وبين آخر صف.",
+    setErrorToast: "تعذّر تحديث التقدم",
+    rangeErrorToast: "تعذّر تحديث النطاق",
   },
   search: {
     placeholder: "ابحث في مكتبتك…",

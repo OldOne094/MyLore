@@ -237,7 +237,7 @@ export function MediaDetailPage() {
           </TabsContent>
 
           <TabsContent value="details" className="pt-6">
-            <NodeTree mediaId={data.id} mediaTitle={title} />
+            <NodeTree mediaId={data.id} mediaTitle={title} contentType={data.content_type} />
           </TabsContent>
 
           <TabsContent value="tracking" className="pt-6">

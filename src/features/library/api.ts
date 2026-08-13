@@ -3,8 +3,19 @@
    typed mutation that invalidates every library list on success. */
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { media_create, media_facets, media_get, media_list, media_nodes } from "@/api";
+import { useTranslation } from "react-i18next";
+import {
+  media_create,
+  media_facets,
+  media_get,
+  media_list,
+  media_nodes,
+  node_progress_range,
+  node_progress_set,
+} from "@/api";
 import { queryKeys } from "@/api";
+import { useToast } from "@/components/ui";
+import type { ContentNode } from "@/api";
 import type { AddMediaInput } from "./types";
 
 export interface MediaCreateArgs {
@@ -171,4 +182,64 @@ export function useMediaNodesQuery(id: string) {
     queryKey: queryKeys.media.nodes(id),
     queryFn: () => media_nodes({ id }),
   });
+}
+
+/**
+ * MISSION-047 — progress actions for the content tree.
+ *
+ * Both actions apply an optimistic state to the nodes cache immediately, roll
+ * the cache back if the IPC write rejects, and — for ranges — reconcile the
+ * cache with the server-returned affected ids after the write succeeds so the
+ * exact boundary never drifts.
+ */
+export function useNodeProgress(mediaId: string) {
+  const { t } = useTranslation();
+  const queryClient = useQueryClient();
+  const toast = useToast();
+  const key = queryKeys.media.nodes(mediaId);
+
+  const commit = (nodeIds: string[], state: string | null) => {
+    const previous = queryClient.getQueryData<ContentNode[]>(key) ?? [];
+    queryClient.setQueryData(key, setNodeState(previous, new Set(nodeIds), state));
+    return previous;
+  };
+
+  const markNode = async (nodeId: string, state: string) => {
+    const previous = commit([nodeId], state);
+    try {
+      await node_progress_set({ node_id: nodeId, node_state: state });
+    } catch {
+      queryClient.setQueryData(key, previous);
+      toast.error({ title: t("progress.setErrorToast") });
+    }
+  };
+
+  const markRange = async (fromId: string, toId: string, state: string, rangeIds: string[]) => {
+    const previous = commit(rangeIds, state);
+    try {
+      const affected = await node_progress_range({
+        media_id: mediaId,
+        from_id: fromId,
+        to_id: toId,
+        node_state: state,
+      });
+      queryClient.setQueryData(key, setNodeState(previous, new Set(affected), state));
+    } catch {
+      queryClient.setQueryData(key, previous);
+      toast.error({ title: t("progress.rangeErrorToast") });
+    }
+  };
+
+  return { markNode, markRange };
+}
+
+/** Immutably set `state` on every matching node id, recursing into children. */
+function setNodeState(nodes: ContentNode[], ids: Set<string>, state: string | null): ContentNode[] {
+  let changed = false;
+  const next = nodes.map((node) => {
+    const children = setNodeState(node.children, ids, state);
+    if (ids.has(node.id) || children !== node.children) changed = true;
+    return ids.has(node.id) ? { ...node, children, state } : { ...node, children };
+  });
+  return changed ? next : nodes;
 }

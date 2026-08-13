@@ -1,6 +1,6 @@
-//! Content-node commands (MISSION-046). Thin handlers — tree assembly lives in
-//! `application::node_service`; per-node progress commands land with
-//! MISSION-047.
+//! Content-node commands (MISSION-046, MISSION-047). Thin handlers — tree
+//! assembly lives in `application::node_service`, progress writes in
+//! `application::progress_service`.
 
 use sqlx::SqlitePool;
 use tauri::command;
@@ -8,11 +8,12 @@ use tauri::State;
 use tracing::info;
 
 use crate::application::node_service::{ContentNode, NodeService};
+use crate::application::progress_service::ProgressService;
 use crate::error::AppError;
 
 /// Read the full content tree for one media (seasons→episodes, volumes→
-/// chapters). Resolves with the nested tree, roots ordered by position, or
-/// rejects with an AppError string.
+/// chapters), with per-node progress state attached. Resolves with the nested
+/// tree, roots ordered by position, or rejects with an AppError string.
 #[command]
 pub async fn media_nodes(
     state: State<'_, SqlitePool>,
@@ -21,4 +22,38 @@ pub async fn media_nodes(
     info!(id, "media_nodes invoked");
     let service = NodeService::new(state.inner().clone());
     service.tree_for_media(&id).await
+}
+
+/// Set the progress state of one node (`read`/`watched`/`skipped`/`unread`).
+/// Resolves or rejects with an AppError string.
+#[command]
+pub async fn node_progress_set(
+    state: State<'_, SqlitePool>,
+    node_id: String,
+    node_state: String,
+) -> Result<(), AppError> {
+    info!(node_id, node_state, "node_progress_set invoked");
+    let service = ProgressService::new(state.inner().clone());
+    service.set_node_progress(&node_id, &node_state).await
+}
+
+/// Set the progress state of every node between two nodes in the media's
+/// display order. Resolves with the affected node ids (for optimistic UI) or
+/// rejects with an AppError string.
+#[command]
+pub async fn node_progress_range(
+    state: State<'_, SqlitePool>,
+    media_id: String,
+    from_id: String,
+    to_id: String,
+    node_state: String,
+) -> Result<Vec<String>, AppError> {
+    info!(
+        media_id,
+        from_id, to_id, node_state, "node_progress_range invoked"
+    );
+    let service = ProgressService::new(state.inner().clone());
+    service
+        .set_range_progress(&media_id, &from_id, &to_id, &node_state)
+        .await
 }

@@ -1,8 +1,9 @@
-//! Content-node tree service (MISSION-046).
+//! Content-node tree service (MISSION-046, MISSION-047).
 //!
 //! Reads a media's node rows and assembles the nested tree the detail page
-//! renders with expand/collapse (seasons→episodes, volumes→chapters). Reads
-//! only; per-node progress commands land with MISSION-047.
+//! renders with expand/collapse (seasons→episodes, volumes→chapters), joined
+//! with the per-node progress state so rows can render their read/watched/
+//! skipped markers. Reads only; progress writes land in `progress_service`.
 
 use std::collections::HashMap;
 
@@ -12,7 +13,8 @@ use crate::error::AppError;
 use crate::infrastructure::repositories::node::{list_by_media, NodeRecord};
 
 /// A node in the serializable tree returned to the UI. Mirrors the `ContentNode`
-/// interface in the IPC contract (`scripts/ipc-contract.json`).
+/// interface in the IPC contract (`scripts/ipc-contract.json`). `state` is the
+/// per-node progress state or `None` when the node has no progress row yet.
 #[derive(Debug, Clone, serde::Serialize)]
 pub struct ContentNode {
     pub id: String,
@@ -25,11 +27,12 @@ pub struct ContentNode {
     pub page_count: Option<i64>,
     pub synopsis: Option<String>,
     pub is_special: bool,
+    pub state: Option<String>,
     pub children: Vec<ContentNode>,
 }
 
 impl ContentNode {
-    fn from_record(record: NodeRecord, children: Vec<ContentNode>) -> Self {
+    fn from_record(record: NodeRecord, children: Vec<ContentNode>, state: Option<String>) -> Self {
         Self {
             id: record.id,
             kind: record.kind,
@@ -41,6 +44,7 @@ impl ContentNode {
             page_count: record.page_count,
             synopsis: record.synopsis,
             is_special: record.is_special,
+            state,
             children,
         }
     }
@@ -56,11 +60,17 @@ impl NodeService {
         Self { pool }
     }
 
-    /// Assemble the full content tree for one media. Roots (and every sibling
-    /// group) are ordered by position, then id. Media without rows — or unknown
-    /// ids — resolve to an empty tree.
+    /// Assemble the full content tree for one media, with each node's progress
+    /// state attached. Roots (and every sibling group) are ordered by position,
+    /// then id. Media without rows — or unknown ids — resolve to an empty tree.
     pub async fn tree_for_media(&self, media_id: &str) -> Result<Vec<ContentNode>, AppError> {
         let rows = list_by_media(&self.pool, media_id).await?;
+        let state_by_node: HashMap<String, String> =
+            crate::infrastructure::repositories::tracking::progress_for_media(&self.pool, media_id)
+                .await?
+                .into_iter()
+                .map(|progress| (progress.node_id, progress.state))
+                .collect();
         let mut by_parent: HashMap<Option<String>, Vec<NodeRecord>> = HashMap::new();
         for row in rows {
             by_parent
@@ -71,6 +81,7 @@ impl NodeService {
 
         fn children_of(
             by_parent: &HashMap<Option<String>, Vec<NodeRecord>>,
+            state_by_node: &HashMap<String, String>,
             parent: Option<&str>,
         ) -> Vec<ContentNode> {
             let mut records = by_parent
@@ -81,13 +92,14 @@ impl NodeService {
             records
                 .into_iter()
                 .map(|record| {
-                    let children = children_of(by_parent, Some(record.id.as_str()));
-                    ContentNode::from_record(record, children)
+                    let children = children_of(by_parent, state_by_node, Some(record.id.as_str()));
+                    let state = state_by_node.get(&record.id).cloned();
+                    ContentNode::from_record(record, children, state)
                 })
                 .collect()
         }
 
-        Ok(children_of(&by_parent, None))
+        Ok(children_of(&by_parent, &state_by_node, None))
     }
 }
 

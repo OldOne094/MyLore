@@ -129,6 +129,39 @@ pub async fn get_progress(
     Ok(row.map(row_to_progress))
 }
 
+/// Upsert progress rows for many nodes in one transaction (MISSION-047 range
+/// marks). Resolves with the ids actually written.
+pub async fn set_progress_many(
+    pool: &SqlitePool,
+    rows: &[NodeProgress],
+) -> Result<Vec<String>, AppError> {
+    let mut tx = pool.begin().await?;
+    let mut written = Vec::with_capacity(rows.len());
+    for progress in rows {
+        sqlx::query(
+            "INSERT INTO node_progress (node_id, state, read_at, note, rating, updated_at)
+             VALUES (?, ?, ?, ?, ?, ?)
+             ON CONFLICT(node_id) DO UPDATE SET
+               state = excluded.state,
+               read_at = excluded.read_at,
+               note = excluded.note,
+               rating = excluded.rating,
+               updated_at = excluded.updated_at",
+        )
+        .bind(&progress.node_id)
+        .bind(&progress.state)
+        .bind(&progress.read_at)
+        .bind(&progress.note)
+        .bind(progress.rating)
+        .bind(&progress.updated_at)
+        .execute(&mut *tx)
+        .await?;
+        written.push(progress.node_id.clone());
+    }
+    tx.commit().await?;
+    Ok(written)
+}
+
 /// All progress rows for a media's nodes.
 pub async fn progress_for_media(
     pool: &SqlitePool,
@@ -320,6 +353,51 @@ mod tests {
             .await
             .expect("count");
         assert_eq!(read, 1);
+        pool.close().await;
+        cleanup_files(&path);
+    }
+
+    #[tokio::test]
+    async fn set_progress_many_writes_all_in_one_transaction() {
+        let (pool, path) = migrated_pool("tracking_progress_many.db").await;
+        sqlx::query(
+            "INSERT INTO media (id, content_type, title_main, created_at, updated_at)
+             VALUES ('m-1', 'novel', 'Title', '2026-01-01', '2026-01-01')",
+        )
+        .execute(&pool)
+        .await
+        .expect("seed media");
+        seed_node(&pool, "n-1", "m-1").await;
+        seed_node(&pool, "n-2", "m-1").await;
+
+        let written = set_progress_many(
+            &pool,
+            &[
+                NodeProgress {
+                    node_id: "n-1".into(),
+                    state: "read".into(),
+                    read_at: Some("2026-01-02".into()),
+                    note: None,
+                    rating: None,
+                    updated_at: "2026-01-02".into(),
+                },
+                NodeProgress {
+                    node_id: "n-2".into(),
+                    state: "read".into(),
+                    read_at: Some("2026-01-02".into()),
+                    note: None,
+                    rating: None,
+                    updated_at: "2026-01-02".into(),
+                },
+            ],
+        )
+        .await
+        .expect("set many");
+
+        assert_eq!(written, vec!["n-1".to_string(), "n-2".to_string()]);
+        let all = progress_for_media(&pool, "m-1").await.expect("all");
+        assert_eq!(all.len(), 2);
+        assert!(all.iter().all(|p| p.state == "read"));
         pool.close().await;
         cleanup_files(&path);
     }

@@ -14,6 +14,7 @@ export interface ContentNode {
   page_count: number | null;
   synopsis: string | null;
   is_special: boolean;
+  state: string | null;
   children: ContentNode[];
 }
 
@@ -186,9 +187,24 @@ export function media_search(args: { query: string }): Promise<
   >("media_search", args);
 }
 
-/** Read the full content tree for one media (seasons→episodes, volumes→chapters). Resolves with the nested tree, roots ordered by position, or rejects with an AppError string. */
+/** Read the full content tree for one media (seasons→episodes, volumes→chapters) with per-node progress state. Resolves with the nested tree, roots ordered by position, or rejects with an AppError string. */
 export function media_nodes(args: { id: string }): Promise<ContentNode[]> {
   return invoke<ContentNode[]>("media_nodes", args);
+}
+
+/** Set the progress state of one node (read/watched/skipped/unread). Completed states stamp read_at. Resolves or rejects with an AppError string. */
+export function node_progress_set(args: { node_id: string; node_state: string }): Promise<void> {
+  return invoke<void>("node_progress_set", args);
+}
+
+/** Set the progress state of every node between two nodes in the media's display order. Resolves with the affected node ids (for optimistic UI) or rejects with an AppError string. */
+export function node_progress_range(args: {
+  media_id: string;
+  from_id: string;
+  to_id: string;
+  node_state: string;
+}): Promise<string[]> {
+  return invoke<string[]>("node_progress_range", args);
 }
 
 /** Soft-delete a media: store its before-image in trash, cascade the row away. Resolves with the trash id (accepted by trash_restore for undo) or rejects with an AppError string. */

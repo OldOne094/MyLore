@@ -81,6 +81,7 @@ const NODES: ContentNode[] = [
     page_count: null,
     synopsis: null,
     is_special: false,
+    state: null,
     children: [
       {
         id: "e1",
@@ -93,6 +94,7 @@ const NODES: ContentNode[] = [
         page_count: null,
         synopsis: null,
         is_special: false,
+        state: null,
         children: [],
       },
     ],
