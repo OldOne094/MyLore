@@ -1,3 +1,4 @@
+import { Check } from "lucide-react";
 import { Link } from "react-router";
 import { useTranslation } from "react-i18next";
 import { Badge } from "@/components/ui";
@@ -7,26 +8,42 @@ import { STATUS_VARIANTS, TYPE_ICONS } from "./mediaMeta";
 
 /* MISSION-040 — Library list rows. `dense` is the Compact tier (DESIGN_SYSTEM
    §8): smaller paddings (8→4), 13px text, hidden meta badges, smaller thumb.
-   MISSION-042 makes the row a link to the media detail page. */
+   MISSION-042 makes the row a link to the media detail page. MISSION-045 adds
+   bulk-select mode: when `selectable` the row becomes a toggle button with a
+   leading checkbox instead of a navigation link. */
 
 export interface MediaRowProps {
   item: MediaListItem;
   dense?: boolean;
+  selectable?: boolean;
+  selected?: boolean;
+  onToggle?: (id: string) => void;
 }
 
-export function MediaRow({ item, dense = false }: MediaRowProps) {
+export function MediaRow({
+  item,
+  dense = false,
+  selectable = false,
+  selected = false,
+  onToggle,
+}: MediaRowProps) {
   const { t } = useTranslation();
   const Icon = TYPE_ICONS[item.content_type] ?? TYPE_ICONS.other;
 
-  return (
-    <Link
-      to={`/library/${item.id}`}
-      aria-label={item.title}
+  const checkbox = selectable ? (
+    <span
+      aria-hidden="true"
       className={cn(
-        "flex w-full items-center gap-3 rounded-md border border-transparent bg-bg-surface transition-colors duration-150 ease-out hover:border-border-subtle hover:bg-bg-hover",
-        dense ? "px-2 py-1" : "px-3 py-2",
+        "flex size-4 shrink-0 items-center justify-center rounded-sm border",
+        selected ? "border-accent bg-accent text-bg-surface" : "border-border-strong bg-bg-surface",
       )}
     >
+      {selected && <Check size={12} />}
+    </span>
+  ) : null;
+
+  const body = (
+    <>
       <div
         className={cn(
           "flex shrink-0 items-center justify-center overflow-hidden rounded-sm bg-bg-hover text-text-tertiary",
@@ -60,6 +77,38 @@ export function MediaRow({ item, dense = false }: MediaRowProps) {
           {item.release_year}
         </span>
       ) : null}
+    </>
+  );
+
+  if (selectable) {
+    return (
+      <button
+        type="button"
+        aria-pressed={selected}
+        aria-label={item.title}
+        onClick={() => onToggle?.(item.id)}
+        className={cn(
+          "flex w-full items-center gap-3 rounded-md border bg-bg-surface transition-colors duration-150 ease-out hover:border-border-subtle hover:bg-bg-hover",
+          dense ? "px-2 py-1" : "px-3 py-2",
+          selected ? "border-accent ring-1 ring-accent" : "border-transparent",
+        )}
+      >
+        {checkbox}
+        {body}
+      </button>
+    );
+  }
+
+  return (
+    <Link
+      to={`/library/${item.id}`}
+      aria-label={item.title}
+      className={cn(
+        "flex w-full items-center gap-3 rounded-md border border-transparent bg-bg-surface transition-colors duration-150 ease-out hover:border-border-subtle hover:bg-bg-hover",
+        dense ? "px-2 py-1" : "px-3 py-2",
+      )}
+    >
+      {body}
     </Link>
   );
 }

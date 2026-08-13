@@ -88,6 +88,45 @@
       "args": { "id": "string" },
       "returns": "void",
       "doc": "Permanently forget a trash entry. Resolves or rejects with an AppError string."
+    },
+    {
+      "name": "tracking_bulk_set_status",
+      "args": {
+        "ids": "string[]",
+        "core_status": "string"
+      },
+      "returns": "void",
+      "doc": "Set the tracking status for many media at once (status engine applies). Resolves or rejects with an AppError string."
+    },
+    {
+      "name": "media_bulk_add_tag",
+      "args": {
+        "ids": "string[]",
+        "tag": "string"
+      },
+      "returns": "void",
+      "doc": "Add a personal tag to many media at once (reused or created as needed). Resolves or rejects with an AppError string."
+    },
+    {
+      "name": "media_bulk_delete",
+      "args": { "ids": "string[]" },
+      "returns": "string[]",
+      "doc": "Soft-delete many media. Resolves with a trash id per media (for group undo) or rejects with an AppError string."
+    },
+    {
+      "name": "collection_list",
+      "args": {},
+      "returns": "{ id: string; name: string }[]",
+      "doc": "List collections for the add-to-list picker. Resolves with collection rows or rejects with an AppError string."
+    },
+    {
+      "name": "collection_bulk_add",
+      "args": {
+        "collection_id": "string",
+        "media_ids": "string[]"
+      },
+      "returns": "void",
+      "doc": "Add many media to one collection. Resolves or rejects with an AppError string."
     }
   ],
   "events": []

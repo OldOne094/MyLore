@@ -451,6 +451,52 @@ pub async fn facets(pool: &SqlitePool) -> Result<MediaFacets, AppError> {
     })
 }
 
+/// Resolve a personal tag by exact name (or `None`). Personal tags are
+/// user-created labels (tag.scope = 'personal'); bulk tagging reuses the row
+/// when one already exists.
+pub async fn resolve_personal_tag(
+    pool: &SqlitePool,
+    name: &str,
+) -> Result<Option<String>, AppError> {
+    let row =
+        sqlx::query_as::<_, (String,)>("SELECT id FROM tag WHERE scope = 'personal' AND name = ?")
+            .bind(name)
+            .fetch_optional(pool)
+            .await?;
+    Ok(row.map(|(id,)| id))
+}
+
+/// Create a personal tag row (ids are minted by the caller, e.g. `tag-{uuid}`).
+pub async fn create_personal_tag(pool: &SqlitePool, id: &str, name: &str) -> Result<(), AppError> {
+    sqlx::query("INSERT INTO tag (id, name, scope) VALUES (?, ?, 'personal')")
+        .bind(id)
+        .bind(name)
+        .execute(pool)
+        .await?;
+    Ok(())
+}
+
+/// Link a tag to many media rows in one transaction; already-linked pairs are
+/// ignored. Resolves with the number of new links.
+pub async fn add_tag_to_many(
+    pool: &SqlitePool,
+    tag_id: &str,
+    media_ids: &[String],
+) -> Result<usize, AppError> {
+    let mut tx = pool.begin().await?;
+    let mut added = 0usize;
+    for media_id in media_ids {
+        let res = sqlx::query("INSERT OR IGNORE INTO media_tag (media_id, tag_id) VALUES (?, ?)")
+            .bind(media_id)
+            .bind(tag_id)
+            .execute(&mut *tx)
+            .await?;
+        added += res.rows_affected() as usize;
+    }
+    tx.commit().await?;
+    Ok(added)
+}
+
 /// Full-text search over both tokenizers, best matches first.
 ///
 /// The query is folded like the index (lowercase + Arabic normalization), then
@@ -981,6 +1027,81 @@ mod tests {
         );
 
         assert!(search(&pool, "  ").await.expect("blank").is_empty());
+        pool.close().await;
+        cleanup_files(&path);
+    }
+
+    #[tokio::test]
+    async fn personal_tags_resolve_and_create() {
+        let (pool, path) = migrated_pool("media_repo_personal_tag.db").await;
+
+        assert!(
+            resolve_personal_tag(&pool, "Favorites")
+                .await
+                .expect("none")
+                .is_none(),
+            "no personal tag yet"
+        );
+
+        create_personal_tag(&pool, "tg-1", "Favorites")
+            .await
+            .expect("create");
+        assert_eq!(
+            resolve_personal_tag(&pool, "Favorites")
+                .await
+                .expect("find"),
+            Some("tg-1".to_string())
+        );
+        assert!(
+            resolve_personal_tag(&pool, "favorites")
+                .await
+                .expect("case")
+                .is_none(),
+            "personal tags match by exact name"
+        );
+
+        pool.close().await;
+        cleanup_files(&path);
+    }
+
+    #[tokio::test]
+    async fn add_tag_to_many_links_only_missing_pairs() {
+        let (pool, path) = migrated_pool("media_repo_tag_many.db").await;
+        create(&pool, &sample_media("m-1", "One"))
+            .await
+            .expect("create 1");
+        create(&pool, &sample_media("m-2", "Two"))
+            .await
+            .expect("create 2");
+        create(&pool, &sample_media("m-3", "Three"))
+            .await
+            .expect("create 3");
+        create_personal_tag(&pool, "tg-1", "Backlog")
+            .await
+            .expect("tag");
+
+        let ids = vec!["m-1".to_string(), "m-2".to_string(), "m-3".to_string()];
+        assert_eq!(
+            add_tag_to_many(&pool, "tg-1", &ids)
+                .await
+                .expect("link all"),
+            3
+        );
+
+        // Re-running is idempotent: no new links, no duplicate rows.
+        let ids = vec!["m-1".to_string(), "m-2".to_string(), "m-3".to_string()];
+        assert_eq!(
+            add_tag_to_many(&pool, "tg-1", &ids)
+                .await
+                .expect("link again"),
+            0
+        );
+        let (n,): (i64,) = sqlx::query_as("SELECT COUNT(*) FROM media_tag")
+            .fetch_one(&pool)
+            .await
+            .expect("count");
+        assert_eq!(n, 3, "no duplicate media_tag rows");
+
         pool.close().await;
         cleanup_files(&path);
     }

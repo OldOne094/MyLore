@@ -1,27 +1,35 @@
+import { Check } from "lucide-react";
 import { Link } from "react-router";
 import { useTranslation } from "react-i18next";
 import { Badge } from "@/components/ui";
+import { cn } from "@/lib/cn";
 import type { MediaListItem } from "./api";
 import { STATUS_VARIANTS, TYPE_ICONS } from "./mediaMeta";
 
 /* MISSION-040 — Single library card in the grid. Poster placeholder until real
    cover art arrives (cover_asset_id is unresolved for now). MISSION-042 makes
-   the card a link to the media detail page. */
+   the card a link to the media detail page. MISSION-045 adds bulk-select mode:
+   when `selectable` the card becomes a toggle button (aria-pressed) with a
+   corner checkbox instead of a navigation link. */
 
 export interface MediaCardProps {
   item: MediaListItem;
+  selectable?: boolean;
+  selected?: boolean;
+  onToggle?: (id: string) => void;
 }
 
-export function MediaCard({ item }: MediaCardProps) {
+export function MediaCard({
+  item,
+  selectable = false,
+  selected = false,
+  onToggle,
+}: MediaCardProps) {
   const { t } = useTranslation();
   const Icon = TYPE_ICONS[item.content_type] ?? TYPE_ICONS.other;
 
-  return (
-    <Link
-      to={`/library/${item.id}`}
-      aria-label={item.title}
-      className="flex flex-col gap-2 rounded-lg border border-border-subtle bg-bg-surface p-2.5 transition-colors duration-150 ease-out hover:border-border-strong"
-    >
+  const body = (
+    <>
       <div className="flex aspect-[2/3] w-full items-center justify-center overflow-hidden rounded-sm bg-bg-hover text-text-tertiary">
         <Icon size={28} aria-hidden="true" />
       </div>
@@ -37,6 +45,45 @@ export function MediaCard({ item }: MediaCardProps) {
           ) : null}
         </div>
       </div>
+    </>
+  );
+
+  if (selectable) {
+    return (
+      <button
+        type="button"
+        aria-pressed={selected}
+        aria-label={item.title}
+        onClick={() => onToggle?.(item.id)}
+        className={cn(
+          "relative flex flex-col gap-2 rounded-lg border bg-bg-surface p-2.5 text-start",
+          "transition-colors duration-150 ease-out hover:border-border-strong",
+          selected && "border-accent ring-1 ring-accent",
+        )}
+      >
+        <span
+          aria-hidden="true"
+          className={cn(
+            "absolute end-2 top-2 flex size-5 items-center justify-center rounded-sm border",
+            selected
+              ? "border-accent bg-accent text-bg-surface"
+              : "border-border-strong bg-bg-surface",
+          )}
+        >
+          {selected && <Check size={14} />}
+        </span>
+        {body}
+      </button>
+    );
+  }
+
+  return (
+    <Link
+      to={`/library/${item.id}`}
+      aria-label={item.title}
+      className="flex flex-col gap-2 rounded-lg border border-border-subtle bg-bg-surface p-2.5 transition-colors duration-150 ease-out hover:border-border-strong"
+    >
+      {body}
     </Link>
   );
 }

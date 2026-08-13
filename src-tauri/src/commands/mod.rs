@@ -6,6 +6,7 @@ use tracing::info;
 
 use crate::error::AppError;
 
+pub mod bulk;
 pub mod media;
 pub mod trash;
 

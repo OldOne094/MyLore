@@ -193,3 +193,34 @@ export function trash_restore(args: { id: string }): Promise<void> {
 export function trash_purge(args: { id: string }): Promise<void> {
   return invoke<void>("trash_purge", args);
 }
+
+/** Set the tracking status for many media at once (status engine applies). Resolves or rejects with an AppError string. */
+export function tracking_bulk_set_status(args: {
+  ids: string[];
+  core_status: string;
+}): Promise<void> {
+  return invoke<void>("tracking_bulk_set_status", args);
+}
+
+/** Add a personal tag to many media at once (reused or created as needed). Resolves or rejects with an AppError string. */
+export function media_bulk_add_tag(args: { ids: string[]; tag: string }): Promise<void> {
+  return invoke<void>("media_bulk_add_tag", args);
+}
+
+/** Soft-delete many media. Resolves with a trash id per media (for group undo) or rejects with an AppError string. */
+export function media_bulk_delete(args: { ids: string[] }): Promise<string[]> {
+  return invoke<string[]>("media_bulk_delete", args);
+}
+
+/** List collections for the add-to-list picker. Resolves with collection rows or rejects with an AppError string. */
+export function collection_list(): Promise<{ id: string; name: string }[]> {
+  return invoke<{ id: string; name: string }[]>("collection_list");
+}
+
+/** Add many media to one collection. Resolves or rejects with an AppError string. */
+export function collection_bulk_add(args: {
+  collection_id: string;
+  media_ids: string[];
+}): Promise<void> {
+  return invoke<void>("collection_bulk_add", args);
+}

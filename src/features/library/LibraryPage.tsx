@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Library, Plus, RefreshCcw, SlidersHorizontal } from "lucide-react";
+import { CheckSquare, Library, Plus, RefreshCcw, SlidersHorizontal, X } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { Button, EmptyState, Skeleton } from "@/components/ui";
 import { useMediaFacetsQuery, useMediaListQuery } from "./api";
@@ -7,6 +7,7 @@ import { AddMediaDialog } from "./AddMediaDialog";
 import { LibraryViewSwitcher, type LibraryView } from "./LibraryViewSwitcher";
 import { VirtualizedLibrary } from "./VirtualizedLibrary";
 import { LibraryFilterBar } from "./LibraryFilterBar";
+import { BulkActionBar } from "./BulkActionBar";
 import {
   activeFilterCount,
   DEFAULT_FILTERS,
@@ -21,7 +22,9 @@ import type { LibraryGroupBy } from "./grouping";
    with the Grid / List / Compact density switcher when populated, filter
    panel (type/format/status/genre/tag/year/favorite) + sort menu + group-by,
    per-view skeletons while loading, and a retry on failure. Rendering is
-   virtualized. */
+   virtualized. MISSION-045 adds bulk-select mode: a Select toggle flips cards
+   and rows into checkboxes and a bottom action bar offers status / tag / list
+   / delete (export arrives later). */
 
 function AddTitleTrigger() {
   const { t } = useTranslation();
@@ -91,6 +94,8 @@ export function LibraryPage() {
   const [filters, setFilters] = useState<LibraryFilters>(DEFAULT_FILTERS);
   const [sort, setSort] = useState<LibrarySort>(DEFAULT_SORT);
   const [groupBy, setGroupBy] = useState<LibraryGroupBy>("none");
+  const [selectMode, setSelectMode] = useState(false);
+  const [selected, setSelected] = useState<ReadonlySet<string>>(new Set());
 
   const queryArgs = filtersToArgs(filters, sort);
   const { data, isLoading, isError, refetch } = useMediaListQuery(queryArgs);
@@ -118,15 +123,72 @@ export function LibraryPage() {
   const hasActiveFilters = activeFilterCount(filters) > 0;
   if (items.length === 0 && !hasActiveFilters) return <EmptyLibrary />;
 
+  const exitSelect = () => {
+    setSelectMode(false);
+    setSelected(new Set());
+  };
+
+  const toggleItem = (id: string) => {
+    setSelected((previous) => {
+      const next = new Set(previous);
+      if (next.has(id)) {
+        next.delete(id);
+      } else {
+        next.add(id);
+      }
+      return next;
+    });
+  };
+
+  const toggleAll = () => {
+    setSelected((previous) => {
+      const allSelected = previous.size === items.length;
+      if (allSelected) return new Set();
+      return new Set(items.map((item) => item.id));
+    });
+  };
+
+  const allSelected = items.length > 0 && selected.size === items.length;
+
   return (
     <section aria-label={t("nav.library")} className="flex h-full min-h-0 flex-col">
       <div className="flex shrink-0 flex-wrap items-center justify-between gap-3 border-b border-border-subtle px-5 py-3">
         <span className="text-sm tabular-nums text-text-secondary">
-          {t("shell.status.counts", { count: items.length })}
+          {selectMode
+            ? t("library.selectionCount", { count: selected.size })
+            : t("shell.status.counts", { count: items.length })}
         </span>
         <div className="flex shrink-0 items-center gap-2">
-          <AddTitleTrigger />
-          <LibraryViewSwitcher view={view} onChange={setView} />
+          {selectMode ? (
+            <>
+              <Button variant="ghost" size="sm" onClick={toggleAll} aria-pressed={allSelected}>
+                {allSelected ? t("library.clearSelection") : t("library.selectAll")}
+              </Button>
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={exitSelect}
+                aria-label={t("library.exitSelect")}
+              >
+                <X size={14} aria-hidden="true" />
+                {t("library.exitSelect")}
+              </Button>
+            </>
+          ) : (
+            <>
+              <Button
+                variant="secondary"
+                size="sm"
+                onClick={() => setSelectMode(true)}
+                aria-label={t("library.select")}
+              >
+                <CheckSquare size={14} aria-hidden="true" />
+                {t("library.select")}
+              </Button>
+              <AddTitleTrigger />
+              <LibraryViewSwitcher view={view} onChange={setView} />
+            </>
+          )}
         </div>
       </div>
       <LibraryFilterBar
@@ -150,7 +212,19 @@ export function LibraryPage() {
           }
         />
       ) : (
-        <VirtualizedLibrary view={view} items={items} groupBy={groupBy} />
+        <>
+          <VirtualizedLibrary
+            view={view}
+            items={items}
+            groupBy={groupBy}
+            selectable={selectMode}
+            selected={selected}
+            onToggle={toggleItem}
+          />
+          {selectMode && selected.size > 0 ? (
+            <BulkActionBar ids={[...selected]} onDone={exitSelect} />
+          ) : null}
+        </>
       )}
     </section>
   );

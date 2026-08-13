@@ -51,6 +51,10 @@ export interface VirtualizedLibraryProps {
   view: LibraryView;
   items: MediaListItem[];
   groupBy?: LibraryGroupBy;
+  /** Bulk-select mode: cards/rows render as toggles instead of links (MISSION-045). */
+  selectable?: boolean;
+  selected?: ReadonlySet<string>;
+  onToggle?: (id: string) => void;
   className?: string;
 }
 
@@ -58,6 +62,9 @@ export function VirtualizedLibrary({
   view,
   items,
   groupBy = "none",
+  selectable = false,
+  selected,
+  onToggle,
   className,
 }: VirtualizedLibraryProps) {
   const { t } = useTranslation();
@@ -126,7 +133,13 @@ export function VirtualizedLibrary({
                 }}
               >
                 {entry.items.map((item) => (
-                  <MediaCard key={item.id} item={item} />
+                  <MediaCard
+                    key={item.id}
+                    item={item}
+                    selectable={selectable}
+                    selected={selected?.has(item.id) ?? false}
+                    onToggle={onToggle}
+                  />
                 ))}
               </div>
             );
@@ -142,7 +155,13 @@ export function VirtualizedLibrary({
               className={cn("absolute inset-x-0 top-0 px-6", view === "compact" ? "pb-1" : "pb-2")}
               style={{ transform: `translateY(${row.start}px)` }}
             >
-              <MediaRow item={item} dense={view === "compact"} />
+              <MediaRow
+                item={item}
+                dense={view === "compact"}
+                selectable={selectable}
+                selected={selected?.has(item.id) ?? false}
+                onToggle={onToggle}
+              />
             </div>
           );
         })}

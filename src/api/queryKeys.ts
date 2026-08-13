@@ -43,6 +43,7 @@ export const queryKeys = {
   },
   collection: {
     all: () => ["collection"] as const,
+    lists: () => ["collection", "list"] as const,
     detail: (collectionId: number) => ["collection", "detail", collectionId] as const,
   },
   stats: {
