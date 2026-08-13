@@ -8,7 +8,7 @@ use tauri::State;
 use tracing::info;
 
 use crate::application::node_service::{ContentNode, NodeService};
-use crate::application::progress_service::ProgressService;
+use crate::application::progress_service::{NodeProgressNextView, ProgressService};
 use crate::error::AppError;
 
 /// Read the full content tree for one media (seasons→episodes, volumes→
@@ -56,4 +56,18 @@ pub async fn node_progress_range(
     service
         .set_range_progress(&media_id, &from_id, &to_id, &node_state)
         .await
+}
+
+/// Mark the next not-yet-consumed countable node of a media done (`watched`
+/// for episodes, `read` otherwise) and run the auto-status rule. Resolves with
+/// the refreshed progress summary, null when nothing is left to mark, or
+/// rejects with an AppError string.
+#[command]
+pub async fn node_progress_next(
+    state: State<'_, SqlitePool>,
+    media_id: String,
+) -> Result<Option<NodeProgressNextView>, AppError> {
+    info!(media_id, "node_progress_next invoked");
+    let service = ProgressService::new(state.inner().clone());
+    service.mark_next_unit(&media_id).await
 }

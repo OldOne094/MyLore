@@ -7,13 +7,14 @@
 //! Timestamps and ids are minted here (repositories are clock-free by design):
 //! ids are UUID-style, timestamps ISO 8601 UTC.
 
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 use std::str::FromStr;
 
 use chrono::Utc;
 use sqlx::SqlitePool;
 use uuid::Uuid;
 
+use crate::application::progress_service::{summary_dto, ProgressSummary};
 use crate::domain::enums::{ContentType, MediaStatus};
 use crate::domain::media::{Media, MediaRuntime};
 use crate::domain::value_objects::{LanguageCode, MediaId};
@@ -22,6 +23,7 @@ use crate::infrastructure::repositories::media::{
     facets as media_facets, list as list_rows, AltTitle, ExternalId, MediaFacets, MediaFilter,
     MediaRecord, MediaRelation, MediaSort, MediaSummary,
 };
+use crate::infrastructure::repositories::tracking;
 
 /// Command input for a manual add (MISSION-038).
 #[derive(Debug, Clone, serde::Deserialize)]
@@ -74,6 +76,8 @@ pub struct MediaListItem {
     pub release_year: Option<i64>,
     pub cover_asset_id: Option<String>,
     pub updated_at: String,
+    /// Per-media progress summary driving the in-grid quick controls (MISSION-049).
+    pub progress: ProgressSummary,
 }
 
 impl MediaService {
@@ -175,7 +179,7 @@ impl MediaService {
         };
 
         let rows = list_rows(&self.pool, &filter).await?;
-        Ok(rows.into_iter().map(media_list_item).collect())
+        self.to_list_items(rows).await
     }
 
     /// Distinct filter values present in the library (MISSION-041).
@@ -195,12 +199,31 @@ impl MediaService {
             return Ok(Vec::new());
         }
         let rows = crate::infrastructure::repositories::media::search(&self.pool, query).await?;
-        Ok(rows.into_iter().map(media_list_item).collect())
+        self.to_list_items(rows).await
+    }
+
+    /// Map repo summary rows onto list items, attaching each media's progress
+    /// summary in one batched pass (no per-row queries).
+    async fn to_list_items(&self, rows: Vec<MediaSummary>) -> Result<Vec<MediaListItem>, AppError> {
+        let ids: Vec<String> = rows.iter().map(|row| row.id.clone()).collect();
+        let summaries: HashMap<String, ProgressSummary> =
+            tracking::progress_summaries(&self.pool, &ids)
+                .await?
+                .into_iter()
+                .map(|row| (row.media_id.clone(), summary_dto(&row)))
+                .collect();
+        Ok(rows
+            .into_iter()
+            .map(|row| {
+                let summary = summaries.get(&row.id);
+                media_list_item(row, summary)
+            })
+            .collect())
     }
 }
 
 /// Map a repository summary row onto the serializable DTO.
-fn media_list_item(row: MediaSummary) -> MediaListItem {
+fn media_list_item(row: MediaSummary, summary: Option<&ProgressSummary>) -> MediaListItem {
     MediaListItem {
         id: row.id,
         content_type: row.content_type,
@@ -209,6 +232,13 @@ fn media_list_item(row: MediaSummary) -> MediaListItem {
         release_year: row.release_year,
         cover_asset_id: row.cover_asset_id,
         updated_at: row.updated_at,
+        progress: summary.cloned().unwrap_or(ProgressSummary {
+            percent: None,
+            completed: 0,
+            total: 0,
+            next_label: None,
+            next_node_id: None,
+        }),
     }
 }
 

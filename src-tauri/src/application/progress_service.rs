@@ -12,10 +12,31 @@ use sqlx::SqlitePool;
 
 use crate::application::node_service::{ContentNode, NodeService};
 use crate::application::tracking_service::TrackingService;
-use crate::domain::enums::NodeProgressState;
+use crate::domain::enums::{ContentType, NodeProgressState};
+use crate::domain::progress::ProgressTemplate;
 use crate::error::AppError;
+use crate::infrastructure::repositories::media;
 use crate::infrastructure::repositories::node;
-use crate::infrastructure::repositories::tracking::{self, NodeProgress};
+use crate::infrastructure::repositories::tracking::{self, MediaProgressSummary, NodeProgress};
+
+/// A library row's progress summary (MISSION-049): weighted totals (pages for
+/// books, else unit counts) + the next not-yet-consumed unit. `next_label` is a
+/// short human label ("E4", "Ch7") for the in-grid quick-control button.
+#[derive(Debug, Clone, serde::Serialize)]
+pub struct ProgressSummary {
+    pub percent: Option<u8>,
+    pub completed: i64,
+    pub total: i64,
+    pub next_label: Option<String>,
+    pub next_node_id: Option<String>,
+}
+
+/// The result of a `node_progress_next` write.
+#[derive(Debug, Clone, serde::Serialize)]
+pub struct NodeProgressNextView {
+    pub media_id: String,
+    pub summary: ProgressSummary,
+}
 
 /// Per-node progress use-cases.
 pub struct ProgressService {
@@ -93,6 +114,62 @@ impl ProgressService {
         }
     }
 
+    /// Mark the next not-yet-consumed countable node of a media done (watched
+    /// for episode units, read otherwise), then run the auto-status rule.
+    /// Resolves with the refreshed progress summary, or `None` when there is
+    /// nothing left to mark. Rejects for unknown media.
+    pub async fn mark_next_unit(
+        &self,
+        media_id: &str,
+    ) -> Result<Option<NodeProgressNextView>, AppError> {
+        let Some(media_row) = media::get(&self.pool, media_id).await? else {
+            return Err(AppError::validation(format!("media not found: {media_id}")));
+        };
+        let content_type = ContentType::from_str(&media_row.content_type)?;
+        let template = ProgressTemplate::for_content_type(content_type);
+        let Some(unit) = tracking::next_unread_unit(&self.pool, media_id).await? else {
+            return Ok(None);
+        };
+
+        let now = Utc::now().to_rfc3339();
+        tracking::set_progress(
+            &self.pool,
+            &NodeProgress {
+                node_id: unit.node_id.clone(),
+                state: template.consuming_state.as_str().to_string(),
+                read_at: Some(now.clone()),
+                note: None,
+                rating: None,
+                updated_at: now,
+            },
+        )
+        .await?;
+        self.sync_auto_status(media_id).await;
+        let summary = self.summary_for(media_id).await?;
+        Ok(Some(NodeProgressNextView {
+            media_id: media_id.to_string(),
+            summary,
+        }))
+    }
+
+    /// Read a media's progress summary (empty defaults when the media has no
+    /// countable nodes).
+    pub async fn summary_for(&self, media_id: &str) -> Result<ProgressSummary, AppError> {
+        let summaries = tracking::progress_summaries(&self.pool, &[media_id.to_string()]).await?;
+        Ok(
+            match summaries.into_iter().find(|s| s.media_id == media_id) {
+                Some(row) => summary_dto(&row),
+                None => ProgressSummary {
+                    percent: None,
+                    completed: 0,
+                    total: 0,
+                    next_label: None,
+                    next_node_id: None,
+                },
+            },
+        )
+    }
+
     /// Build a progress row for one node. Completed states stamp `read_at`;
     /// all other states clear it.
     async fn progress_row(&self, node_id: &str, state: NodeProgressState) -> NodeProgress {
@@ -121,6 +198,40 @@ fn preorder(nodes: &[ContentNode]) -> Vec<String> {
     let mut ids = Vec::new();
     preorder_ids(nodes, &mut ids);
     ids
+}
+
+/// Map a repo progress summary onto the serializable DTO (percent + labels).
+pub(crate) fn summary_dto(row: &MediaProgressSummary) -> ProgressSummary {
+    let percent = (row.total_weight > 0)
+        .then(|| (row.completed_weight.saturating_mul(100) / row.total_weight) as u8);
+    ProgressSummary {
+        percent,
+        completed: row.completed_weight,
+        total: row.total_weight,
+        next_label: row.next_node_id.as_ref().map(|_| {
+            unit_label(
+                row.next_kind.as_deref().unwrap_or("node"),
+                row.next_number.as_deref(),
+                row.next_position,
+            )
+        }),
+        next_node_id: row.next_node_id.clone(),
+    }
+}
+
+/// A short label for a countable node: "E4" for episodes, "Ch7" for chapters,
+/// "#12" otherwise (falls back to the display position when unnumbered).
+pub(crate) fn unit_label(kind: &str, number: Option<&str>, position: Option<i64>) -> String {
+    let raw = match number {
+        Some(n) if !n.trim().is_empty() => n.to_string(),
+        _ => position.map(|p| p.to_string()).unwrap_or_default(),
+    };
+    match kind {
+        "episode" => format!("E{raw}"),
+        "chapter" => format!("Ch{raw}"),
+        _ if raw.is_empty() => "#".to_string(),
+        _ => format!("#{raw}"),
+    }
 }
 
 #[cfg(test)]
@@ -409,5 +520,218 @@ mod tests {
             },
         ];
         assert_eq!(preorder(&nodes), vec!["v1", "c1", "c2", "v2"]);
+    }
+
+    #[tokio::test]
+    async fn mark_next_unit_watches_episodes_and_auto_completes() {
+        let (pool, path) = migrated_pool("progress_service_next_anime.db").await;
+        let media_id = seed_anime(&pool).await;
+        seed_episode(&pool, "e1", &media_id, "1").await;
+        seed_episode(&pool, "e2", &media_id, "2").await;
+        seed_episode(&pool, "e3", &media_id, "3").await;
+        let service = ProgressService::new(pool.clone());
+
+        let first = service
+            .mark_next_unit(&media_id)
+            .await
+            .expect("mark")
+            .expect("has next");
+        assert_eq!(first.media_id, media_id);
+        assert_eq!(first.summary.completed, 1);
+        assert_eq!(first.summary.next_label.as_deref(), Some("E2"));
+        assert_eq!(
+            tracking::get_progress(&pool, "e1")
+                .await
+                .expect("get")
+                .unwrap()
+                .state,
+            "watched"
+        );
+
+        service
+            .mark_next_unit(&media_id)
+            .await
+            .expect("mark")
+            .expect("has next");
+        let done = service
+            .mark_next_unit(&media_id)
+            .await
+            .expect("mark")
+            .expect("still a summary");
+        assert!(done.summary.next_node_id.is_none(), "everything watched");
+
+        let exhausted = service.mark_next_unit(&media_id).await.expect("mark");
+        assert!(exhausted.is_none(), "nothing left to mark");
+        let tracking_row = tracking::get_tracking(&pool, &media_id)
+            .await
+            .expect("tracking")
+            .expect("row");
+        assert_eq!(tracking_row.core_status, "completed", "auto-complete ran");
+        pool.close().await;
+        cleanup_files(&path);
+    }
+
+    #[tokio::test]
+    async fn mark_next_unit_skips_to_next_and_rejects_unknown_media() {
+        let (pool, path) = migrated_pool("progress_service_next_skip.db").await;
+        let media_id = seed_anime(&pool).await;
+        seed_episode(&pool, "e1", &media_id, "1").await;
+        seed_episode(&pool, "e2", &media_id, "2").await;
+        let service = ProgressService::new(pool.clone());
+
+        service
+            .set_node_progress("e1", "skipped")
+            .await
+            .expect("skip e1");
+        let next = service
+            .mark_next_unit(&media_id)
+            .await
+            .expect("mark")
+            .expect("has next");
+        assert_eq!(
+            next.summary.next_label.as_deref(),
+            Some("E2"),
+            "skipped e1 is still the next unit"
+        );
+
+        let err = service
+            .mark_next_unit("m-nope")
+            .await
+            .expect_err("unknown media");
+        assert!(matches!(err, AppError::Validation(_)));
+        pool.close().await;
+        cleanup_files(&path);
+    }
+
+    #[tokio::test]
+    async fn mark_next_unit_reads_books_and_weights_pages() {
+        let (pool, path) = migrated_pool("progress_service_next_book.db").await;
+        let media_id = seed_book(&pool).await;
+        seed_chapter(&pool, "c1", &media_id, 30).await;
+        seed_chapter(&pool, "c2", &media_id, 45).await;
+        let service = ProgressService::new(pool.clone());
+
+        let next = service
+            .mark_next_unit(&media_id)
+            .await
+            .expect("mark")
+            .expect("has next");
+        assert_eq!(next.summary.completed, 30, "c1's page weight");
+        assert_eq!(next.summary.total, 75);
+        assert_eq!(next.summary.percent, Some(40));
+        assert_eq!(next.summary.next_label.as_deref(), Some("Ch2"));
+        pool.close().await;
+        cleanup_files(&path);
+    }
+
+    #[tokio::test]
+    async fn unit_label_formats_kinds_and_fallbacks() {
+        assert_eq!(unit_label("episode", Some("12.5"), Some(12)), "E12.5");
+        assert_eq!(unit_label("chapter", Some("7"), Some(7)), "Ch7");
+        assert_eq!(unit_label("episode", None, Some(3)), "E3");
+        assert_eq!(unit_label("node", None, Some(2)), "#2");
+        assert_eq!(unit_label("chapter", Some(" "), Some(9)), "Ch9");
+    }
+
+    /// Seed an anime media (counts watched episodes).
+    async fn seed_anime(pool: &sqlx::SqlitePool) -> String {
+        let id = format!("m-{}", uuid::Uuid::new_v4());
+        seed_media_row(pool, &id, "anime").await;
+        id
+    }
+
+    /// Seed a book media (weighs chapters by pages).
+    async fn seed_book(pool: &sqlx::SqlitePool) -> String {
+        let id = format!("m-{}", uuid::Uuid::new_v4());
+        seed_media_row(pool, &id, "book").await;
+        id
+    }
+
+    async fn seed_media_row(pool: &sqlx::SqlitePool, id: &str, content_type: &str) {
+        media::create(
+            pool,
+            &media::MediaRecord {
+                id: id.to_string(),
+                content_type: content_type.into(),
+                format: None,
+                title_main: format!("Title {id}"),
+                title_original: None,
+                synopsis: None,
+                pub_status: "unknown".into(),
+                start_date: None,
+                end_date: None,
+                release_year: None,
+                language: None,
+                country: None,
+                content_rating: None,
+                pages: None,
+                duration_min: None,
+                ep_count: None,
+                ch_count: None,
+                cover_asset_id: None,
+                banner_asset_id: None,
+                provider: None,
+                provider_url: None,
+                metadata_refreshed_at: None,
+                created_at: "2026-01-01".into(),
+                updated_at: "2026-01-01".into(),
+                alt_titles: Vec::new(),
+                people: Vec::new(),
+                genres: Vec::new(),
+                tags: Vec::new(),
+                external_ids: Vec::new(),
+                relations: Vec::new(),
+            },
+        )
+        .await
+        .expect("seed media");
+    }
+
+    async fn seed_episode(pool: &sqlx::SqlitePool, id: &str, media_id: &str, number: &str) {
+        node::create(
+            pool,
+            &node::NodeRecord {
+                id: id.to_string(),
+                media_id: media_id.to_string(),
+                parent_id: None,
+                kind: "episode".into(),
+                position: number.parse().expect("position"),
+                number: Some(number.to_string()),
+                title: None,
+                release_date: None,
+                duration_min: Some(24),
+                page_count: None,
+                synopsis: None,
+                external_id: None,
+                is_special: false,
+                created_at: "2026-01-01".into(),
+            },
+        )
+        .await
+        .expect("seed episode");
+    }
+
+    async fn seed_chapter(pool: &sqlx::SqlitePool, id: &str, media_id: &str, pages: i64) {
+        node::create(
+            pool,
+            &node::NodeRecord {
+                id: id.to_string(),
+                media_id: media_id.to_string(),
+                parent_id: None,
+                kind: "chapter".into(),
+                position: pages,
+                number: Some(id.trim_start_matches('c').to_string()),
+                title: None,
+                release_date: None,
+                duration_min: None,
+                page_count: Some(pages),
+                synopsis: None,
+                external_id: None,
+                is_special: false,
+                created_at: "2026-01-01".into(),
+            },
+        )
+        .await
+        .expect("seed chapter");
     }
 }

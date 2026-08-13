@@ -37,6 +37,7 @@ pub fn run() {
             commands::node::media_nodes,
             commands::node::node_progress_set,
             commands::node::node_progress_range,
+            commands::node::node_progress_next,
             commands::trash::media_delete,
             commands::trash::trash_list,
             commands::trash::trash_restore,

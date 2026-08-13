@@ -26,6 +26,17 @@ export interface TrackingView {
   repeat_count: number;
   updated_at: string;
 }
+export interface ProgressSummary {
+  percent: number | null;
+  completed: number;
+  total: number;
+  next_label: string | null;
+  next_node_id: string | null;
+}
+export interface NodeProgressNextView {
+  media_id: string;
+  summary: ProgressSummary;
+}
 
 /** Placeholder greeting command (create-tauri-app scaffold). Resolves with the greeting or rejects with an AppError string. */
 export function greet(args: { name: string }): Promise<string> {
@@ -51,7 +62,7 @@ export function media_create(args: {
   return invoke<string>("media_create", args);
 }
 
-/** List library entries with optional filters. Resolves with summary rows or rejects with an AppError string. */
+/** List library entries with optional filters. Resolves with summary rows (each carrying its progress summary for the in-grid quick controls) or rejects with an AppError string. */
 export function media_list(args: {
   content_type: string | null;
   format: string | null;
@@ -74,6 +85,7 @@ export function media_list(args: {
     release_year: number | null;
     cover_asset_id: string | null;
     updated_at: string;
+    progress: ProgressSummary;
   }[]
 > {
   return invoke<
@@ -85,6 +97,7 @@ export function media_list(args: {
       release_year: number | null;
       cover_asset_id: string | null;
       updated_at: string;
+      progress: ProgressSummary;
     }[]
   >("media_list", args);
 }
@@ -171,7 +184,7 @@ export function media_get(args: { id: string }): Promise<{
   } | null>("media_get", args);
 }
 
-/** Local full-text search over the library. Resolves with summary rows or rejects with an AppError string. */
+/** Local full-text search over the library. Resolves with summary rows (each carrying its progress summary) or rejects with an AppError string. */
 export function media_search(args: { query: string }): Promise<
   {
     id: string;
@@ -181,6 +194,7 @@ export function media_search(args: { query: string }): Promise<
     release_year: number | null;
     cover_asset_id: string | null;
     updated_at: string;
+    progress: ProgressSummary;
   }[]
 > {
   return invoke<
@@ -192,6 +206,7 @@ export function media_search(args: { query: string }): Promise<
       release_year: number | null;
       cover_asset_id: string | null;
       updated_at: string;
+      progress: ProgressSummary;
     }[]
   >("media_search", args);
 }
@@ -214,6 +229,13 @@ export function node_progress_range(args: {
   node_state: string;
 }): Promise<string[]> {
   return invoke<string[]>("node_progress_range", args);
+}
+
+/** Mark the next not-yet-consumed countable node of a media done (watched for episodes, read otherwise) and run the auto-status rule. Resolves with the refreshed progress summary, null when nothing is left to mark, or rejects with an AppError string. */
+export function node_progress_next(args: {
+  media_id: string;
+}): Promise<NodeProgressNextView | null> {
+  return invoke<NodeProgressNextView | null>("node_progress_next", args);
 }
 
 /** Read the tracking row for one media. Resolves with the row or null when the media is untracked; rejects with an AppError string. */

@@ -9,6 +9,14 @@
     {
       "name": "TrackingView",
       "shape": "media_id: string; core_status: string; custom_status_id: string | null; started_at: string | null; finished_at: string | null; repeat_count: number; updated_at: string"
+    },
+    {
+      "name": "ProgressSummary",
+      "shape": "percent: number | null; completed: number; total: number; next_label: string | null; next_node_id: string | null"
+    },
+    {
+      "name": "NodeProgressNextView",
+      "shape": "media_id: string; summary: ProgressSummary"
     }
   ],
   "commands": [
@@ -54,8 +62,8 @@
         "limit": "number | null",
         "offset": "number | null"
       },
-      "returns": "{ id: string; content_type: string; title: string; pub_status: string; release_year: number | null; cover_asset_id: string | null; updated_at: string }[]",
-      "doc": "List library entries with optional filters. Resolves with summary rows or rejects with an AppError string."
+      "returns": "{ id: string; content_type: string; title: string; pub_status: string; release_year: number | null; cover_asset_id: string | null; updated_at: string; progress: ProgressSummary }[]",
+      "doc": "List library entries with optional filters. Resolves with summary rows (each carrying its progress summary for the in-grid quick controls) or rejects with an AppError string."
     },
     {
       "name": "media_facets",
@@ -72,8 +80,8 @@
     {
       "name": "media_search",
       "args": { "query": "string" },
-      "returns": "{ id: string; content_type: string; title: string; pub_status: string; release_year: number | null; cover_asset_id: string | null; updated_at: string }[]",
-      "doc": "Local full-text search over the library. Resolves with summary rows or rejects with an AppError string."
+      "returns": "{ id: string; content_type: string; title: string; pub_status: string; release_year: number | null; cover_asset_id: string | null; updated_at: string; progress: ProgressSummary }[]",
+      "doc": "Local full-text search over the library. Resolves with summary rows (each carrying its progress summary) or rejects with an AppError string."
     },
     {
       "name": "media_nodes",
@@ -100,6 +108,12 @@
       },
       "returns": "string[]",
       "doc": "Set the progress state of every node between two nodes in the media's display order. Resolves with the affected node ids (for optimistic UI) or rejects with an AppError string."
+    },
+    {
+      "name": "node_progress_next",
+      "args": { "media_id": "string" },
+      "returns": "NodeProgressNextView | null",
+      "doc": "Mark the next not-yet-consumed countable node of a media done (watched for episodes, read otherwise) and run the auto-status rule. Resolves with the refreshed progress summary, null when nothing is left to mark, or rejects with an AppError string."
     },
     {
       "name": "tracking_get",
