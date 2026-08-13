@@ -14,10 +14,10 @@ use chrono::Utc;
 use sqlx::SqlitePool;
 use uuid::Uuid;
 
+use crate::application::tracking_service::{domain_to_record, existing_to_domain};
 use crate::application::trash_service::TrashService;
 use crate::domain::enums::CoreStatus;
 use crate::domain::status::apply_transition;
-use crate::domain::tracking::Tracking;
 use crate::domain::value_objects::{DateOnly, MediaId};
 use crate::error::AppError;
 use crate::infrastructure::repositories::{collection, media, tracking};
@@ -136,76 +136,6 @@ fn normalize_tag(tag: &str) -> Result<String, AppError> {
         return Err(AppError::validation("tag must not be empty"));
     }
     Ok(collapsed)
-}
-
-/// Map a persisted tracking row (or nothing) into the domain aggregate. A
-/// missing row becomes a fresh `Planned` record; the status engine then moves
-/// it to the requested status.
-fn existing_to_domain(
-    record: Option<tracking::TrackingRecord>,
-    media_id: &MediaId,
-    updated_at: &str,
-) -> Result<Tracking, AppError> {
-    let Some(record) = record else {
-        return Ok(Tracking {
-            media_id: media_id.clone(),
-            core_status: CoreStatus::Planned,
-            custom_status_id: None,
-            started_at: None,
-            finished_at: None,
-            repeat_count: 0,
-            current_node_id: None,
-            current_position: None,
-            updated_at: updated_at.to_string(),
-        });
-    };
-
-    let core_status = CoreStatus::from_str(&record.core_status)?;
-    let started_at = record
-        .started_at
-        .as_deref()
-        .map(DateOnly::new)
-        .transpose()?;
-    let finished_at = record
-        .finished_at
-        .as_deref()
-        .map(DateOnly::new)
-        .transpose()?;
-    let repeat_count = u32::try_from(record.repeat_count)
-        .map_err(|_| AppError::validation("tracking repeat_count out of range"))?;
-    let current_position = record
-        .current_position
-        .map(|p| {
-            u32::try_from(p).map_err(|_| AppError::validation("tracking position out of range"))
-        })
-        .transpose()?;
-
-    Ok(Tracking {
-        media_id: media_id.clone(),
-        core_status,
-        custom_status_id: record.custom_status_id,
-        started_at,
-        finished_at,
-        repeat_count,
-        current_node_id: record.current_node_id,
-        current_position,
-        updated_at: record.updated_at,
-    })
-}
-
-/// Persist a domain aggregate as a tracking record.
-fn domain_to_record(next: &Tracking) -> tracking::TrackingRecord {
-    tracking::TrackingRecord {
-        media_id: next.media_id.as_str().to_string(),
-        core_status: next.core_status.as_str().to_string(),
-        custom_status_id: next.custom_status_id.clone(),
-        started_at: next.started_at.as_ref().map(|d| d.as_str().to_string()),
-        finished_at: next.finished_at.as_ref().map(|d| d.as_str().to_string()),
-        repeat_count: i64::from(next.repeat_count),
-        current_node_id: next.current_node_id.clone(),
-        current_position: next.current_position.map(i64::from),
-        updated_at: next.updated_at.clone(),
-    }
 }
 
 #[cfg(test)]

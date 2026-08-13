@@ -15,13 +15,14 @@ import {
 } from "@/components/ui";
 import { useMediaDetailQuery } from "./api";
 import { NodeTree } from "./NodeTree";
+import { TrackingTab } from "./TrackingTab";
 import { useDeleteMedia, useRestoreTrashItem } from "@/features/trash/api";
 import { STATUS_VARIANTS, TYPE_ICONS } from "./mediaMeta";
 
 /* MISSION-042 — Media detail page. Hero (cover, title, meta badges, actions)
-   above tabbed sections: Overview / Details / Tracking / Review. Tracking and
-   Review are shells wired to their later missions (MISSION-046, MISSION-073);
-   Overview/Details render the aggregate fields today. */
+   above tabbed sections: Overview / Details / Tracking / Review. Overview and
+   Details render the aggregate fields; Tracking is the MISSION-048 status
+   picker; Review remains a shell wired to MISSION-073. */
 
 type DetailTab = "overview" | "details" | "tracking" | "review";
 
@@ -241,7 +242,7 @@ export function MediaDetailPage() {
           </TabsContent>
 
           <TabsContent value="tracking" className="pt-6">
-            <p className="text-sm text-text-secondary">{t("detail.trackingPlaceholder")}</p>
+            <TrackingTab mediaId={data.id} />
           </TabsContent>
 
           <TabsContent value="review" className="pt-6">

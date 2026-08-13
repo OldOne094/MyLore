@@ -11,6 +11,7 @@ use chrono::Utc;
 use sqlx::SqlitePool;
 
 use crate::application::node_service::{ContentNode, NodeService};
+use crate::application::tracking_service::TrackingService;
 use crate::domain::enums::NodeProgressState;
 use crate::error::AppError;
 use crate::infrastructure::repositories::node;
@@ -27,15 +28,18 @@ impl ProgressService {
     }
 
     /// Set the progress state of a single node. Rejects unknown node ids and
-    /// invalid states.
+    /// invalid states. Runs the auto-status rule afterwards (MISSION-048).
     pub async fn set_node_progress(&self, node_id: &str, state: &str) -> Result<(), AppError> {
         let state = NodeProgressState::from_str(state).map_err(|err| {
             crate::error::AppError::validation(format!("invalid node progress state: {err}"))
         })?;
-        if node::get(&self.pool, node_id).await?.is_none() {
+        let node = node::get(&self.pool, node_id).await?;
+        let Some(node) = node else {
             return Err(AppError::validation(format!("node not found: {node_id}")));
-        }
-        tracking::set_progress(&self.pool, &self.progress_row(node_id, state).await).await
+        };
+        tracking::set_progress(&self.pool, &self.progress_row(node_id, state).await).await?;
+        self.sync_auto_status(&node.media_id).await;
+        Ok(())
     }
 
     /// Set the same progress state for every node between `from_id` and
@@ -74,7 +78,19 @@ impl ProgressService {
         for id in &order[start..=end] {
             rows.push(self.progress_row(id, state).await);
         }
-        tracking::set_progress_many(&self.pool, &rows).await
+        let written = tracking::set_progress_many(&self.pool, &rows).await?;
+        self.sync_auto_status(media_id).await;
+        Ok(written)
+    }
+
+    /// Run the auto-status rule after a progress write. The write itself has
+    /// already committed; a sync failure must not surface as a progress failure
+    /// (the UI would roll back a persisted change), so it is logged only.
+    async fn sync_auto_status(&self, media_id: &str) {
+        let service = TrackingService::new(self.pool.clone());
+        if let Err(err) = service.sync_auto_status(media_id).await {
+            tracing::warn!(%err, media_id, "auto status sync failed after progress write");
+        }
     }
 
     /// Build a progress row for one node. Completed states stamp `read_at`;

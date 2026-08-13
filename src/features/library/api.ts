@@ -208,6 +208,7 @@ export function useNodeProgress(mediaId: string) {
     const previous = commit([nodeId], state);
     try {
       await node_progress_set({ node_id: nodeId, node_state: state });
+      await queryClient.invalidateQueries({ queryKey: queryKeys.tracking.all() });
     } catch {
       queryClient.setQueryData(key, previous);
       toast.error({ title: t("progress.setErrorToast") });
@@ -224,6 +225,7 @@ export function useNodeProgress(mediaId: string) {
         node_state: state,
       });
       queryClient.setQueryData(key, setNodeState(previous, new Set(affected), state));
+      await queryClient.invalidateQueries({ queryKey: queryKeys.tracking.all() });
     } catch {
       queryClient.setQueryData(key, previous);
       toast.error({ title: t("progress.rangeErrorToast") });

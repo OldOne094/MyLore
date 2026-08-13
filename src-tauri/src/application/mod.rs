@@ -8,6 +8,7 @@ pub mod bulk_service;
 pub mod media_service;
 pub mod node_service;
 pub mod progress_service;
+pub mod tracking_service;
 pub mod trash_service;
 
 /// Placeholder to keep the crate skeleton compiling until M3 services land.

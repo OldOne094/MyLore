@@ -34,8 +34,7 @@ export const queryKeys = {
   },
   tracking: {
     all: () => ["tracking"] as const,
-    detail: (mediaId: number) => ["tracking", "detail", mediaId] as const,
-    node: (mediaId: number, nodeId: number) => ["tracking", "node", mediaId, nodeId] as const,
+    detail: (mediaId: string) => ["tracking", "detail", mediaId] as const,
   },
   review: {
     all: () => ["review"] as const,

@@ -17,6 +17,15 @@ export interface ContentNode {
   state: string | null;
   children: ContentNode[];
 }
+export interface TrackingView {
+  media_id: string;
+  core_status: string;
+  custom_status_id: string | null;
+  started_at: string | null;
+  finished_at: string | null;
+  repeat_count: number;
+  updated_at: string;
+}
 
 /** Placeholder greeting command (create-tauri-app scaffold). Resolves with the greeting or rejects with an AppError string. */
 export function greet(args: { name: string }): Promise<string> {
@@ -205,6 +214,19 @@ export function node_progress_range(args: {
   node_state: string;
 }): Promise<string[]> {
   return invoke<string[]>("node_progress_range", args);
+}
+
+/** Read the tracking row for one media. Resolves with the row or null when the media is untracked; rejects with an AppError string. */
+export function tracking_get(args: { media_id: string }): Promise<TrackingView | null> {
+  return invoke<TrackingView | null>("tracking_get", args);
+}
+
+/** Apply a status transition for one media (status engine applies, incl. the Repeat guard and started/finished stamps). Resolves with the updated row or rejects with an AppError string. */
+export function tracking_set_status(args: {
+  media_id: string;
+  core_status: string;
+}): Promise<TrackingView> {
+  return invoke<TrackingView>("tracking_set_status", args);
 }
 
 /** Soft-delete a media: store its before-image in trash, cascade the row away. Resolves with the trash id (accepted by trash_restore for undo) or rejects with an AppError string. */

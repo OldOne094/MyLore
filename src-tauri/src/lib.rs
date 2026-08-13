@@ -45,7 +45,9 @@ pub fn run() {
             commands::bulk::media_bulk_add_tag,
             commands::bulk::media_bulk_delete,
             commands::bulk::collection_list,
-            commands::bulk::collection_bulk_add
+            commands::bulk::collection_bulk_add,
+            commands::tracking::tracking_get,
+            commands::tracking::tracking_set_status
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

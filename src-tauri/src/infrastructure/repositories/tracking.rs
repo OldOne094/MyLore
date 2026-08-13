@@ -198,6 +198,47 @@ pub async fn count_nodes_in_state(
     Ok(n)
 }
 
+/// Every node of a media with its progress state (unmarked nodes report
+/// `unread`). This is the full tick set the domain progress engine folds —
+/// unmarked nodes must be present for the auto-status suggestion to reason
+/// about completion (MISSION-048).
+#[derive(Debug, Clone)]
+pub struct NodeTickRow {
+    pub node_id: String,
+    pub kind: String,
+    pub page_count: Option<i64>,
+    pub duration_min: Option<i64>,
+    pub state: String,
+}
+
+/// All node ticks for a media, in display order (position, then id).
+pub async fn node_ticks_for_media(
+    pool: &SqlitePool,
+    media_id: &str,
+) -> Result<Vec<NodeTickRow>, AppError> {
+    let rows = sqlx::query(
+        "SELECT cn.id, cn.kind, cn.page_count, cn.duration_min, \
+         COALESCE(np.state, 'unread') \
+         FROM content_node cn \
+         LEFT JOIN node_progress np ON np.node_id = cn.id \
+         WHERE cn.media_id = ? \
+         ORDER BY cn.position, cn.id",
+    )
+    .bind(media_id)
+    .fetch_all(pool)
+    .await?;
+    Ok(rows
+        .into_iter()
+        .map(|row| NodeTickRow {
+            node_id: row.get(0),
+            kind: row.get(1),
+            page_count: row.get(2),
+            duration_min: row.get(3),
+            state: row.get(4),
+        })
+        .collect())
+}
+
 fn row_to_tracking(row: SqliteRow) -> TrackingRecord {
     let get = |idx: usize| -> Option<String> { row.get(idx) };
     TrackingRecord {
@@ -353,6 +394,42 @@ mod tests {
             .await
             .expect("count");
         assert_eq!(read, 1);
+        pool.close().await;
+        cleanup_files(&path);
+    }
+
+    #[tokio::test]
+    async fn node_ticks_include_unmarked_nodes_as_unread() {
+        let (pool, path) = migrated_pool("tracking_ticks.db").await;
+        sqlx::query(
+            "INSERT INTO media (id, content_type, title_main, created_at, updated_at)
+             VALUES ('m-1', 'manga', 'Title', '2026-01-01', '2026-01-01')",
+        )
+        .execute(&pool)
+        .await
+        .expect("seed media");
+        seed_node(&pool, "n-1", "m-1").await;
+        seed_node(&pool, "n-2", "m-1").await;
+        set_progress(
+            &pool,
+            &NodeProgress {
+                node_id: "n-1".into(),
+                state: "read".into(),
+                read_at: Some("2026-01-02".into()),
+                note: None,
+                rating: None,
+                updated_at: "2026-01-02".into(),
+            },
+        )
+        .await
+        .expect("mark read");
+
+        let ticks = node_ticks_for_media(&pool, "m-1").await.expect("ticks");
+        assert_eq!(ticks.len(), 2, "unmarked nodes still yield a tick");
+        assert_eq!(ticks[0].node_id, "n-1");
+        assert_eq!(ticks[0].state, "read");
+        assert_eq!(ticks[1].node_id, "n-2");
+        assert_eq!(ticks[1].state, "unread");
         pool.close().await;
         cleanup_files(&path);
     }

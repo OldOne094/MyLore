@@ -138,15 +138,20 @@ describe("MediaDetailPage", () => {
     expect(within(panel).getByText("JP")).toBeInTheDocument();
   });
 
-  it("switches tabs with the keyboard and shows the shell placeholders", async () => {
-    vi.mocked(invoke).mockResolvedValue(DETAIL);
+  it("switches tabs with the keyboard and shows the tracking status picker", async () => {
+    vi.mocked(invoke).mockImplementation((cmd: string) => {
+      if (cmd === "media_get") return Promise.resolve(DETAIL);
+      if (cmd === "tracking_get") return Promise.resolve(null);
+      return Promise.resolve(undefined);
+    });
     renderPage();
     await screen.findByRole("heading", { name: "Steins;Gate" });
 
-    const tabs = screen.getByRole("tab", { name: "Tracking" });
-    await userEvent.click(tabs);
-    expect(tabs).toHaveAttribute("aria-selected", "true");
-    expect(screen.getByRole("tabpanel")).toHaveTextContent("Tracking tools land here");
+    const tab = screen.getByRole("tab", { name: "Tracking" });
+    await userEvent.click(tab);
+    expect(tab).toHaveAttribute("aria-selected", "true");
+    expect(screen.getByRole("group", { name: "Tracking status" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Planned" })).toBeInTheDocument();
 
     await userEvent.click(screen.getByRole("tab", { name: "Review" }));
     expect(screen.getByRole("tabpanel")).toHaveTextContent("Reviews land here");
