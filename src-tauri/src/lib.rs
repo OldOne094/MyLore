@@ -34,6 +34,7 @@ pub fn run() {
             commands::media::media_facets,
             commands::media::media_get,
             commands::media::media_search,
+            commands::dashboard::dashboard_summary,
             commands::node::media_nodes,
             commands::node::node_progress_set,
             commands::node::node_progress_range,

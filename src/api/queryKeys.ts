@@ -32,6 +32,10 @@ export const queryKeys = {
     detail: (id: string) => ["media", "detail", id] as const,
     nodes: (id: string) => ["media", "nodes", id] as const,
   },
+  dashboard: {
+    all: () => ["dashboard"] as const,
+    summary: () => ["dashboard", "summary"] as const,
+  },
   tracking: {
     all: () => ["tracking"] as const,
     detail: (mediaId: string) => ["tracking", "detail", mediaId] as const,

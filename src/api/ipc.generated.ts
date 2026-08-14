@@ -37,6 +37,21 @@ export interface NodeProgressNextView {
   media_id: string;
   summary: ProgressSummary;
 }
+export interface MediaListItem {
+  id: string;
+  content_type: string;
+  title: string;
+  pub_status: string;
+  release_year: number | null;
+  cover_asset_id: string | null;
+  updated_at: string;
+  progress: ProgressSummary;
+}
+export interface DashboardSummary {
+  continue_watching: MediaListItem[];
+  recently_completed: MediaListItem[];
+  recently_added: MediaListItem[];
+}
 
 /** Placeholder greeting command (create-tauri-app scaffold). Resolves with the greeting or rejects with an AppError string. */
 export function greet(args: { name: string }): Promise<string> {
@@ -76,30 +91,8 @@ export function media_list(args: {
   ascending: boolean | null;
   limit: number | null;
   offset: number | null;
-}): Promise<
-  {
-    id: string;
-    content_type: string;
-    title: string;
-    pub_status: string;
-    release_year: number | null;
-    cover_asset_id: string | null;
-    updated_at: string;
-    progress: ProgressSummary;
-  }[]
-> {
-  return invoke<
-    {
-      id: string;
-      content_type: string;
-      title: string;
-      pub_status: string;
-      release_year: number | null;
-      cover_asset_id: string | null;
-      updated_at: string;
-      progress: ProgressSummary;
-    }[]
-  >("media_list", args);
+}): Promise<MediaListItem[]> {
+  return invoke<MediaListItem[]>("media_list", args);
 }
 
 /** Distinct filter values present in the library. Resolves with facet options or rejects with an AppError string. */
@@ -185,30 +178,13 @@ export function media_get(args: { id: string }): Promise<{
 }
 
 /** Local full-text search over the library. Resolves with summary rows (each carrying its progress summary) or rejects with an AppError string. */
-export function media_search(args: { query: string }): Promise<
-  {
-    id: string;
-    content_type: string;
-    title: string;
-    pub_status: string;
-    release_year: number | null;
-    cover_asset_id: string | null;
-    updated_at: string;
-    progress: ProgressSummary;
-  }[]
-> {
-  return invoke<
-    {
-      id: string;
-      content_type: string;
-      title: string;
-      pub_status: string;
-      release_year: number | null;
-      cover_asset_id: string | null;
-      updated_at: string;
-      progress: ProgressSummary;
-    }[]
-  >("media_search", args);
+export function media_search(args: { query: string }): Promise<MediaListItem[]> {
+  return invoke<MediaListItem[]>("media_search", args);
+}
+
+/** Resolve the dashboard widget lists (continue watching, recently completed, recently added). `limit` is optional and clamped per widget (1..=20). Resolves with the DashboardSummary or rejects with an AppError string. */
+export function dashboard_summary(args: { limit: number | null }): Promise<DashboardSummary> {
+  return invoke<DashboardSummary>("dashboard_summary", args);
 }
 
 /** Read the full content tree for one media (seasons→episodes, volumes→chapters) with per-node progress state. Resolves with the nested tree, roots ordered by position, or rejects with an AppError string. */

@@ -38,6 +38,7 @@ export function useBulkSetStatus() {
         queryClient.invalidateQueries({ queryKey: queryKeys.media.lists() }),
         queryClient.invalidateQueries({ queryKey: queryKeys.media.details() }),
         queryClient.invalidateQueries({ queryKey: queryKeys.tracking.all() }),
+        queryClient.invalidateQueries({ queryKey: queryKeys.dashboard.all() }),
       ]);
     },
   });
@@ -67,6 +68,7 @@ export function useBulkDelete() {
         queryClient.invalidateQueries({ queryKey: queryKeys.media.lists() }),
         queryClient.invalidateQueries({ queryKey: queryKeys.media.details() }),
         queryClient.invalidateQueries({ queryKey: queryKeys.trash.lists() }),
+        queryClient.invalidateQueries({ queryKey: queryKeys.dashboard.all() }),
       ]);
     },
   });

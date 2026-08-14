@@ -5,6 +5,7 @@
 //! `collection_service` land with their milestones (M6–M11).
 
 pub mod bulk_service;
+pub mod dashboard_service;
 pub mod media_service;
 pub mod node_service;
 pub mod progress_service;

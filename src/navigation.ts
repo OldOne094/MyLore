@@ -3,6 +3,7 @@ import {
   Calendar,
   Compass,
   FolderHeart,
+  LayoutDashboard,
   LibraryBig,
   Search,
   Settings,
@@ -25,6 +26,7 @@ export interface NavItem {
 }
 
 export const NAV_ITEMS: NavItem[] = [
+  { path: "/dashboard", key: "dashboard", icon: LayoutDashboard, hintKey: "nav.hint_dashboard" },
   { path: "/library", key: "library", icon: LibraryBig, hintKey: "nav.hint_library" },
   { path: "/search", key: "search", icon: Search, hintKey: "nav.hint_search" },
   { path: "/discover", key: "discover", icon: Compass, hintKey: "nav.hint_discover" },

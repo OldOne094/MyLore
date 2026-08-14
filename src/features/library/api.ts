@@ -150,6 +150,7 @@ export function useAddMedia() {
     mutationFn: (input: AddMediaInput) => media_create(toMediaCreateArgs(input)),
     onSuccess: async () => {
       await queryClient.invalidateQueries({ queryKey: queryKeys.media.lists() });
+      await queryClient.invalidateQueries({ queryKey: queryKeys.dashboard.all() });
     },
   });
 }

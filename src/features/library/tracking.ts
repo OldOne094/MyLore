@@ -24,6 +24,7 @@ export function useSetStatus() {
       tracking_set_status({ media_id, core_status }),
     onSuccess: (view) => {
       queryClient.setQueryData(queryKeys.tracking.detail(view.media_id), view);
+      void queryClient.invalidateQueries({ queryKey: queryKeys.dashboard.all() });
     },
   });
 }

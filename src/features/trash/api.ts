@@ -33,6 +33,7 @@ export function useDeleteMedia() {
         queryClient.invalidateQueries({ queryKey: queryKeys.media.lists() }),
         queryClient.invalidateQueries({ queryKey: queryKeys.media.details() }),
         queryClient.invalidateQueries({ queryKey: queryKeys.trash.lists() }),
+        queryClient.invalidateQueries({ queryKey: queryKeys.dashboard.all() }),
       ]);
     },
   });
@@ -48,6 +49,7 @@ export function useRestoreTrashItem() {
         queryClient.invalidateQueries({ queryKey: queryKeys.trash.lists() }),
         queryClient.invalidateQueries({ queryKey: queryKeys.media.lists() }),
         queryClient.invalidateQueries({ queryKey: queryKeys.media.details() }),
+        queryClient.invalidateQueries({ queryKey: queryKeys.dashboard.all() }),
       ]);
     },
   });

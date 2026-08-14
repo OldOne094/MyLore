@@ -639,7 +639,7 @@ fn row_to_record(row: SqliteRow) -> MediaRecord {
     }
 }
 
-fn row_to_summary(row: SqliteRow) -> MediaSummary {
+pub(crate) fn row_to_summary(row: SqliteRow) -> MediaSummary {
     let get = |idx: usize| -> Option<String> { row.get(idx) };
     MediaSummary {
         id: get(0).expect("id"),

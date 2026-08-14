@@ -49,6 +49,7 @@ export async function invalidateProgress(queryClient: QueryClient, mediaId?: str
     queryClient.invalidateQueries({ queryKey: queryKeys.media.all() }),
     queryClient.invalidateQueries({ queryKey: queryKeys.tracking.all() }),
     queryClient.invalidateQueries({ queryKey: queryKeys.search.all() }),
+    queryClient.invalidateQueries({ queryKey: queryKeys.dashboard.all() }),
   ];
   if (mediaId)
     jobs.push(queryClient.invalidateQueries({ queryKey: queryKeys.media.nodes(mediaId) }));

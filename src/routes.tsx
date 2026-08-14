@@ -3,6 +3,7 @@ import { AppShell } from "@/components/shell/AppShell";
 import {
   CalendarPage,
   CollectionsPage,
+  DashboardPage,
   DiscoverPage,
   LibraryPage,
   ReviewsPage,
@@ -22,6 +23,7 @@ export const appRoutes: RouteObject[] = [
     element: <AppShell />,
     children: [
       { index: true, element: <Navigate to={NAV_ITEMS[0].path} replace /> },
+      { path: "dashboard", element: <DashboardPage /> },
       { path: "library", element: <LibraryPage /> },
       { path: "library/:id", element: <MediaDetailPage /> },
       { path: "search", element: <SearchPage /> },

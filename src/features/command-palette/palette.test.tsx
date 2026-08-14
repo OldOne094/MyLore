@@ -36,11 +36,15 @@ function openPalette() {
 }
 
 const LIBRARY_HINT = "Your tracked titles appear here as you add them.";
-const SEARCH_HINT = "Type a title, author, genre or tag to find it in your library.";
 const SETTINGS_HINT = "Light, dark, or follow the system appearance.";
 
 beforeEach(() => {
-  vi.mocked(invoke).mockResolvedValue([]);
+  vi.mocked(invoke).mockImplementation((cmd: string) => {
+    if (cmd === "dashboard_summary") {
+      return Promise.resolve({ continue_watching: [], recently_completed: [], recently_added: [] });
+    }
+    return Promise.resolve([]);
+  });
 });
 
 afterEach(async () => {
@@ -75,12 +79,12 @@ describe("command palette", () => {
   });
 
   it("navigates with arrow keys + Enter", async () => {
-    renderApp("/library");
+    renderApp("/dashboard");
     openPalette();
     const input = await screen.findByRole("combobox");
     fireEvent.keyDown(input, { key: "ArrowDown" });
     fireEvent.keyDown(input, { key: "Enter" });
-    expect(await screen.findByText(SEARCH_HINT)).toBeInTheDocument();
+    expect(await screen.findByText("Your library is empty")).toBeInTheDocument();
     expect(screen.queryByRole("combobox")).not.toBeInTheDocument();
   });
 

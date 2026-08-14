@@ -17,6 +17,14 @@
     {
       "name": "NodeProgressNextView",
       "shape": "media_id: string; summary: ProgressSummary"
+    },
+    {
+      "name": "MediaListItem",
+      "shape": "id: string; content_type: string; title: string; pub_status: string; release_year: number | null; cover_asset_id: string | null; updated_at: string; progress: ProgressSummary"
+    },
+    {
+      "name": "DashboardSummary",
+      "shape": "continue_watching: MediaListItem[]; recently_completed: MediaListItem[]; recently_added: MediaListItem[]"
     }
   ],
   "commands": [
@@ -62,7 +70,7 @@
         "limit": "number | null",
         "offset": "number | null"
       },
-      "returns": "{ id: string; content_type: string; title: string; pub_status: string; release_year: number | null; cover_asset_id: string | null; updated_at: string; progress: ProgressSummary }[]",
+      "returns": "MediaListItem[]",
       "doc": "List library entries with optional filters. Resolves with summary rows (each carrying its progress summary for the in-grid quick controls) or rejects with an AppError string."
     },
     {
@@ -80,8 +88,14 @@
     {
       "name": "media_search",
       "args": { "query": "string" },
-      "returns": "{ id: string; content_type: string; title: string; pub_status: string; release_year: number | null; cover_asset_id: string | null; updated_at: string; progress: ProgressSummary }[]",
+      "returns": "MediaListItem[]",
       "doc": "Local full-text search over the library. Resolves with summary rows (each carrying its progress summary) or rejects with an AppError string."
+    },
+    {
+      "name": "dashboard_summary",
+      "args": { "limit": "number | null" },
+      "returns": "DashboardSummary",
+      "doc": "Resolve the dashboard widget lists (continue watching, recently completed, recently added). `limit` is optional and clamped per widget (1..=20). Resolves with the DashboardSummary or rejects with an AppError string."
     },
     {
       "name": "media_nodes",

@@ -203,8 +203,12 @@ impl MediaService {
     }
 
     /// Map repo summary rows onto list items, attaching each media's progress
-    /// summary in one batched pass (no per-row queries).
-    async fn to_list_items(&self, rows: Vec<MediaSummary>) -> Result<Vec<MediaListItem>, AppError> {
+    /// summary in one batched pass (no per-row queries). Shared with the
+    /// dashboard service (MISSION-050).
+    pub(crate) async fn to_list_items(
+        &self,
+        rows: Vec<MediaSummary>,
+    ) -> Result<Vec<MediaListItem>, AppError> {
         let ids: Vec<String> = rows.iter().map(|row| row.id.clone()).collect();
         let summaries: HashMap<String, ProgressSummary> =
             tracking::progress_summaries(&self.pool, &ids)

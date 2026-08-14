@@ -14,6 +14,7 @@ function placeholder(path: string) {
   };
 }
 
+export { DashboardPage } from "@/features/dashboard/DashboardPage";
 export { LibraryPage } from "@/features/library/LibraryPage";
 export { SearchPage } from "@/features/search/SearchPage";
 export { TrashPage } from "@/features/trash/TrashPage";

@@ -32,11 +32,15 @@ function renderApp(initialEntry = "/") {
   );
 }
 
-const EMPTY_LIBRARY = "Your library is empty";
 const STATS_HINT = "Time watched, pages read and your ratings distribution.";
 
 beforeEach(() => {
-  vi.mocked(invoke).mockResolvedValue([]);
+  vi.mocked(invoke).mockImplementation((cmd: string) => {
+    if (cmd === "dashboard_summary") {
+      return Promise.resolve({ continue_watching: [], recently_completed: [], recently_added: [] });
+    }
+    return Promise.resolve([]);
+  });
 });
 
 afterEach(async () => {
@@ -51,7 +55,7 @@ afterEach(async () => {
 describe("App shell", () => {
   it("redirects the root to the first nav section", async () => {
     renderApp("/");
-    expect(await screen.findByText(EMPTY_LIBRARY)).toBeInTheDocument();
+    expect(await screen.findByText("Nothing in progress right now.")).toBeInTheDocument();
   });
 
   it("navigates between sections via the nav rail", async () => {

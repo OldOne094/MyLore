@@ -11,6 +11,7 @@ use sqlx::sqlite::{SqlitePool, SqliteRow};
 use sqlx::Row;
 
 use crate::error::AppError;
+use crate::infrastructure::repositories::media::{row_to_summary, MediaSummary};
 
 /// The per-media user tracking state.
 #[derive(Debug, Clone)]
@@ -380,6 +381,54 @@ pub async fn next_unread_unit(
         number: row.get(2),
         position: row.get(3),
     }))
+}
+
+/// Ordering for `recent_media_by_status` (MISSION-050 dashboard widgets).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum RecentOrder {
+    /// Most recently updated tracking row first — drives "Continue".
+    UpdatedAt,
+    /// Most recently finished first, unfinished rows last — drives "Completed".
+    FinishedAt,
+}
+
+/// Media joined with a tracking row in one of `statuses` (MISSION-050).
+/// Ordered per `order` and capped by `limit`; rows carry the `MediaSummary`
+/// shape so callers map them onto list items with the batched progress attach.
+pub async fn recent_media_by_status(
+    pool: &SqlitePool,
+    statuses: &[&str],
+    order: RecentOrder,
+    limit: i64,
+) -> Result<Vec<MediaSummary>, AppError> {
+    if statuses.is_empty() {
+        return Ok(Vec::new());
+    }
+    let mut query = String::from(
+        "SELECT m.id, m.content_type, m.title_main, m.pub_status, m.release_year, \
+         m.cover_asset_id, COALESCE(r.favorite, 0) AS favorite, m.updated_at \
+         FROM media m \
+         JOIN tracking t ON t.media_id = m.id \
+         LEFT JOIN review r ON r.media_id = m.id \
+         WHERE t.core_status IN (",
+    );
+    query.push_str(&vec!["?"; statuses.len()].join(", "));
+    query.push(')');
+    match order {
+        RecentOrder::UpdatedAt => {
+            query.push_str(" ORDER BY t.updated_at DESC, m.title_main ASC LIMIT ?")
+        }
+        RecentOrder::FinishedAt => query.push_str(
+            " ORDER BY t.finished_at IS NULL ASC, t.finished_at DESC, m.title_main ASC LIMIT ?",
+        ),
+    }
+    let mut qb = sqlx::query(&query);
+    for status in statuses {
+        qb = qb.bind(status);
+    }
+    qb = qb.bind(limit);
+    let rows = qb.fetch_all(pool).await?;
+    Ok(rows.into_iter().map(row_to_summary).collect())
 }
 
 fn row_to_tracking(row: SqliteRow) -> TrackingRecord {
@@ -851,6 +900,116 @@ mod tests {
                 .expect("next")
                 .is_none(),
             "an unread season is not a countable unit"
+        );
+        pool.close().await;
+        cleanup_files(&path);
+    }
+
+    async fn seed_media_row(
+        pool: &SqlitePool,
+        id: &str,
+        content_type: &str,
+        title: &str,
+        created_at: &str,
+    ) {
+        sqlx::query(
+            "INSERT INTO media (id, content_type, title_main, created_at, updated_at)
+             VALUES (?, ?, ?, ?, ?)",
+        )
+        .bind(id)
+        .bind(content_type)
+        .bind(title)
+        .bind(created_at)
+        .bind(created_at)
+        .execute(pool)
+        .await
+        .expect("seed media row");
+    }
+
+    #[tokio::test]
+    async fn recent_media_by_status_filters_and_orders_by_updated_at() {
+        let (pool, path) = migrated_pool("tracking_dashboard_continue.db").await;
+        seed_media_row(&pool, "m-1", "anime", "A", "2026-01-01").await;
+        seed_media_row(&pool, "m-2", "novel", "B", "2026-01-01").await;
+        seed_media_row(&pool, "m-3", "manga", "C", "2026-01-01").await;
+        let mut row = tracking("m-1", "in_progress");
+        row.updated_at = "2026-01-05".into();
+        upsert_tracking(&pool, &row).await.expect("track m-1");
+        let mut row = tracking("m-2", "repeat");
+        row.updated_at = "2026-01-06".into();
+        upsert_tracking(&pool, &row).await.expect("track m-2");
+        upsert_tracking(&pool, &tracking("m-3", "completed"))
+            .await
+            .expect("track m-3");
+
+        let got = recent_media_by_status(
+            &pool,
+            &["in_progress", "repeat"],
+            RecentOrder::UpdatedAt,
+            10,
+        )
+        .await
+        .expect("continue");
+        let ids: Vec<&str> = got.iter().map(|m| m.id.as_str()).collect();
+        assert_eq!(ids, vec!["m-2", "m-1"], "most recently updated first");
+        assert_eq!(got[0].content_type, "novel");
+        assert_eq!(got[0].title_main, "B");
+        pool.close().await;
+        cleanup_files(&path);
+    }
+
+    #[tokio::test]
+    async fn recent_media_by_status_orders_completed_nulls_last_and_limits() {
+        let (pool, path) = migrated_pool("tracking_dashboard_completed.db").await;
+        seed_media_row(&pool, "m-1", "anime", "A", "2026-01-01").await;
+        seed_media_row(&pool, "m-2", "novel", "B", "2026-01-01").await;
+        seed_media_row(&pool, "m-3", "manga", "C", "2026-01-01").await;
+        seed_media_row(&pool, "m-4", "movie", "D", "2026-01-01").await;
+        let mut finished_old = tracking("m-1", "completed");
+        finished_old.finished_at = Some("2026-01-02".into());
+        finished_old.updated_at = "2026-01-09".into();
+        upsert_tracking(&pool, &finished_old).await.expect("old");
+        let mut finished_new = tracking("m-2", "completed");
+        finished_new.finished_at = Some("2026-01-08".into());
+        finished_new.updated_at = "2026-01-10".into();
+        upsert_tracking(&pool, &finished_new).await.expect("new");
+        upsert_tracking(&pool, &tracking("m-3", "completed"))
+            .await
+            .expect("no finish");
+        upsert_tracking(&pool, &tracking("m-4", "in_progress"))
+            .await
+            .expect("active");
+
+        let got = recent_media_by_status(&pool, &["completed"], RecentOrder::FinishedAt, 2)
+            .await
+            .expect("completed");
+        let ids: Vec<&str> = got.iter().map(|m| m.id.as_str()).collect();
+        assert_eq!(
+            ids,
+            vec!["m-2", "m-1"],
+            "finished newest first, capped at limit"
+        );
+        pool.close().await;
+        cleanup_files(&path);
+    }
+
+    #[tokio::test]
+    async fn recent_media_by_status_skips_untracked_and_empty_statuses() {
+        let (pool, path) = migrated_pool("tracking_dashboard_empty.db").await;
+        seed_media_row(&pool, "m-1", "anime", "A", "2026-01-01").await;
+        seed_media_row(&pool, "m-2", "novel", "B", "2026-01-01").await;
+
+        let untracked = recent_media_by_status(&pool, &["in_progress"], RecentOrder::UpdatedAt, 10)
+            .await
+            .expect("untracked");
+        assert!(untracked.is_empty(), "no tracking rows → no widget rows");
+
+        let none = recent_media_by_status(&pool, &[], RecentOrder::UpdatedAt, 10)
+            .await
+            .expect("empty statuses");
+        assert!(
+            none.is_empty(),
+            "empty status list resolves without SQL error"
         );
         pool.close().await;
         cleanup_files(&path);
