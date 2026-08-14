@@ -1,0 +1,38 @@
+{
+  "data": {
+    "Media": {
+      "id": 106626,
+      "type": "MANGA",
+      "format": "NOVEL",
+      "countryOfOrigin": "JP",
+      "title": {
+        "romaji": "Classroom of the Elite",
+        "english": "Classroom of the Elite",
+        "native": "ようこそ実力至上主義の教室へ"
+      },
+      "coverImage": {
+        "extraLarge": "https://s4.anilist.co/file/anilistcdn/media/manga/cover/large/bx106626.jpg",
+        "large": "https://s4.anilist.co/file/anilistcdn/media/manga/cover/medium/bx106626.jpg",
+        "medium": "https://s4.anilist.co/file/anilistcdn/media/manga/cover/small/bx106626.jpg"
+      },
+      "bannerImage": null,
+      "description": "<p>Koudo Ikusei Senior High School, a utopian school with a 100% employment rate.</p>",
+      "startDate": { "year": 2015, "month": 5, "day": 30 },
+      "endDate": null,
+      "status": "RELEASING",
+      "episodes": null,
+      "chapters": null,
+      "volumes": 16,
+      "duration": null,
+      "genres": ["Drama", "Psychological"],
+      "tags": [{ "name": "School" }],
+      "studios": null,
+      "staff": { "edges": [{ "role": "Story & Art", "node": { "name": "Syougo Kinugasa" } }] },
+      "relations": { "edges": [] },
+      "externalLinks": [
+        { "site": "MAL", "id": 85653, "url": "https://myanimelist.net/manga/85653" }
+      ],
+      "siteUrl": "https://anilist.co/manga/106626/"
+    }
+  }
+}

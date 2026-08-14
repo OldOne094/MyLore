@@ -1,0 +1,74 @@
+{
+  "data": {
+    "Media": {
+      "id": 1,
+      "type": "ANIME",
+      "format": "TV",
+      "countryOfOrigin": "JP",
+      "title": {
+        "romaji": "Cowboy Bebop",
+        "english": "Cowboy Bebop",
+        "native": "カウボーイビバップ"
+      },
+      "coverImage": {
+        "extraLarge": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/large/bx1.jpg",
+        "large": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/medium/bx1.jpg",
+        "medium": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/small/bx1.jpg"
+      },
+      "bannerImage": "https://s4.anilist.co/file/anilistcdn/media/anime/banner/bx1.jpg",
+      "description": "<p>In the year 2071, humanity has spread across the solar system.</p><br><i>Credits to Sunrise.</i>",
+      "startDate": { "year": 1998, "month": 4, "day": 3 },
+      "endDate": { "year": 1999, "month": 4, "day": 26 },
+      "status": "FINISHED",
+      "episodes": 26,
+      "chapters": null,
+      "volumes": null,
+      "duration": 24,
+      "genres": ["Action", "Adventure", "Comedy", "Drama", "Sci-Fi"],
+      "tags": [{ "name": "Space" }, { "name": "Bounty Hunters" }],
+      "studios": {
+        "edges": [
+          { "isMain": true, "node": { "name": "Sunrise" } },
+          { "isMain": false, "node": { "name": "Bandai Visual" } }
+        ]
+      },
+      "staff": {
+        "edges": [
+          { "role": "Director", "node": { "name": "Shinichirou Watanabe" } },
+          { "role": "Story & Art", "node": { "name": "Toshihiro Kawamoto" } },
+          { "role": "Character Design", "node": { "name": "Toshihiro Kawamoto" } }
+        ]
+      },
+      "relations": {
+        "edges": [
+          {
+            "relationType": "SEQUEL",
+            "node": {
+              "id": 30013,
+              "type": "ANIME",
+              "title": { "romaji": "Cowboy Bebop: Tengoku no Tobira" },
+              "siteUrl": "https://anilist.co/anime/30013/"
+            }
+          },
+          {
+            "relationType": "ADAPTATION",
+            "node": {
+              "id": 2,
+              "type": "MANGA",
+              "title": { "romaji": "Cowboy Bebop" },
+              "siteUrl": "https://anilist.co/manga/2/"
+            }
+          }
+        ]
+      },
+      "externalLinks": [
+        { "site": "MAL", "id": 1, "url": "https://myanimelist.net/anime/1/Cowboy_Bebop" },
+        { "site": "AniDB", "id": 23, "url": "https://anidb.net/anime/23" },
+        { "site": "IMDb", "id": 151162, "url": "https://www.imdb.com/title/tt0151162/" },
+        { "site": "TMDB", "id": 1429, "url": "https://www.themoviedb.org/tv/1429" },
+        { "site": "Official Site", "id": null, "url": "https://www.sunrise-inc.co.jp" }
+      ],
+      "siteUrl": "https://anilist.co/anime/1/"
+    }
+  }
+}

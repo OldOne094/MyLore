@@ -1,0 +1,54 @@
+{
+  "data": {
+    "Page": {
+      "media": [
+        {
+          "id": 1,
+          "type": "ANIME",
+          "format": "TV",
+          "countryOfOrigin": "JP",
+          "title": {
+            "romaji": "Cowboy Bebop",
+            "english": "Cowboy Bebop",
+            "native": "カウボーイビバップ"
+          },
+          "coverImage": {
+            "extraLarge": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/large/bx1.jpg",
+            "large": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/medium/bx1.jpg"
+          },
+          "bannerImage": "https://s4.anilist.co/file/anilistcdn/media/anime/banner/bx1.jpg",
+          "description": "<p>A ragtag crew of bounty hunters chases fugitives across the solar system.</p>",
+          "startDate": { "year": 1998 },
+          "status": "FINISHED",
+          "episodes": 26,
+          "chapters": null,
+          "volumes": null,
+          "duration": 24,
+          "genres": ["Action", "Adventure"],
+          "siteUrl": "https://anilist.co/anime/1/"
+        },
+        {
+          "id": 21,
+          "type": "ANIME",
+          "format": "TV",
+          "countryOfOrigin": "JP",
+          "title": { "romaji": "One Piece", "english": "One Piece", "native": "ワンピース" },
+          "coverImage": {
+            "extraLarge": null,
+            "large": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/medium/bx21.jpg"
+          },
+          "bannerImage": null,
+          "description": null,
+          "startDate": { "year": 1999 },
+          "status": "RELEASING",
+          "episodes": null,
+          "chapters": null,
+          "volumes": null,
+          "duration": 24,
+          "genres": ["Action", "Adventure", "Comedy"],
+          "siteUrl": "https://anilist.co/anime/21/"
+        }
+      ]
+    }
+  }
+}

@@ -30,12 +30,14 @@ tracing-subscriber = { version = "0.3", features = ["env-filter", "fmt"] }
 sqlx = { version = "0.8", features = ["sqlite", "runtime-tokio", "migrate"] }
 tokio = { version = "1", features = ["macros", "rt-multi-thread", "time", "sync"] }
 async-trait = "0.1"
+reqwest = { version = "0.13", features = ["json"] }
 unicode-normalization = "0.1.25"
 uuid = { version = "1", features = ["v4"] }
 chrono = { version = "0.4", default-features = false, features = ["clock"] }
 
 [dev-dependencies]
 tokio = { version = "1", features = ["macros", "rt-multi-thread", "test-util"] }
+wiremock = "0.6"
 criterion = { version = "0.5", default-features = false, features = ["cargo_bench_support"] }
 
 [[bench]]

@@ -78,6 +78,12 @@ impl ProviderConfig {
         self.rate_limit.requests_per_sec = rps;
         self
     }
+
+    /// Restrict this provider to the given domains (empty = domain-agnostic).
+    pub fn with_content_types(mut self, types: Vec<ContentType>) -> Self {
+        self.content_types = types;
+        self
+    }
 }
 
 #[cfg(test)]
