@@ -20,6 +20,9 @@ pub struct Tracking {
     pub repeat_count: u32,
     pub current_node_id: Option<String>,
     pub current_position: Option<u32>,
+    /// Normal (autoTrack) vs Manual mode — whether progress writes may
+    /// auto-derive the status (DOMAIN_MODEL §2.3, MISSION-052).
+    pub auto_track: bool,
     pub updated_at: String,
 }
 
@@ -84,6 +87,7 @@ mod tests {
             repeat_count: 0,
             current_node_id: None,
             current_position: Some(12),
+            auto_track: true,
             updated_at: "2026-01-01".into(),
         }
     }

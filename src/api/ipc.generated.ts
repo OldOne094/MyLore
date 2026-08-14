@@ -24,6 +24,8 @@ export interface TrackingView {
   started_at: string | null;
   finished_at: string | null;
   repeat_count: number;
+  auto_track: boolean;
+  progress: ProgressSummary | null;
   updated_at: string;
 }
 export interface ProgressSummary {
@@ -225,6 +227,14 @@ export function tracking_set_status(args: {
   core_status: string;
 }): Promise<TrackingView> {
   return invoke<TrackingView>("tracking_set_status", args);
+}
+
+/** Toggle Normal (autoTrack) vs Manual tracking mode for one media. Resolves with the updated row (turning Normal back on re-syncs the status to the current progress) or rejects with an AppError string. */
+export function tracking_set_auto_track(args: {
+  media_id: string;
+  auto_track: boolean;
+}): Promise<TrackingView> {
+  return invoke<TrackingView>("tracking_set_auto_track", args);
 }
 
 /** Soft-delete a media: store its before-image in trash, cascade the row away. Resolves with the trash id (accepted by trash_restore for undo) or rejects with an AppError string. */

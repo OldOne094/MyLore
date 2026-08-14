@@ -19,6 +19,7 @@ use chrono::Utc;
 use sqlx::SqlitePool;
 
 use crate::application::activity_service::log_status_transition;
+use crate::application::progress_service::{summary_dto, ProgressSummary};
 use crate::domain::enums::{ContentType, CoreStatus, NodeKind, NodeProgressState};
 use crate::domain::progress::{aggregate, NodeTick};
 use crate::domain::status::{apply_transition, suggest_auto_status};
@@ -28,7 +29,7 @@ use crate::error::AppError;
 use crate::infrastructure::repositories::{media, tracking};
 
 /// The tracking row surfaced to the detail page (status picker + repeat
-/// counter + dates).
+/// counter + dates + tracking mode + derived progress).
 #[derive(Debug, Clone, serde::Serialize)]
 pub struct TrackingView {
     pub media_id: String,
@@ -37,6 +38,11 @@ pub struct TrackingView {
     pub started_at: Option<String>,
     pub finished_at: Option<String>,
     pub repeat_count: u32,
+    /// Normal (autoTrack) vs Manual mode (MISSION-052).
+    pub auto_track: bool,
+    /// The media's derived progress (percent + next unit); `None` when the
+    /// media has no countable nodes. Drives the DNF-with-progress display.
+    pub progress: Option<ProgressSummary>,
     pub updated_at: String,
 }
 
@@ -53,7 +59,11 @@ impl TrackingService {
     /// Read the tracking row for a media (`None` when untracked).
     pub async fn get(&self, media_id: &str) -> Result<Option<TrackingView>, AppError> {
         let row = tracking::get_tracking(&self.pool, media_id).await?;
-        Ok(row.as_ref().map(view_from_record))
+        let Some(row) = row else {
+            return Ok(None);
+        };
+        let view = self.with_progress(view_from_record(&row)).await?;
+        Ok(Some(view))
     }
 
     /// Apply a status transition for one media through the status engine
@@ -89,28 +99,71 @@ impl TrackingService {
             &next.core_status,
         )
         .await;
-        Ok(view_from_domain(&next))
+        let view = self.with_progress(view_from_domain(&next)).await?;
+        Ok(view)
+    }
+
+    /// Toggle Normal (autoTrack) vs Manual tracking mode for one media
+    /// (MISSION-052). Resolves with the updated row. Turning Normal back on
+    /// immediately re-syncs the status to the current progress, so the change
+    /// is observable right away.
+    pub async fn set_auto_track(
+        &self,
+        media_id: &str,
+        enabled: bool,
+    ) -> Result<TrackingView, AppError> {
+        let media_id = MediaId::new(media_id)?;
+        if media::get(&self.pool, media_id.as_str()).await?.is_none() {
+            return Err(AppError::validation(format!(
+                "media not found: {}",
+                media_id.as_str()
+            )));
+        }
+        let updated_at = Utc::now().to_rfc3339();
+        let existing = tracking::get_tracking(&self.pool, media_id.as_str()).await?;
+        let mut current = existing_to_domain(existing, &media_id, &updated_at)?;
+        if current.auto_track == enabled {
+            return self.with_progress(view_from_domain(&current)).await;
+        }
+        current.auto_track = enabled;
+        current.updated_at = updated_at;
+        tracking::upsert_tracking(&self.pool, &domain_to_record(&current)).await?;
+        if enabled {
+            let _ = self.sync_auto_status(media_id.as_str()).await;
+        }
+        let Some(row) = tracking::get_tracking(&self.pool, media_id.as_str()).await? else {
+            return Err(AppError::internal("tracking row vanished after write"));
+        };
+        let view = self.with_progress(view_from_record(&row)).await?;
+        Ok(view)
     }
 
     /// The auto-complete rule. Derives the status implied by the media's
     /// progress aggregate and applies it when it differs from the current one —
-    /// only for statuses the engine owns (planned / in_progress / completed).
-    /// Resolves with the updated view when a transition happened, else `None`.
+    /// only for statuses the engine owns (planned / in_progress / completed)
+    /// and only in **Normal (autoTrack) mode**; a Manual-mode media is never
+    /// auto-overridden (MISSION-052). Resolves with the updated view when a
+    /// transition happened, else `None`.
     pub async fn sync_auto_status(&self, media_id: &str) -> Result<Option<TrackingView>, AppError> {
         let media = media::get(&self.pool, media_id).await?;
         let Some(media) = media else {
             return Err(AppError::validation(format!("media not found: {media_id}")));
         };
         let content_type = ContentType::from_str(&media.content_type)?;
-        let ticks = ticks_to_domain(&tracking::node_ticks_for_media(&self.pool, media_id).await?)?;
-        let Some(suggestion) = suggest_auto_status(&aggregate(content_type, &ticks)) else {
-            return Ok(None); // no node data → nothing to reason about
-        };
 
         let media_id = MediaId::new(media_id)?;
         let updated_at = Utc::now().to_rfc3339();
         let existing = tracking::get_tracking(&self.pool, media_id.as_str()).await?;
         let current = existing_to_domain(existing, &media_id, &updated_at)?;
+        if !current.auto_track {
+            return Ok(None); // Manual mode: progress never drives the status
+        }
+
+        let ticks =
+            ticks_to_domain(&tracking::node_ticks_for_media(&self.pool, media_id.as_str()).await?)?;
+        let Some(suggestion) = suggest_auto_status(&aggregate(content_type, &ticks)) else {
+            return Ok(None); // no node data → nothing to reason about
+        };
         if current.core_status == suggestion {
             return Ok(None);
         }
@@ -135,6 +188,16 @@ impl TrackingService {
         )
         .await;
         Ok(Some(view_from_domain(&next)))
+    }
+
+    /// Attach the media's derived progress to a view (percent + next unit).
+    /// Media without countable nodes keep `progress = None`.
+    async fn with_progress(&self, mut view: TrackingView) -> Result<TrackingView, AppError> {
+        let summaries = tracking::progress_summaries(&self.pool, &[view.media_id.clone()]).await?;
+        if let Some(row) = summaries.into_iter().find(|s| s.media_id == view.media_id) {
+            view.progress = Some(summary_dto(&row));
+        }
+        Ok(view)
     }
 }
 
@@ -181,6 +244,8 @@ fn view_from_domain(tracking: &Tracking) -> TrackingView {
             .as_ref()
             .map(|d| d.as_str().to_string()),
         repeat_count: tracking.repeat_count,
+        auto_track: tracking.auto_track,
+        progress: None,
         updated_at: tracking.updated_at.clone(),
     }
 }
@@ -193,6 +258,8 @@ fn view_from_record(record: &tracking::TrackingRecord) -> TrackingView {
         started_at: record.started_at.clone(),
         finished_at: record.finished_at.clone(),
         repeat_count: u32::try_from(record.repeat_count).unwrap_or(0),
+        auto_track: record.auto_track != 0,
+        progress: None,
         updated_at: record.updated_at.clone(),
     }
 }
@@ -215,6 +282,7 @@ pub(crate) fn existing_to_domain(
             repeat_count: 0,
             current_node_id: None,
             current_position: None,
+            auto_track: true,
             updated_at: updated_at.to_string(),
         });
     };
@@ -248,6 +316,7 @@ pub(crate) fn existing_to_domain(
         repeat_count,
         current_node_id: record.current_node_id,
         current_position,
+        auto_track: record.auto_track != 0,
         updated_at: record.updated_at,
     })
 }
@@ -263,6 +332,7 @@ pub(crate) fn domain_to_record(next: &Tracking) -> tracking::TrackingRecord {
         repeat_count: i64::from(next.repeat_count),
         current_node_id: next.current_node_id.clone(),
         current_position: next.current_position.map(i64::from),
+        auto_track: i64::from(next.auto_track),
         updated_at: next.updated_at.clone(),
     }
 }
@@ -659,6 +729,100 @@ mod tests {
             kinds,
             vec!["completed", "progress", "progress", "started", "progress"],
             "per-node progress plus the auto transitions (newest first)"
+        );
+        pool.close().await;
+        cleanup_files(&path);
+    }
+
+    #[tokio::test]
+    async fn set_auto_track_toggles_mode_and_survives_transitions() {
+        let (pool, path) = migrated_pool("tracking_auto_track_mode.db").await;
+        seed_media(&pool).await;
+        let service = TrackingService::new(pool.clone());
+
+        let view = service.set_auto_track("m-1", false).await.expect("manual");
+        assert!(!view.auto_track);
+        assert_eq!(
+            view.core_status, "planned",
+            "untracked media gets a planned row with the mode applied"
+        );
+
+        let view = service.set_status("m-1", "on_hold").await.expect("on hold");
+        assert!(!view.auto_track, "status transitions preserve the mode");
+
+        let view = service.set_auto_track("m-1", true).await.expect("normal");
+        assert!(view.auto_track);
+
+        let err = service
+            .set_auto_track("nope", true)
+            .await
+            .expect_err("unknown media");
+        assert!(matches!(err, AppError::Validation(_)));
+        pool.close().await;
+        cleanup_files(&path);
+    }
+
+    #[tokio::test]
+    async fn manual_mode_blocks_auto_complete_until_normal_resumes() {
+        let (pool, path) = migrated_pool("tracking_manual_mode.db").await;
+        seed_media(&pool).await;
+        seed_tree(&pool).await;
+        let service = TrackingService::new(pool.clone());
+        let progress = ProgressService::new(pool.clone());
+
+        service
+            .set_status("m-1", "in_progress")
+            .await
+            .expect("start");
+        service.set_auto_track("m-1", false).await.expect("manual");
+
+        for id in ["c1", "c2", "c3"] {
+            progress.set_node_progress(id, "read").await.expect("mark");
+        }
+        let view = service.get("m-1").await.expect("get").unwrap();
+        assert_eq!(
+            view.core_status, "in_progress",
+            "Manual mode: progress marks never auto-complete"
+        );
+
+        service.set_auto_track("m-1", true).await.expect("normal");
+        let view = service.get("m-1").await.expect("get").unwrap();
+        assert_eq!(
+            view.core_status, "completed",
+            "turning Normal back on re-syncs to the current progress"
+        );
+        pool.close().await;
+        cleanup_files(&path);
+    }
+
+    #[tokio::test]
+    async fn view_includes_derived_progress_for_dnf() {
+        let (pool, path) = migrated_pool("tracking_view_progress.db").await;
+        seed_media(&pool).await;
+        seed_tree(&pool).await;
+        let service = TrackingService::new(pool.clone());
+        let progress = ProgressService::new(pool.clone());
+
+        progress
+            .set_node_progress("c1", "read")
+            .await
+            .expect("mark c1");
+        progress
+            .set_node_progress("c2", "read")
+            .await
+            .expect("mark c2");
+        service.set_status("m-1", "dropped").await.expect("drop");
+
+        let view = service.get("m-1").await.expect("get").unwrap();
+        assert_eq!(view.core_status, "dropped");
+        let progress = view.progress.expect("derived progress attached");
+        assert_eq!(progress.completed, 2);
+        assert_eq!(progress.total, 3);
+        assert_eq!(progress.percent, Some(66));
+        assert_eq!(
+            progress.next_label.as_deref(),
+            Some("Ch1"),
+            "the unread chapter is where the user stopped"
         );
         pool.close().await;
         cleanup_files(&path);

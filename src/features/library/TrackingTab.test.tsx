@@ -21,6 +21,8 @@ const VIEW: TrackingView = {
   started_at: "2026-01-01T00:00:00Z",
   finished_at: "2026-01-03T00:00:00Z",
   repeat_count: 0,
+  auto_track: true,
+  progress: null,
   updated_at: "2026-01-03T00:00:00Z",
 };
 
@@ -139,5 +141,78 @@ describe("TrackingTab", () => {
     await userEvent.click(screen.getByRole("button", { name: "Repeat" }));
 
     expect(await screen.findByText("Couldn't update the status")).toBeInTheDocument();
+  });
+
+  it("renders the mode toggle with Normal selected for an auto-tracked row", async () => {
+    mockTracking(VIEW);
+    renderTab();
+
+    expect(await screen.findByRole("button", { name: "Normal" })).toHaveAttribute(
+      "aria-pressed",
+      "true",
+    );
+    expect(screen.getByRole("button", { name: "Manual" })).toHaveAttribute("aria-pressed", "false");
+  });
+
+  it("defaults the mode to Normal when the media is untracked", async () => {
+    mockTracking(null);
+    renderTab();
+    await screen.findByText("Not tracked yet — pick a status above to start.");
+
+    expect(screen.getByRole("button", { name: "Normal" })).toHaveAttribute("aria-pressed", "true");
+  });
+
+  it("switches to Manual via the toggle", async () => {
+    mockTracking(VIEW);
+    renderTab();
+    await screen.findByRole("button", { name: "Normal" });
+
+    vi.mocked(invoke).mockResolvedValueOnce({ ...VIEW, auto_track: false });
+    await userEvent.click(screen.getByRole("button", { name: "Manual" }));
+
+    await waitFor(() =>
+      expect(invoke).toHaveBeenCalledWith("tracking_set_auto_track", {
+        media_id: "m-111",
+        auto_track: false,
+      }),
+    );
+    expect(await screen.findByRole("button", { name: "Manual" })).toHaveAttribute(
+      "aria-pressed",
+      "true",
+    );
+  });
+
+  it("shows where a dropped title stopped, with progress", async () => {
+    mockTracking({
+      ...VIEW,
+      core_status: "dropped",
+      progress: { percent: 66, completed: 2, total: 3, next_label: "Ch3", next_node_id: "c3" },
+    });
+    renderTab();
+
+    expect(await screen.findByText("Stopped at")).toBeInTheDocument();
+    expect(screen.getByText("Ch3 · 66%")).toBeInTheDocument();
+  });
+
+  it("hides the stopped-at marker when a dropped title has no countable nodes", async () => {
+    mockTracking({ ...VIEW, core_status: "dropped", progress: null });
+    renderTab();
+
+    expect(await screen.findByRole("button", { name: "Dropped" })).toHaveAttribute(
+      "aria-pressed",
+      "true",
+    );
+    expect(screen.queryByText("Stopped at")).not.toBeInTheDocument();
+  });
+
+  it("shows an error toast when the mode toggle is rejected", async () => {
+    mockTracking(VIEW);
+    renderTab();
+    await screen.findByRole("button", { name: "Normal" });
+
+    vi.mocked(invoke).mockRejectedValueOnce("boom");
+    await userEvent.click(screen.getByRole("button", { name: "Manual" }));
+
+    expect(await screen.findByText("Couldn't update the tracking mode")).toBeInTheDocument();
   });
 });

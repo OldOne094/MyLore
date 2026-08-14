@@ -8,7 +8,7 @@
     },
     {
       "name": "TrackingView",
-      "shape": "media_id: string; core_status: string; custom_status_id: string | null; started_at: string | null; finished_at: string | null; repeat_count: number; updated_at: string"
+      "shape": "media_id: string; core_status: string; custom_status_id: string | null; started_at: string | null; finished_at: string | null; repeat_count: number; auto_track: boolean; progress: ProgressSummary | null; updated_at: string"
     },
     {
       "name": "ProgressSummary",
@@ -143,6 +143,15 @@
       },
       "returns": "TrackingView",
       "doc": "Apply a status transition for one media (status engine applies, incl. the Repeat guard and started/finished stamps). Resolves with the updated row or rejects with an AppError string."
+    },
+    {
+      "name": "tracking_set_auto_track",
+      "args": {
+        "media_id": "string",
+        "auto_track": "boolean"
+      },
+      "returns": "TrackingView",
+      "doc": "Toggle Normal (autoTrack) vs Manual tracking mode for one media. Resolves with the updated row (turning Normal back on re-syncs the status to the current progress) or rejects with an AppError string."
     },
     {
       "name": "media_delete",

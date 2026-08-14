@@ -128,6 +128,7 @@ async fn full_lifecycle_across_aggregates_cascades_on_delete() {
             repeat_count: 0,
             current_node_id: Some("c-1".into()),
             current_position: Some(12),
+            auto_track: 1,
             updated_at: "2026-01-01".into(),
         },
     )
@@ -477,6 +478,7 @@ async fn fk_violations_are_rejected_across_aggregates() {
             repeat_count: 0,
             current_node_id: None,
             current_position: None,
+            auto_track: 1,
             updated_at: "2026-01-01".into(),
         },
     )

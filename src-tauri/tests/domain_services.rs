@@ -89,6 +89,7 @@ fn tracking(status: CoreStatus) -> Tracking {
         repeat_count: 0,
         current_node_id: None,
         current_position: None,
+        auto_track: true,
         updated_at: "2026-08-11".into(),
     }
 }

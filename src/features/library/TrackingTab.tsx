@@ -1,14 +1,28 @@
-import { Activity, RefreshCcw } from "lucide-react";
+import { Activity, Hand, RefreshCcw, Zap } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { Button, EmptyState, Skeleton, useToast } from "@/components/ui";
 import { cn } from "@/lib/cn";
-import { useSetStatus, useTrackingQuery } from "./tracking";
+import { useSetAutoTrack, useSetStatus, useTrackingQuery } from "./tracking";
 
-/* MISSION-048 — Tracking tab. Exclusive status picker (7 core statuses,
-   colored per the status palette) plus started/finished dates and the repeat
-   run counter. The status engine on the backend owns transitions; marking all
-   nodes in the content tree auto-completes, surfaced here via cache
-   invalidation from `useNodeProgress`. */
+/* MISSION-048/052 — Tracking tab. Exclusive status picker (7 core statuses,
+   colored per the status palette) plus started/finished dates, the repeat run
+   counter, the Normal (autoTrack) vs Manual mode toggle, and the DNF progress
+   for dropped titles. The status engine on the backend owns transitions;
+   marking all nodes in the content tree auto-completes in Normal mode,
+   surfaced here via cache invalidation from `useNodeProgress`. */
+
+interface DnfProgress {
+  percent: number | null;
+  next_label: string | null;
+}
+
+function dnfValue(progress: DnfProgress): string {
+  const parts = [
+    progress.next_label,
+    progress.percent != null ? `${progress.percent}%` : null,
+  ].filter(Boolean) as string[];
+  return parts.join(" · ");
+}
 
 const STATUS_ORDER = [
   "planned",
@@ -90,14 +104,23 @@ export function TrackingTab({ mediaId }: { mediaId: string }) {
   const { t } = useTranslation();
   const { data, isPending, isError, refetch } = useTrackingQuery(mediaId);
   const setStatus = useSetStatus();
+  const setAutoTrack = useSetAutoTrack();
   const toast = useToast();
 
   const current = data?.core_status ?? null;
+  const autoTrack = data?.auto_track ?? true;
 
   const apply = (coreStatus: string) => {
     setStatus.mutate(
       { media_id: mediaId, core_status: coreStatus },
       { onError: () => toast.error({ title: t("tracking.setErrorToast") }) },
+    );
+  };
+
+  const applyMode = (enabled: boolean) => {
+    setAutoTrack.mutate(
+      { media_id: mediaId, auto_track: enabled },
+      { onError: () => toast.error({ title: t("tracking.setModeErrorToast") }) },
     );
   };
 
@@ -151,6 +174,45 @@ export function TrackingTab({ mediaId }: { mediaId: string }) {
         </div>
       </section>
 
+      <section aria-labelledby="tracking-mode-heading">
+        <h2 id="tracking-mode-heading" className="text-sm font-medium text-text-primary">
+          {t("tracking.modeTitle")}
+        </h2>
+        <p className="mt-1 text-xs text-text-secondary">{t("tracking.modeHint")}</p>
+        <div
+          role="group"
+          aria-label={t("tracking.modeTitle")}
+          className="mt-4 inline-flex rounded-lg border border-border-subtle bg-bg-surface p-0.5"
+        >
+          {(
+            [
+              { enabled: true, label: t("tracking.modeNormal"), icon: Zap },
+              { enabled: false, label: t("tracking.modeManual"), icon: Hand },
+            ] as const
+          ).map(({ enabled, label, icon: Icon }) => {
+            const selected = autoTrack === enabled;
+            return (
+              <button
+                key={label}
+                type="button"
+                aria-pressed={selected}
+                disabled={setAutoTrack.isPending}
+                onClick={() => applyMode(enabled)}
+                className={cn(
+                  "inline-flex items-center gap-1.5 rounded-md px-3 py-1.5 text-sm transition-colors duration-150 ease-out disabled:opacity-60",
+                  selected
+                    ? "bg-bg-raised text-text-primary shadow-sm"
+                    : "text-text-tertiary hover:text-text-secondary",
+                )}
+              >
+                <Icon size={14} aria-hidden="true" />
+                {label}
+              </button>
+            );
+          })}
+        </div>
+      </section>
+
       <section aria-label={t("tracking.metaTitle")}>
         {data ? (
           <dl className="grid grid-cols-1 gap-x-8 gap-y-5 sm:grid-cols-3">
@@ -162,6 +224,11 @@ export function TrackingTab({ mediaId }: { mediaId: string }) {
             ) : null}
             {data.core_status === "repeat" ? (
               <MetaItem label={t("tracking.repeatCount")} value={`#${data.repeat_count}`} />
+            ) : null}
+            {data.core_status === "dropped" &&
+            data.progress &&
+            (data.progress.next_label || data.progress.percent != null) ? (
+              <MetaItem label={t("tracking.dnfTitle")} value={dnfValue(data.progress)} />
             ) : null}
           </dl>
         ) : (

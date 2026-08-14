@@ -233,6 +233,13 @@ const en = {
     loadErrorTitle: "Couldn't load tracking",
     loadErrorHint: "Something went wrong while reading it. Try again in a moment.",
     setErrorToast: "Couldn't update the status",
+    modeTitle: "Tracking mode",
+    modeHint:
+      "Normal marks your status automatically from progress. Manual keeps the status fully under your control.",
+    modeNormal: "Normal",
+    modeManual: "Manual",
+    dnfTitle: "Stopped at",
+    setModeErrorToast: "Couldn't update the tracking mode",
   },
   nodes: {
     emptyTitle: "No content structure",
@@ -600,6 +607,12 @@ const ar = {
     loadErrorTitle: "تعذّر تحميل حالة المتابعة",
     loadErrorHint: "حدث خطأ أثناء القراءة. حاول مرة أخرى بعد لحظات.",
     setErrorToast: "تعذّر تحديث الحالة",
+    modeTitle: "نمط المتابعة",
+    modeHint: "النمط العادي يحدّث الحالة تلقائيًا حسب التقدم. اليدوي يبقي الحالة تحت تحكمك الكامل.",
+    modeNormal: "عادي",
+    modeManual: "يدوي",
+    dnfTitle: "توقّف عند",
+    setModeErrorToast: "تعذّر تحديث نمط المتابعة",
   },
   nodes: {
     emptyTitle: "لا توجد بنية للمحتوى",

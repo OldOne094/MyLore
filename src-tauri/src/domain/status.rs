@@ -165,6 +165,7 @@ mod tests {
             repeat_count: 0,
             current_node_id: None,
             current_position: Some(12),
+            auto_track: true,
             updated_at: "2026-08-11".into(),
         }
     }

@@ -24,6 +24,8 @@ pub struct TrackingRecord {
     pub repeat_count: i64,
     pub current_node_id: Option<String>,
     pub current_position: Option<i64>,
+    /// 1 = Normal (autoTrack) mode, 0 = Manual (MISSION-052).
+    pub auto_track: i64,
     pub updated_at: String,
 }
 
@@ -43,8 +45,8 @@ pub async fn upsert_tracking(pool: &SqlitePool, t: &TrackingRecord) -> Result<()
     sqlx::query(
         "INSERT INTO tracking
            (media_id, core_status, custom_status_id, started_at, finished_at,
-            repeat_count, current_node_id, current_position, updated_at)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+            repeat_count, current_node_id, current_position, auto_track, updated_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
          ON CONFLICT(media_id) DO UPDATE SET
            core_status = excluded.core_status,
            custom_status_id = excluded.custom_status_id,
@@ -53,6 +55,7 @@ pub async fn upsert_tracking(pool: &SqlitePool, t: &TrackingRecord) -> Result<()
            repeat_count = excluded.repeat_count,
            current_node_id = excluded.current_node_id,
            current_position = excluded.current_position,
+           auto_track = excluded.auto_track,
            updated_at = excluded.updated_at",
     )
     .bind(&t.media_id)
@@ -63,6 +66,7 @@ pub async fn upsert_tracking(pool: &SqlitePool, t: &TrackingRecord) -> Result<()
     .bind(t.repeat_count)
     .bind(&t.current_node_id)
     .bind(t.current_position)
+    .bind(t.auto_track)
     .bind(&t.updated_at)
     .execute(pool)
     .await?;
@@ -76,7 +80,7 @@ pub async fn get_tracking(
 ) -> Result<Option<TrackingRecord>, AppError> {
     let row = sqlx::query(
         "SELECT media_id, core_status, custom_status_id, started_at, finished_at, \
-         repeat_count, current_node_id, current_position, updated_at \
+         repeat_count, current_node_id, current_position, auto_track, updated_at \
          FROM tracking WHERE media_id = ?",
     )
     .bind(media_id)
@@ -442,7 +446,8 @@ fn row_to_tracking(row: SqliteRow) -> TrackingRecord {
         repeat_count: row.get(5),
         current_node_id: get(6),
         current_position: row.get(7),
-        updated_at: get(8).expect("updated_at"),
+        auto_track: row.get(8),
+        updated_at: get(9).expect("updated_at"),
     }
 }
 
@@ -474,6 +479,7 @@ mod tests {
             repeat_count: 0,
             current_node_id: None,
             current_position: Some(12),
+            auto_track: 1,
             updated_at: "2026-01-01".to_string(),
         }
     }
@@ -519,15 +525,18 @@ mod tests {
         let got = get_tracking(&pool, "m-1").await.expect("get").unwrap();
         assert_eq!(got.core_status, "in_progress");
         assert_eq!(got.current_position, Some(12));
+        assert_eq!(got.auto_track, 1, "auto_track defaults to Normal");
 
         let mut t = tracking("m-1", "completed");
         t.repeat_count = 1;
+        t.auto_track = 0;
         t.updated_at = "2026-02-01".into();
         upsert_tracking(&pool, &t).await.expect("re-upsert");
 
         let got = get_tracking(&pool, "m-1").await.expect("get").unwrap();
         assert_eq!(got.core_status, "completed");
         assert_eq!(got.repeat_count, 1);
+        assert_eq!(got.auto_track, 0, "upsert roundtrips the mode");
         assert_eq!(got.updated_at, "2026-02-01");
 
         assert!(get_tracking(&pool, "nope").await.expect("get").is_none());

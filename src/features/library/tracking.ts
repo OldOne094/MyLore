@@ -4,7 +4,7 @@
    progress writes, so this cache is invalidated from `useNodeProgress`). */
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { tracking_get, tracking_set_status } from "@/api";
+import { tracking_get, tracking_set_auto_track, tracking_set_status } from "@/api";
 import { queryKeys } from "@/api";
 
 /** Read the tracking row for one media (`null` when untracked). */
@@ -22,6 +22,20 @@ export function useSetStatus() {
   return useMutation({
     mutationFn: ({ media_id, core_status }: { media_id: string; core_status: string }) =>
       tracking_set_status({ media_id, core_status }),
+    onSuccess: (view) => {
+      queryClient.setQueryData(queryKeys.tracking.detail(view.media_id), view);
+      void queryClient.invalidateQueries({ queryKey: queryKeys.dashboard.all() });
+    },
+  });
+}
+
+/** Toggle Normal (autoTrack) vs Manual tracking mode for one media
+    (MISSION-052); seeds the detail cache with the server-returned row. */
+export function useSetAutoTrack() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ media_id, auto_track }: { media_id: string; auto_track: boolean }) =>
+      tracking_set_auto_track({ media_id, auto_track }),
     onSuccess: (view) => {
       queryClient.setQueryData(queryKeys.tracking.detail(view.media_id), view);
       void queryClient.invalidateQueries({ queryKey: queryKeys.dashboard.all() });

@@ -35,3 +35,18 @@ pub async fn tracking_set_status(
     let service = TrackingService::new(state.inner().clone());
     service.set_status(&media_id, &core_status).await
 }
+
+/// Toggle Normal (autoTrack) vs Manual tracking mode for one media
+/// (MISSION-052). Resolves with the updated row (turning Normal back on
+/// re-syncs the status to the current progress) or rejects with an AppError
+/// string.
+#[command]
+pub async fn tracking_set_auto_track(
+    state: State<'_, SqlitePool>,
+    media_id: String,
+    auto_track: bool,
+) -> Result<TrackingView, AppError> {
+    info!(media_id, auto_track, "tracking_set_auto_track invoked");
+    let service = TrackingService::new(state.inner().clone());
+    service.set_auto_track(&media_id, auto_track).await
+}
