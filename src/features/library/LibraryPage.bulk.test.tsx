@@ -14,6 +14,7 @@ vi.mock("@tauri-apps/api/core", () => ({
 import { invoke } from "@tauri-apps/api/core";
 import { LibraryPage } from "./LibraryPage";
 import type { MediaFacets } from "./api";
+import { NO_PROGRESS } from "./testFixtures";
 
 /* MISSION-045 — Bulk-select mode + action bar. Covers entering select mode,
    select-all/clear, and the status / tag / delete / list actions wiring through
@@ -28,6 +29,7 @@ const TITLES = [
     release_year: 2011,
     cover_asset_id: null,
     updated_at: "2026-01-01T00:00:00Z",
+    progress: NO_PROGRESS,
   },
   {
     id: "m-222",
@@ -37,6 +39,7 @@ const TITLES = [
     release_year: 2026,
     cover_asset_id: null,
     updated_at: "2026-01-02T00:00:00Z",
+    progress: NO_PROGRESS,
   },
 ];
 

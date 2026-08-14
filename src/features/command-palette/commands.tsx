@@ -1,12 +1,14 @@
-import { Monitor, Moon, Sun, type LucideIcon } from "lucide-react";
+import { Monitor, Moon, Sun, Zap, type LucideIcon } from "lucide-react";
 import type { TFunction } from "i18next";
 import type { NavigateFunction } from "react-router";
 import { NAV_ITEMS } from "@/navigation";
+import { formatKeyCombo } from "@/shortcuts/keys";
 import type { ThemePreference } from "@/themes/theme";
 
 /* MISSION-036 — Command registry for the palette. Commands are assembled with
-   the hooks they depend on; the palette only renders and dispatches them. Full
-   command map (add, mark complete, status…) lands with MISSION-089. */
+   the hooks they depend on; the palette only renders and dispatches them. The
+   quick-capture action (MISSION-049) opens the popover by dispatching the
+   `mylore:open-quick-capture` window event so the palette stays decoupled. */
 
 export type PaletteGroup = "navigation" | "actions";
 
@@ -45,14 +47,25 @@ export function buildPaletteCommands(deps: {
     run: () => navigate(item.path),
   }));
 
-  const actions: PaletteCommand[] = (["light", "dark", "system"] as const).map((preference) => ({
-    id: `theme:${preference}`,
-    group: "actions",
-    label: t(`theme.${preference}`),
-    keywords: ["theme", "appearance", "color scheme"],
-    icon: THEME_ICONS[preference],
-    run: () => setTheme(preference),
-  }));
+  const actions: PaletteCommand[] = [
+    ...(["light", "dark", "system"] as const).map((preference) => ({
+      id: `theme:${preference}`,
+      group: "actions" as const,
+      label: t(`theme.${preference}`),
+      keywords: ["theme", "appearance", "color scheme"],
+      icon: THEME_ICONS[preference],
+      run: () => setTheme(preference),
+    })),
+    {
+      id: "quick:capture",
+      group: "actions",
+      label: t("quick.open"),
+      keywords: ["quick capture", "progress", "mark done", "catch up"],
+      icon: Zap,
+      hint: formatKeyCombo("Mod+Enter"),
+      run: () => window.dispatchEvent(new Event("mylore:open-quick-capture")),
+    },
+  ];
 
   return [...navigation, ...actions];
 }

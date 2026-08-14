@@ -5,12 +5,15 @@ import { Badge } from "@/components/ui";
 import { cn } from "@/lib/cn";
 import type { MediaListItem } from "./api";
 import { STATUS_VARIANTS, TYPE_ICONS } from "./mediaMeta";
+import { NextUnitButton } from "./NextUnitButton";
+import { ProgressBar } from "./ProgressBar";
 
 /* MISSION-040 — Single library card in the grid. Poster placeholder until real
    cover art arrives (cover_asset_id is unresolved for now). MISSION-042 makes
    the card a link to the media detail page. MISSION-045 adds bulk-select mode:
    when `selectable` the card becomes a toggle button (aria-pressed) with a
-   corner checkbox instead of a navigation link. */
+   corner checkbox instead of a navigation link. MISSION-049 overlays the
+   next-unit pill and a thin progress bar at the poster's bottom edge. */
 
 export interface MediaCardProps {
   item: MediaListItem;
@@ -28,11 +31,16 @@ export function MediaCard({
   const { t } = useTranslation();
   const Icon = TYPE_ICONS[item.content_type] ?? TYPE_ICONS.other;
 
+  const poster = (
+    <div className="relative flex aspect-[2/3] w-full items-center justify-center overflow-hidden rounded-sm bg-bg-hover text-text-tertiary">
+      <Icon size={28} aria-hidden="true" />
+      <ProgressBar percent={item.progress.percent} className="absolute inset-x-0 bottom-0" />
+    </div>
+  );
+
   const body = (
     <>
-      <div className="flex aspect-[2/3] w-full items-center justify-center overflow-hidden rounded-sm bg-bg-hover text-text-tertiary">
-        <Icon size={28} aria-hidden="true" />
-      </div>
+      {poster}
       <div className="flex flex-col gap-1.5 px-0.5">
         <h3 className="line-clamp-2 text-sm font-medium text-text-primary">{item.title}</h3>
         <div className="flex flex-wrap items-center gap-1.5">
@@ -78,12 +86,15 @@ export function MediaCard({
   }
 
   return (
-    <Link
-      to={`/library/${item.id}`}
-      aria-label={item.title}
-      className="flex flex-col gap-2 rounded-lg border border-border-subtle bg-bg-surface p-2.5 transition-colors duration-150 ease-out hover:border-border-strong"
-    >
-      {body}
-    </Link>
+    <div className="relative">
+      <Link
+        to={`/library/${item.id}`}
+        aria-label={item.title}
+        className="flex flex-col gap-2 rounded-lg border border-border-subtle bg-bg-surface p-2.5 transition-colors duration-150 ease-out hover:border-border-strong"
+      >
+        {body}
+      </Link>
+      <NextUnitButton item={item} className="absolute end-2 top-2" />
+    </div>
   );
 }

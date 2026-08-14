@@ -1,17 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { buildLibraryRows, CONTENT_TYPE_ORDER, PUB_STATUS_ORDER } from "./grouping";
-import type { MediaListItem } from "./api";
-
-const item = (overrides: Partial<MediaListItem>): MediaListItem => ({
-  id: "m-1",
-  content_type: "novel",
-  title: "Title",
-  pub_status: "ongoing",
-  release_year: 2024,
-  cover_asset_id: null,
-  updated_at: "2026-01-01T00:00:00Z",
-  ...overrides,
-});
+import { listItem } from "./testFixtures";
 
 const labelFor = (group: string, raw: string) => `${group}:${raw}`;
 
@@ -21,7 +10,7 @@ describe("buildLibraryRows", () => {
   });
 
   it("chunks a flat list into grid rows without headers", () => {
-    const items = [item({ id: "m-1" }), item({ id: "m-2" }), item({ id: "m-3" })];
+    const items = [listItem({ id: "m-1" }), listItem({ id: "m-2" }), listItem({ id: "m-3" })];
     const rows = buildLibraryRows(items, "none", 2, labelFor);
     expect(rows).toHaveLength(2);
     expect(rows[0]).toEqual({ kind: "items", key: "m-1,m-2", items: [items[0], items[1]] });
@@ -29,8 +18,8 @@ describe("buildLibraryRows", () => {
   });
 
   it("groups by content type in enum order and emits headers", () => {
-    const anime = item({ id: "m-a", content_type: "anime", title: "Anime Title" });
-    const book = item({ id: "m-b", content_type: "book", title: "Book Title" });
+    const anime = listItem({ id: "m-a", content_type: "anime", title: "Anime Title" });
+    const book = listItem({ id: "m-b", content_type: "book", title: "Book Title" });
     const rows = buildLibraryRows([anime, book], "content_type", 2, labelFor);
 
     expect(rows.map((row) => row.kind)).toEqual(["header", "items", "header", "items"]);
@@ -48,9 +37,9 @@ describe("buildLibraryRows", () => {
   });
 
   it("groups by year descending with unknown last", () => {
-    const y2024 = item({ id: "m-1", release_year: 2024 });
-    const noYear = item({ id: "m-2", release_year: null });
-    const y1999 = item({ id: "m-3", release_year: 1999 });
+    const y2024 = listItem({ id: "m-1", release_year: 2024 });
+    const noYear = listItem({ id: "m-2", release_year: null });
+    const y1999 = listItem({ id: "m-3", release_year: 1999 });
     const rows = buildLibraryRows([y2024, noYear, y1999], "year", 1, labelFor);
 
     const headers = rows.filter((row) => row.kind === "header");
@@ -62,8 +51,8 @@ describe("buildLibraryRows", () => {
   });
 
   it("orders unknown groups after known ones", () => {
-    const known = item({ id: "m-known", pub_status: "ongoing" });
-    const unknown = item({ id: "m-unknown", pub_status: "unknown" });
+    const known = listItem({ id: "m-known", pub_status: "ongoing" });
+    const unknown = listItem({ id: "m-unknown", pub_status: "unknown" });
     const rows = buildLibraryRows([unknown, known], "pub_status", 1, labelFor);
     expect(rows.filter((row) => row.kind === "header")[0].label).toBe("pub_status:ongoing");
     expect(rows.filter((row) => row.kind === "header")[1].label).toBe("pub_status:unknown");

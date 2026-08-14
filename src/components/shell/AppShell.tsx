@@ -4,6 +4,7 @@ import { TopBar } from "./TopBar";
 import { StatusBar } from "./StatusBar";
 import { SkipLink } from "./SkipLink";
 import { CommandPalette } from "@/features/command-palette/CommandPalette";
+import { QuickCapture } from "@/features/library/QuickCapture";
 
 /* App shell (MISSION-032): nav rail + top bar + status bar around the routed
    content. Layout uses logical flow so it mirrors in RTL for Arabic. The skip
@@ -27,6 +28,7 @@ export function AppShell() {
           <StatusBar />
         </div>
         <CommandPalette />
+        <QuickCapture />
       </div>
     </>
   );

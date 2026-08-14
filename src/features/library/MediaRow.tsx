@@ -5,12 +5,14 @@ import { Badge } from "@/components/ui";
 import { cn } from "@/lib/cn";
 import type { MediaListItem } from "./api";
 import { STATUS_VARIANTS, TYPE_ICONS } from "./mediaMeta";
+import { NextUnitButton } from "./NextUnitButton";
 
 /* MISSION-040 — Library list rows. `dense` is the Compact tier (DESIGN_SYSTEM
    §8): smaller paddings (8→4), 13px text, hidden meta badges, smaller thumb.
    MISSION-042 makes the row a link to the media detail page. MISSION-045 adds
    bulk-select mode: when `selectable` the row becomes a toggle button with a
-   leading checkbox instead of a navigation link. */
+   leading checkbox instead of a navigation link. MISSION-049 overlays the
+   icon-only next-unit control at the trailing edge. */
 
 export interface MediaRowProps {
   item: MediaListItem;
@@ -99,16 +101,22 @@ export function MediaRow({
     );
   }
 
+  const hasNext = Boolean(item.progress.next_node_id);
+
   return (
-    <Link
-      to={`/library/${item.id}`}
-      aria-label={item.title}
-      className={cn(
-        "flex w-full items-center gap-3 rounded-md border border-transparent bg-bg-surface transition-colors duration-150 ease-out hover:border-border-subtle hover:bg-bg-hover",
-        dense ? "px-2 py-1" : "px-3 py-2",
-      )}
-    >
-      {body}
-    </Link>
+    <div className={cn("relative", dense ? "px-2 py-1" : "px-3 py-2")}>
+      <Link
+        to={`/library/${item.id}`}
+        aria-label={item.title}
+        className={cn(
+          "flex w-full items-center gap-3 rounded-md border border-transparent bg-bg-surface transition-colors duration-150 ease-out hover:border-border-subtle hover:bg-bg-hover",
+          dense ? "px-2 py-1" : "px-3 py-2",
+          hasNext && "pe-10",
+        )}
+      >
+        {body}
+      </Link>
+      <NextUnitButton item={item} dense={dense} className="end-3 top-1/2 -translate-y-1/2" />
+    </div>
   );
 }

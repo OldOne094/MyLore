@@ -15,7 +15,7 @@ import {
 } from "@/api";
 import { queryKeys } from "@/api";
 import { useToast } from "@/components/ui";
-import type { ContentNode } from "@/api";
+import type { ContentNode, ProgressSummary } from "@/api";
 import type { AddMediaInput } from "./types";
 
 export interface MediaCreateArgs {
@@ -43,6 +43,8 @@ export interface MediaListItem {
   release_year: number | null;
   cover_asset_id: string | null;
   updated_at: string;
+  /** Derived progress summary driving the in-grid quick controls (MISSION-049). */
+  progress: ProgressSummary;
 }
 
 /** A selectable facet value (`genre`/`tag` rows carry an id + display name). */
