@@ -25,6 +25,7 @@ pub mod media;
 pub mod merge;
 pub mod normalize;
 pub mod progress;
+pub mod provider;
 pub mod review;
 pub mod stats;
 pub mod status;

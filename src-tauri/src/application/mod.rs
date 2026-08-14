@@ -10,6 +10,7 @@ pub mod dashboard_service;
 pub mod media_service;
 pub mod node_service;
 pub mod progress_service;
+pub mod providers;
 pub mod tracking_service;
 pub mod trash_service;
 
