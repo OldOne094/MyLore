@@ -14,6 +14,7 @@ use chrono::Utc;
 use sqlx::SqlitePool;
 use uuid::Uuid;
 
+use crate::application::activity_service::log_status_transition;
 use crate::application::tracking_service::{domain_to_record, existing_to_domain};
 use crate::application::trash_service::TrashService;
 use crate::domain::enums::CoreStatus;
@@ -57,6 +58,13 @@ impl BulkService {
             let mut next = next;
             next.updated_at = updated_at.clone();
             tracking::upsert_tracking(&self.pool, &domain_to_record(&next)).await?;
+            log_status_transition(
+                &self.pool,
+                media_id.as_str(),
+                &current.core_status,
+                &next.core_status,
+            )
+            .await;
         }
         Ok(())
     }
@@ -143,6 +151,7 @@ mod tests {
     use super::*;
     use crate::application::media_service::{AddMediaInput, MediaListInput, MediaService};
     use crate::infrastructure::repositories::collection::CollectionRecord;
+    use crate::infrastructure::repositories::{activity, tracking};
     use crate::infrastructure::test_support::migrated_pool;
 
     fn input(title: &str) -> AddMediaInput {
@@ -421,6 +430,26 @@ mod tests {
             .await
             .expect_err("unknown collection");
         assert!(matches!(err, AppError::Validation(_)));
+        pool.close().await;
+        cleanup(&path);
+    }
+
+    #[tokio::test]
+    async fn set_status_logs_activity_per_media() {
+        let (pool, path) = migrated_pool("activity_bulk_status.db").await;
+        let ids = seed_media(&pool, 2).await;
+        let service = BulkService::new(pool.clone());
+
+        service
+            .set_status(&ids, "in_progress")
+            .await
+            .expect("set status");
+
+        for id in &ids {
+            let entries = activity::list_for_media(&pool, id, 10).await.expect("list");
+            let kinds: Vec<&str> = entries.iter().map(|e| e.kind.as_str()).collect();
+            assert_eq!(kinds, vec!["started"], "bulk transitions log per media");
+        }
         pool.close().await;
         cleanup(&path);
     }

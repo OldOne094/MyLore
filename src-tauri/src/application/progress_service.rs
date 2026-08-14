@@ -10,6 +10,7 @@ use std::str::FromStr;
 use chrono::Utc;
 use sqlx::SqlitePool;
 
+use crate::application::activity_service::log_progress;
 use crate::application::node_service::{ContentNode, NodeService};
 use crate::application::tracking_service::TrackingService;
 use crate::domain::enums::{ContentType, NodeProgressState};
@@ -59,6 +60,7 @@ impl ProgressService {
             return Err(AppError::validation(format!("node not found: {node_id}")));
         };
         tracking::set_progress(&self.pool, &self.progress_row(node_id, state).await).await?;
+        log_progress(&self.pool, &node.media_id, node_id, state.as_str()).await;
         self.sync_auto_status(&node.media_id).await;
         Ok(())
     }
@@ -100,6 +102,9 @@ impl ProgressService {
             rows.push(self.progress_row(id, state).await);
         }
         let written = tracking::set_progress_many(&self.pool, &rows).await?;
+        for id in &written {
+            log_progress(&self.pool, media_id, id, state.as_str()).await;
+        }
         self.sync_auto_status(media_id).await;
         Ok(written)
     }
@@ -144,6 +149,13 @@ impl ProgressService {
             },
         )
         .await?;
+        log_progress(
+            &self.pool,
+            media_id,
+            &unit.node_id,
+            template.consuming_state.as_str(),
+        )
+        .await;
         self.sync_auto_status(media_id).await;
         let summary = self.summary_for(media_id).await?;
         Ok(Some(NodeProgressNextView {
@@ -237,8 +249,7 @@ pub(crate) fn unit_label(kind: &str, number: Option<&str>, position: Option<i64>
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::infrastructure::repositories::media;
-    use crate::infrastructure::repositories::node;
+    use crate::infrastructure::repositories::{activity, media, node};
     use crate::infrastructure::test_support::{cleanup_files, migrated_pool};
 
     fn sample_node(
@@ -631,6 +642,91 @@ mod tests {
         assert_eq!(unit_label("episode", None, Some(3)), "E3");
         assert_eq!(unit_label("node", None, Some(2)), "#2");
         assert_eq!(unit_label("chapter", Some(" "), Some(9)), "Ch9");
+    }
+
+    #[tokio::test]
+    async fn set_node_progress_logs_progress_activity() {
+        let (pool, path) = migrated_pool("activity_progress_set.db").await;
+        seed_media(&pool, "m-1").await;
+        seed_tree(&pool).await;
+        let service = ProgressService::new(pool.clone());
+
+        service
+            .set_node_progress("c1", "read")
+            .await
+            .expect("mark read");
+
+        let entries = activity::list_for_media(&pool, "m-1", 10)
+            .await
+            .expect("list");
+        let progress = entries
+            .iter()
+            .find(|e| e.kind == "progress")
+            .expect("progress entry");
+        assert_eq!(progress.node_id.as_deref(), Some("c1"));
+        assert_eq!(progress.meta.as_deref(), Some(r#"{"state":"read"}"#));
+        assert!(
+            entries.iter().any(|e| e.kind == "started"),
+            "auto-transition to in_progress is logged too"
+        );
+        pool.close().await;
+        cleanup_files(&path);
+    }
+
+    #[tokio::test]
+    async fn range_logs_progress_per_written_node() {
+        let (pool, path) = migrated_pool("activity_progress_range.db").await;
+        seed_media(&pool, "m-1").await;
+        seed_tree(&pool).await;
+        let service = ProgressService::new(pool.clone());
+
+        service
+            .set_range_progress("m-1", "c1", "c3", "read")
+            .await
+            .expect("range");
+
+        let entries = activity::list_for_media(&pool, "m-1", 20)
+            .await
+            .expect("list");
+        let progress: Vec<&str> = entries
+            .iter()
+            .filter(|e| e.kind == "progress")
+            .filter_map(|e| e.node_id.as_deref())
+            .collect();
+        assert_eq!(
+            progress,
+            vec!["c3", "v2", "c2", "c1"],
+            "one progress entry per written node, newest first"
+        );
+        pool.close().await;
+        cleanup_files(&path);
+    }
+
+    #[tokio::test]
+    async fn mark_next_unit_logs_progress_activity() {
+        let (pool, path) = migrated_pool("activity_progress_next.db").await;
+        let media_id = seed_anime(&pool).await;
+        seed_episode(&pool, "e1", &media_id, "1").await;
+        seed_episode(&pool, "e2", &media_id, "2").await;
+        let service = ProgressService::new(pool.clone());
+
+        service
+            .mark_next_unit(&media_id)
+            .await
+            .expect("mark")
+            .expect("has next");
+
+        let entries = activity::list_for_media(&pool, &media_id, 10)
+            .await
+            .expect("list");
+        let progress = entries
+            .iter()
+            .find(|e| e.kind == "progress")
+            .expect("progress entry");
+        assert_eq!(progress.node_id.as_deref(), Some("e1"));
+        assert_eq!(progress.meta.as_deref(), Some(r#"{"state":"watched"}"#));
+        pool.close().await;
+        cleanup_files(&path);
     }
 
     /// Seed an anime media (counts watched episodes).

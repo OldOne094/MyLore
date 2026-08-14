@@ -4,6 +4,7 @@
 //! `import_service`, `export_service`, `backup_service`, `provider_coordinator`,
 //! `collection_service` land with their milestones (M6–M11).
 
+pub mod activity_service;
 pub mod bulk_service;
 pub mod dashboard_service;
 pub mod media_service;

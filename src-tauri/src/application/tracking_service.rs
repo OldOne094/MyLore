@@ -18,6 +18,7 @@ use std::str::FromStr;
 use chrono::Utc;
 use sqlx::SqlitePool;
 
+use crate::application::activity_service::log_status_transition;
 use crate::domain::enums::{ContentType, CoreStatus, NodeKind, NodeProgressState};
 use crate::domain::progress::{aggregate, NodeTick};
 use crate::domain::status::{apply_transition, suggest_auto_status};
@@ -81,6 +82,13 @@ impl TrackingService {
         let mut next = next;
         next.updated_at = updated_at;
         tracking::upsert_tracking(&self.pool, &domain_to_record(&next)).await?;
+        log_status_transition(
+            &self.pool,
+            media_id.as_str(),
+            &current.core_status,
+            &next.core_status,
+        )
+        .await;
         Ok(view_from_domain(&next))
     }
 
@@ -119,6 +127,13 @@ impl TrackingService {
         let mut next = next;
         next.updated_at = updated_at;
         tracking::upsert_tracking(&self.pool, &domain_to_record(&next)).await?;
+        log_status_transition(
+            &self.pool,
+            media_id.as_str(),
+            &current.core_status,
+            &next.core_status,
+        )
+        .await;
         Ok(Some(view_from_domain(&next)))
     }
 }
@@ -256,8 +271,7 @@ pub(crate) fn domain_to_record(next: &Tracking) -> tracking::TrackingRecord {
 mod tests {
     use super::*;
     use crate::application::progress_service::ProgressService;
-    use crate::infrastructure::repositories::media;
-    use crate::infrastructure::repositories::node;
+    use crate::infrastructure::repositories::{activity, media, node};
     use crate::infrastructure::test_support::{cleanup_files, migrated_pool};
 
     fn sample_node(
@@ -587,6 +601,65 @@ mod tests {
             .await
             .expect("get")
             .is_none());
+        pool.close().await;
+        cleanup_files(&path);
+    }
+
+    #[tokio::test]
+    async fn set_status_logs_activity_for_tracked_statuses() {
+        let (pool, path) = migrated_pool("activity_status.db").await;
+        seed_media(&pool).await;
+        let service = TrackingService::new(pool.clone());
+
+        service
+            .set_status("m-1", "in_progress")
+            .await
+            .expect("start");
+        service
+            .set_status("m-1", "completed")
+            .await
+            .expect("complete");
+        service.set_status("m-1", "repeat").await.expect("repeat");
+        service.set_status("m-1", "on_hold").await.expect("on hold");
+
+        let entries = activity::list_for_media(&pool, "m-1", 10)
+            .await
+            .expect("list");
+        let kinds: Vec<&str> = entries.iter().map(|e| e.kind.as_str()).collect();
+        assert_eq!(
+            kinds,
+            vec!["repeat", "completed", "started"],
+            "on_hold has no activity kind and is skipped, newest first"
+        );
+        assert_eq!(
+            entries[2].meta.as_deref(),
+            Some(r#"{"from":"planned","to":"in_progress"}"#),
+            "transition metadata carries from → to"
+        );
+        pool.close().await;
+        cleanup_files(&path);
+    }
+
+    #[tokio::test]
+    async fn auto_complete_logs_started_and_completed_activity() {
+        let (pool, path) = migrated_pool("activity_auto_complete.db").await;
+        seed_media(&pool).await;
+        seed_tree(&pool).await;
+        let progress = ProgressService::new(pool.clone());
+
+        for id in ["c1", "c2", "c3"] {
+            progress.set_node_progress(id, "read").await.expect("mark");
+        }
+
+        let entries = activity::list_for_media(&pool, "m-1", 20)
+            .await
+            .expect("list");
+        let kinds: Vec<&str> = entries.iter().map(|e| e.kind.as_str()).collect();
+        assert_eq!(
+            kinds,
+            vec!["completed", "progress", "progress", "started", "progress"],
+            "per-node progress plus the auto transitions (newest first)"
+        );
         pool.close().await;
         cleanup_files(&path);
     }
