@@ -45,6 +45,10 @@
     {
       "name": "ExternalProviderFailure",
       "shape": "provider: string; message: string"
+    },
+    {
+      "name": "ProviderImportView",
+      "shape": "media_id: string; created: boolean; identity_kind: string; title: string; content_type: string"
     }
   ],
   "commands": [
@@ -119,6 +123,15 @@
       },
       "returns": "ExternalSearchView",
       "doc": "External (provider) search grouped by provider, with identity flags. `content_type` narrows the fan-out when provided; null searches every enabled provider (domain-agnostic). Resolves with local hits + provider groups + per-provider failures, or rejects with an AppError string."
+    },
+    {
+      "name": "import_provider",
+      "args": {
+        "provider": "string",
+        "provider_id": "string"
+      },
+      "returns": "ProviderImportView",
+      "doc": "Import one provider title into the library (details → identity check → add). Resolves with the media that owns the title — newly created (created: true) or an existing library row the identity check matched (created: false), or rejects with an AppError string."
     },
     {
       "name": "dashboard_summary",

@@ -22,7 +22,7 @@ use tokio::task::JoinSet;
 use crate::domain::enums::ContentType;
 use crate::domain::provider::capabilities::ProviderCapabilities;
 use crate::domain::provider::error::ProviderError;
-use crate::domain::provider::types::ProviderCandidate;
+use crate::domain::provider::types::{ProviderCandidate, ProviderMedia, ProviderNode};
 use crate::domain::provider::Provider;
 
 use super::config::ProviderConfig;
@@ -186,6 +186,79 @@ impl ProviderCoordinator {
                 operation: "calls".to_string(),
             })?;
         run_with_policy(provider_id, &entry.config, &entry.limiter, token, op).await
+    }
+
+    /// Fetch full metadata for one provider id (MISSION-060). Only runs when the
+    /// provider is enabled and declares the `details` capability; the call goes
+    /// through the same policy (timeout/retry/backoff/rate-limit) as a search.
+    pub async fn get_details(
+        &self,
+        provider_id: &str,
+        id: &str,
+        token: &CancellationToken,
+    ) -> Result<ProviderMedia, ProviderError> {
+        let entry = self
+            .entry(provider_id)
+            .ok_or_else(|| ProviderError::Unsupported {
+                provider: provider_id.to_string(),
+                operation: "details".to_string(),
+            })?;
+        if !entry.config.enabled {
+            return Err(ProviderError::Unsupported {
+                provider: provider_id.to_string(),
+                operation: "details".to_string(),
+            });
+        }
+        if !entry.provider.capabilities().details {
+            return Err(ProviderError::Unsupported {
+                provider: provider_id.to_string(),
+                operation: "details".to_string(),
+            });
+        }
+        let provider = entry.provider.clone();
+        let id = id.to_string();
+        self.execute(provider_id, token, move || {
+            let provider = provider.clone();
+            let id = id.clone();
+            async move { provider.get_details(&id).await }
+        })
+        .await
+    }
+
+    /// Fetch the content node tree (volumes→chapters, seasons→episodes) for one
+    /// provider id (MISSION-060). Gated on the `nodes` capability; policy-run.
+    pub async fn get_nodes(
+        &self,
+        provider_id: &str,
+        id: &str,
+        token: &CancellationToken,
+    ) -> Result<Vec<ProviderNode>, ProviderError> {
+        let entry = self
+            .entry(provider_id)
+            .ok_or_else(|| ProviderError::Unsupported {
+                provider: provider_id.to_string(),
+                operation: "nodes".to_string(),
+            })?;
+        if !entry.config.enabled {
+            return Err(ProviderError::Unsupported {
+                provider: provider_id.to_string(),
+                operation: "nodes".to_string(),
+            });
+        }
+        if !entry.provider.capabilities().nodes {
+            return Err(ProviderError::Unsupported {
+                provider: provider_id.to_string(),
+                operation: "nodes".to_string(),
+            });
+        }
+        let provider = entry.provider.clone();
+        let id = id.to_string();
+        self.execute(provider_id, token, move || {
+            let provider = provider.clone();
+            let id = id.clone();
+            async move { provider.get_nodes(&id).await }
+        })
+        .await
     }
 
     /// Search every enabled provider that can serve `content_type` (empty set =
@@ -387,6 +460,7 @@ mod tests {
     use std::sync::{Arc, Mutex};
 
     use super::*;
+    use crate::domain::provider::types::ProviderNode;
     use crate::domain::provider::{AuthKind, ProviderMedia};
 
     #[derive(Clone)]
@@ -399,6 +473,8 @@ mod tests {
             then: Vec<ProviderCandidate>,
         },
         Hang,
+        Details(ProviderMedia),
+        Nodes(Vec<ProviderNode>),
     }
 
     struct FakeProvider {
@@ -456,13 +532,29 @@ mod tests {
                     }
                 }
                 Behavior::Hang => std::future::pending().await,
+                Behavior::Details(_) | Behavior::Nodes(_) => Err(ProviderError::Unsupported {
+                    provider: self.id.clone(),
+                    operation: "search".into(),
+                }),
             }
         }
         async fn get_details(&self, _provider_id: &str) -> Result<ProviderMedia, ProviderError> {
-            Err(ProviderError::Unsupported {
-                provider: self.id.clone(),
-                operation: "details".into(),
-            })
+            match self.behavior.lock().unwrap().clone() {
+                Behavior::Details(details) => Ok(details),
+                _ => Err(ProviderError::Unsupported {
+                    provider: self.id.clone(),
+                    operation: "details".into(),
+                }),
+            }
+        }
+        async fn get_nodes(&self, _provider_id: &str) -> Result<Vec<ProviderNode>, ProviderError> {
+            match self.behavior.lock().unwrap().clone() {
+                Behavior::Nodes(nodes) => Ok(nodes),
+                _ => Err(ProviderError::Unsupported {
+                    provider: self.id.clone(),
+                    operation: "nodes".into(),
+                }),
+            }
         }
     }
 
@@ -543,6 +635,182 @@ mod tests {
             .await;
         assert!(result.is_ok());
         assert_eq!(calls.load(AOrdering::SeqCst), 3, "1 initial + 2 retries");
+    }
+
+    #[tokio::test(start_paused = true)]
+    async fn get_details_runs_when_enabled_and_capable() {
+        let details = ProviderMedia {
+            provider: "fake".to_string(),
+            provider_id: "x1".to_string(),
+            title_main: "Sword of the Dawn".to_string(),
+            title_original: None,
+            alt_titles: Vec::new(),
+            content_type: ContentType::Novel,
+            format: None,
+            pub_status: crate::domain::enums::MediaStatus::Ongoing,
+            synopsis: None,
+            start_date: None,
+            end_date: None,
+            release_year: None,
+            language: None,
+            country: None,
+            content_rating: None,
+            pages: None,
+            duration_min: None,
+            ep_count: None,
+            ch_count: None,
+            cover_url: None,
+            banner_url: None,
+            url: None,
+            people: Vec::new(),
+            genres: Vec::new(),
+            tags: Vec::new(),
+            external_ids: Vec::new(),
+        };
+        let provider = FakeProvider::make(
+            "fake",
+            ProviderCapabilities {
+                details: true,
+                ..Default::default()
+            },
+            Behavior::Details(details.clone()),
+        );
+        let c = coord(vec![(base_config("fake"), provider)]);
+        let token = c.token();
+        let got = c.get_details("fake", "x1", &token).await.expect("details");
+        assert_eq!(got.title_main, "Sword of the Dawn");
+    }
+
+    #[tokio::test(start_paused = true)]
+    async fn get_details_requires_the_details_capability() {
+        let provider = FakeProvider::make(
+            "fake",
+            ProviderCapabilities::default(),
+            Behavior::Details(ProviderMedia {
+                provider: "fake".to_string(),
+                provider_id: "x1".to_string(),
+                title_main: "Sword".to_string(),
+                title_original: None,
+                alt_titles: Vec::new(),
+                content_type: ContentType::Novel,
+                format: None,
+                pub_status: crate::domain::enums::MediaStatus::Unknown,
+                synopsis: None,
+                start_date: None,
+                end_date: None,
+                release_year: None,
+                language: None,
+                country: None,
+                content_rating: None,
+                pages: None,
+                duration_min: None,
+                ep_count: None,
+                ch_count: None,
+                cover_url: None,
+                banner_url: None,
+                url: None,
+                people: Vec::new(),
+                genres: Vec::new(),
+                tags: Vec::new(),
+                external_ids: Vec::new(),
+            }),
+        );
+        let c = coord(vec![(base_config("fake"), provider)]);
+        let token = c.token();
+        let err = c.get_details("fake", "x1", &token).await.unwrap_err();
+        assert!(matches!(err, ProviderError::Unsupported { .. }));
+    }
+
+    #[tokio::test(start_paused = true)]
+    async fn get_details_rejects_disabled_providers() {
+        let details = ProviderMedia {
+            provider: "fake".to_string(),
+            provider_id: "x1".to_string(),
+            title_main: "Sword".to_string(),
+            title_original: None,
+            alt_titles: Vec::new(),
+            content_type: ContentType::Novel,
+            format: None,
+            pub_status: crate::domain::enums::MediaStatus::Unknown,
+            synopsis: None,
+            start_date: None,
+            end_date: None,
+            release_year: None,
+            language: None,
+            country: None,
+            content_rating: None,
+            pages: None,
+            duration_min: None,
+            ep_count: None,
+            ch_count: None,
+            cover_url: None,
+            banner_url: None,
+            url: None,
+            people: Vec::new(),
+            genres: Vec::new(),
+            tags: Vec::new(),
+            external_ids: Vec::new(),
+        };
+        let provider = FakeProvider::make(
+            "fake",
+            ProviderCapabilities {
+                details: true,
+                ..Default::default()
+            },
+            Behavior::Details(details),
+        );
+        let mut config = base_config("fake");
+        config.enabled = false;
+        let c = coord(vec![(config, provider)]);
+        let token = c.token();
+        let err = c.get_details("fake", "x1", &token).await.unwrap_err();
+        assert!(matches!(err, ProviderError::Unsupported { .. }));
+    }
+
+    #[tokio::test(start_paused = true)]
+    async fn get_nodes_runs_when_enabled_and_capable() {
+        let nodes = vec![ProviderNode {
+            id: "vol-1".to_string(),
+            kind: crate::domain::enums::NodeKind::Volume,
+            position: 1,
+            number: Some("1".to_string()),
+            title: Some("Volume 1".to_string()),
+            release_date: None,
+            duration_min: None,
+            page_count: None,
+            synopsis: None,
+            is_special: false,
+            children: Vec::new(),
+        }];
+        let provider = FakeProvider::make(
+            "fake",
+            ProviderCapabilities {
+                nodes: true,
+                ..Default::default()
+            },
+            Behavior::Nodes(nodes.clone()),
+        );
+        let c = coord(vec![(base_config("fake"), provider)]);
+        let token = c.token();
+        let got = c.get_nodes("fake", "x1", &token).await.expect("nodes");
+        assert_eq!(got.len(), 1);
+        assert_eq!(got[0].id, "vol-1");
+    }
+
+    #[tokio::test(start_paused = true)]
+    async fn get_nodes_requires_the_nodes_capability() {
+        let provider = FakeProvider::make(
+            "fake",
+            ProviderCapabilities {
+                search: true,
+                ..Default::default()
+            },
+            Behavior::Nodes(Vec::new()),
+        );
+        let c = coord(vec![(base_config("fake"), provider)]);
+        let token = c.token();
+        let err = c.get_nodes("fake", "x1", &token).await.unwrap_err();
+        assert!(matches!(err, ProviderError::Unsupported { .. }));
     }
 
     #[tokio::test(start_paused = true)]

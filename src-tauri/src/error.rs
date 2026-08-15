@@ -51,6 +51,13 @@ impl From<crate::domain::DomainError> for AppError {
     }
 }
 
+impl From<crate::domain::provider::error::ProviderError> for AppError {
+    fn from(source: crate::domain::provider::error::ProviderError) -> Self {
+        // ProviderError Display is already a user-safe message.
+        Self::Internal(source.to_string())
+    }
+}
+
 impl AppError {
     /// Build an internal error without leaking internals to the UI.
     pub fn internal(message: impl Into<String>) -> Self {

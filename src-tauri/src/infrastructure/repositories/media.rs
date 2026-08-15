@@ -9,6 +9,7 @@
 
 use sqlx::sqlite::{SqlitePool, SqliteRow};
 use sqlx::{QueryBuilder, Row};
+use uuid::Uuid;
 
 use crate::domain::identity::IdentityCandidate;
 use crate::domain::value_objects::ExternalId as DomainExternalId;
@@ -24,7 +25,7 @@ pub struct AltTitle {
 }
 
 /// An external identity on a provider.
-#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 pub struct ExternalId {
     pub provider: String,
     pub ext_id: String,
@@ -411,6 +412,70 @@ pub async fn identity_candidates(pool: &SqlitePool) -> Result<Vec<IdentityCandid
         });
     }
     Ok(candidates)
+}
+
+/// Find-or-create a person by (name, role); resolves with its id (MISSION-060).
+pub async fn ensure_person(pool: &SqlitePool, name: &str, role: &str) -> Result<String, AppError> {
+    let existing: Option<(String,)> = sqlx::query_as(
+        "SELECT id FROM person WHERE name = ? COLLATE NOCASE AND role = ?",
+    )
+    .bind(name)
+    .bind(role)
+    .fetch_optional(pool)
+    .await?;
+    if let Some((id,)) = existing {
+        return Ok(id);
+    }
+    let id = format!("p-{}", Uuid::new_v4());
+    sqlx::query("INSERT INTO person (id, name, role) VALUES (?, ?, ?)")
+        .bind(&id)
+        .bind(name)
+        .bind(role)
+        .execute(pool)
+        .await?;
+    Ok(id)
+}
+
+/// Find-or-create a genre by name; resolves with its id (MISSION-060). Seed
+/// genres carry slug ids (`action`), so the lookup is by name and existing rows
+/// are reused rather than duplicated.
+pub async fn ensure_genre(pool: &SqlitePool, name: &str) -> Result<String, AppError> {
+    let existing: Option<(String,)> =
+        sqlx::query_as("SELECT id FROM genre WHERE name = ? COLLATE NOCASE")
+            .bind(name)
+            .fetch_optional(pool)
+            .await?;
+    if let Some((id,)) = existing {
+        return Ok(id);
+    }
+    let id = format!("g-{}", Uuid::new_v4());
+    sqlx::query("INSERT INTO genre (id, name) VALUES (?, ?)")
+        .bind(&id)
+        .bind(name)
+        .execute(pool)
+        .await?;
+    Ok(id)
+}
+
+/// Find-or-create a domain tag by name; resolves with its id (MISSION-060).
+/// Domain tags are the curated community/detail conventions (scope `domain`);
+/// personal tags (scope `personal`) are user-owned and never created here.
+pub async fn ensure_domain_tag(pool: &SqlitePool, name: &str) -> Result<String, AppError> {
+    let existing: Option<(String,)> =
+        sqlx::query_as("SELECT id FROM tag WHERE name = ? COLLATE NOCASE AND scope = 'domain'")
+            .bind(name)
+            .fetch_optional(pool)
+            .await?;
+    if let Some((id,)) = existing {
+        return Ok(id);
+    }
+    let id = format!("tag-{}", Uuid::new_v4());
+    sqlx::query("INSERT INTO tag (id, name, scope) VALUES (?, ?, 'domain')")
+        .bind(&id)
+        .bind(name)
+        .execute(pool)
+        .await?;
+    Ok(id)
 }
 
 /// Library listing with filter/sort/pagination.

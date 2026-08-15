@@ -59,6 +59,10 @@ function renderPage() {
         <MemoryRouter initialEntries={["/discover"]}>
           <Routes>
             <Route path="/discover" element={<DiscoverPage />} />
+            <Route
+              path="/library/:id"
+              element={<div data-testid="library-detail">Library detail</div>}
+            />
           </Routes>
         </MemoryRouter>
       </ToastProvider>
@@ -137,5 +141,56 @@ describe("DiscoverPage", () => {
       query: "zzz",
       content_type: null,
     });
+  });
+
+  it("imports a new hit, shows the success toast and navigates to it", async () => {
+    vi.mocked(invoke).mockImplementation(async (cmd: string) => {
+      if (cmd === "search_external") return VIEW;
+      if (cmd === "import_provider") {
+        return {
+          media_id: "m-42",
+          created: true,
+          identity_kind: "new",
+          title: "Berserk",
+          content_type: "anime",
+        };
+      }
+      throw new Error(`unexpected command ${cmd}`);
+    });
+    const user = userEvent.setup();
+    renderPage();
+
+    await user.type(screen.getByRole("searchbox", { name: "Search providers" }), "berserk");
+    await user.click(screen.getByRole("button", { name: "Search" }));
+
+    const addButton = await screen.findByRole("button", { name: "Add to library" });
+    expect(addButton).toBeInTheDocument();
+    expect(screen.queryByText("In library")).toBeInTheDocument();
+
+    await user.click(addButton);
+    expect(await screen.findByTestId("library-detail")).toBeInTheDocument();
+    expect(invoke).toHaveBeenCalledWith("import_provider", {
+      provider: "anilist",
+      provider_id: "999",
+    });
+    expect(await screen.findByText("Added “Berserk” to your library")).toBeInTheDocument();
+  });
+
+  it("resolves an already-imported hit to its library page without an add button", async () => {
+    vi.mocked(invoke).mockImplementation(async (cmd: string) => {
+      if (cmd === "search_external") return VIEW;
+      throw new Error(`unexpected command ${cmd}`);
+    });
+    const user = userEvent.setup();
+    renderPage();
+
+    await user.type(screen.getByRole("searchbox", { name: "Search providers" }), "attack");
+    await user.click(screen.getByRole("button", { name: "Search" }));
+
+    expect(await screen.findByText("In library")).toBeInTheDocument();
+    const links = screen.getAllByRole("link", { name: "Attack on Titan" });
+    expect(links).toHaveLength(2);
+    // Only the "new" hit shows an import button; the in-library hit links out.
+    expect(screen.getAllByRole("button", { name: "Add to library" })).toHaveLength(1);
   });
 });

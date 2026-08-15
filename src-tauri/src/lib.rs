@@ -45,6 +45,7 @@ pub fn run() {
             commands::media::media_get,
             commands::media::media_search,
             commands::discover::search_external,
+            commands::import::import_provider,
             commands::dashboard::dashboard_summary,
             commands::node::media_nodes,
             commands::node::node_progress_set,

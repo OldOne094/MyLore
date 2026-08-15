@@ -1,10 +1,11 @@
 import { ArrowUpRight, Compass, Search, SearchX } from "lucide-react";
 import { useState, type FormEvent } from "react";
 import { useTranslation } from "react-i18next";
-import { Link } from "react-router";
+import { Link, useNavigate } from "react-router";
 import { Badge, Button, EmptyState, Skeleton } from "@/components/ui";
+import { useToast } from "@/components/ui";
 import { MediaRow } from "@/features/library/MediaRow";
-import { useDiscoverSearchQuery } from "./api";
+import { useDiscoverSearchQuery, useImportProvider } from "./api";
 
 /* MISSION-059 — External search (Discover). Searches every enabled provider
    through the coordinator, groups hits by provider, and flags each hit as
@@ -62,6 +63,10 @@ function IdentityBadge({ kind }: { kind: string }) {
 
 function ExternalHitRow({ hit }: { hit: import("@/api").ExternalHit }) {
   const { t } = useTranslation();
+  const navigate = useNavigate();
+  const toast = useToast();
+  const importProvider = useImportProvider();
+
   const title =
     hit.identity.kind === "in_library" && hit.identity.media_id ? (
       <Link
@@ -74,6 +79,26 @@ function ExternalHitRow({ hit }: { hit: import("@/api").ExternalHit }) {
     ) : (
       <span className="truncate">{hit.title}</span>
     );
+
+  const alreadyAdded = hit.identity.kind === "in_library";
+  const onImport = () => {
+    importProvider.mutate(
+      { provider: hit.provider, provider_id: hit.provider_id },
+      {
+        onSuccess: (view) => {
+          if (view.created) {
+            toast.success({ title: t("discover.importedToast", { title: view.title }) });
+          } else if (view.identity_kind === "duplicate") {
+            toast.info({ title: t("discover.importDuplicate", { title: view.title }) });
+          } else {
+            toast.info({ title: t("discover.importAlreadyAdded", { title: view.title }) });
+          }
+          navigate(`/library/${view.media_id}`);
+        },
+        onError: () => toast.error({ title: t("discover.importError", { title: hit.title }) }),
+      },
+    );
+  };
 
   return (
     <div className="flex items-center gap-3 rounded-md border border-transparent px-3 py-2 transition-colors duration-150 ease-out hover:border-border-subtle hover:bg-bg-hover">
@@ -92,6 +117,17 @@ function ExternalHitRow({ hit }: { hit: import("@/api").ExternalHit }) {
         <span className="shrink-0 text-xs tabular-nums text-text-tertiary">{hit.release_year}</span>
       ) : null}
       <IdentityBadge kind={hit.identity.kind} />
+      {!alreadyAdded ? (
+        <Button
+          size="sm"
+          variant="secondary"
+          onClick={onImport}
+          disabled={importProvider.isPending}
+          className="ml-auto shrink-0"
+        >
+          {importProvider.isPending ? t("discover.importing") : t("discover.import")}
+        </Button>
+      ) : null}
     </div>
   );
 }

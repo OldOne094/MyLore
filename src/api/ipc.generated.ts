@@ -84,6 +84,13 @@ export interface ExternalProviderFailure {
   provider: string;
   message: string;
 }
+export interface ProviderImportView {
+  media_id: string;
+  created: boolean;
+  identity_kind: string;
+  title: string;
+  content_type: string;
+}
 
 /** Placeholder greeting command (create-tauri-app scaffold). Resolves with the greeting or rejects with an AppError string. */
 export function greet(args: { name: string }): Promise<string> {
@@ -220,6 +227,14 @@ export function search_external(args: {
   content_type: string | null;
 }): Promise<ExternalSearchView> {
   return invoke<ExternalSearchView>("search_external", args);
+}
+
+/** Import one provider title into the library (details → identity check → add). Resolves with the media that owns the title — newly created (created: true) or an existing library row the identity check matched (created: false), or rejects with an AppError string. */
+export function import_provider(args: {
+  provider: string;
+  provider_id: string;
+}): Promise<ProviderImportView> {
+  return invoke<ProviderImportView>("import_provider", args);
 }
 
 /** Resolve the dashboard widget lists (continue watching, recently completed, recently added). `limit` is optional and clamped per widget (1..=20). Resolves with the DashboardSummary or rejects with an AppError string. */
