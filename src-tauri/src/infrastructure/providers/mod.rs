@@ -2,16 +2,22 @@
 //!
 //! Each adapter is a thin normalizer: provider HTTP → unified domain types
 //! (`domain::provider`) + typed `ProviderError`s, with all policy applied by
-//! `application::providers::coordinator`. AniList, TMDB and MangaDex land here
-//! first; OpenLibrary follows (MISSION-057).
+//! `application::providers::coordinator`. AniList, TMDB, MangaDex and
+//! OpenLibrary land here first; the fallback providers (Jikan/Google Books)
+//! follow in MISSION-058.
 
 pub mod anilist;
 pub mod mangadex;
+pub mod openlibrary;
 pub mod tmdb;
 
 pub use anilist::{anilist_config, AniListClient, AniListProvider, PROVIDER_ID};
 pub use mangadex::{
     mangadex_config, MangaDexClient, MangaDexProvider, PROVIDER_ID as MANGADEX_PROVIDER_ID,
+};
+pub use openlibrary::{
+    openlibrary_config, OpenLibraryClient, OpenLibraryProvider,
+    PROVIDER_ID as OPENLIBRARY_PROVIDER_ID,
 };
 pub use tmdb::{tmdb_config, TmdbClient, TmdbProvider, PROVIDER_ID as TMDB_PROVIDER_ID};
 
@@ -36,6 +42,10 @@ pub fn default_provider_entries() -> Vec<(ProviderConfig, Arc<dyn Provider>)> {
         (
             mangadex_config(),
             Arc::new(MangaDexProvider::new(MangaDexClient::new())) as Arc<dyn Provider>,
+        ),
+        (
+            openlibrary_config(),
+            Arc::new(OpenLibraryProvider::new(OpenLibraryClient::new())) as Arc<dyn Provider>,
         ),
     ]
 }
@@ -68,5 +78,14 @@ pub(crate) mod test_support {
             env!("CARGO_MANIFEST_DIR")
         ))
         .expect("mangadex fixture file exists")
+    }
+
+    /// Read a recorded fixture under `tests/fixtures/openlibrary/`.
+    pub(crate) fn openlibrary_fixture(name: &str) -> String {
+        std::fs::read_to_string(format!(
+            "{}/tests/fixtures/openlibrary/{name}",
+            env!("CARGO_MANIFEST_DIR")
+        ))
+        .expect("openlibrary fixture file exists")
     }
 }

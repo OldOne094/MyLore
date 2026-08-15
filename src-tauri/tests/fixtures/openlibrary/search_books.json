@@ -1,0 +1,26 @@
+{
+  "numFound": 1,
+  "start": 0,
+  "docs": [
+    {
+      "key": "/works/OL89650W",
+      "title": "Dune",
+      "author_name": ["Frank Herbert"],
+      "first_publish_year": 1965,
+      "cover_i": 68486,
+      "subject": [
+        "Science fiction",
+        "Prophecy",
+        "Deserts",
+        "Noble families",
+        "Space travel",
+        "Aristocracy"
+      ],
+      "language": ["eng"],
+      "isbn": ["0441172717"],
+      "edition_key": ["OL8985349M"],
+      "type": "work",
+      "publish_year": [1965]
+    }
+  ]
+}
