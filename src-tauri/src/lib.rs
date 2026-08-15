@@ -9,7 +9,11 @@ pub mod domain;
 pub mod error;
 pub mod infrastructure;
 
+use std::sync::Arc;
+
 use tauri::Manager;
+
+use crate::application::providers::coordinator::ProviderCoordinator;
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
@@ -25,6 +29,12 @@ pub fn run() {
             tracing::info!(db = %db_path.display(), "database opened");
             app.manage(pool);
 
+            let coordinator = Arc::new(
+                ProviderCoordinator::new(infrastructure::providers::default_provider_entries())
+                    .map_err(std::io::Error::other)?,
+            );
+            app.manage(coordinator);
+
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
@@ -34,6 +44,7 @@ pub fn run() {
             commands::media::media_facets,
             commands::media::media_get,
             commands::media::media_search,
+            commands::discover::search_external,
             commands::dashboard::dashboard_summary,
             commands::node::media_nodes,
             commands::node::node_progress_set,

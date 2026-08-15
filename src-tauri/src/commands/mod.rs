@@ -8,6 +8,7 @@ use crate::error::AppError;
 
 pub mod bulk;
 pub mod dashboard;
+pub mod discover;
 pub mod media;
 pub mod node;
 pub mod tracking;

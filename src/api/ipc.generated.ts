@@ -54,6 +54,36 @@ export interface DashboardSummary {
   recently_completed: MediaListItem[];
   recently_added: MediaListItem[];
 }
+export interface ExternalSearchView {
+  local: MediaListItem[];
+  groups: ExternalProviderGroup[];
+  failures: ExternalProviderFailure[];
+}
+export interface ExternalProviderGroup {
+  provider: string;
+  name: string;
+  hits: ExternalHit[];
+}
+export interface ExternalHit {
+  provider: string;
+  provider_id: string;
+  title: string;
+  content_type: string;
+  release_year: number | null;
+  cover_url: string | null;
+  synopsis: string | null;
+  url: string | null;
+  identity: ExternalIdentityFlag;
+}
+export interface ExternalIdentityFlag {
+  kind: string;
+  media_id: string | null;
+  score: number | null;
+}
+export interface ExternalProviderFailure {
+  provider: string;
+  message: string;
+}
 
 /** Placeholder greeting command (create-tauri-app scaffold). Resolves with the greeting or rejects with an AppError string. */
 export function greet(args: { name: string }): Promise<string> {
@@ -182,6 +212,14 @@ export function media_get(args: { id: string }): Promise<{
 /** Local full-text search over the library. Resolves with summary rows (each carrying its progress summary) or rejects with an AppError string. */
 export function media_search(args: { query: string }): Promise<MediaListItem[]> {
   return invoke<MediaListItem[]>("media_search", args);
+}
+
+/** External (provider) search grouped by provider, with identity flags. `content_type` narrows the fan-out when provided; null searches every enabled provider (domain-agnostic). Resolves with local hits + provider groups + per-provider failures, or rejects with an AppError string. */
+export function search_external(args: {
+  query: string;
+  content_type: string | null;
+}): Promise<ExternalSearchView> {
+  return invoke<ExternalSearchView>("search_external", args);
 }
 
 /** Resolve the dashboard widget lists (continue watching, recently completed, recently added). `limit` is optional and clamped per widget (1..=20). Resolves with the DashboardSummary or rejects with an AppError string. */

@@ -18,7 +18,7 @@ export { DashboardPage } from "@/features/dashboard/DashboardPage";
 export { LibraryPage } from "@/features/library/LibraryPage";
 export { SearchPage } from "@/features/search/SearchPage";
 export { TrashPage } from "@/features/trash/TrashPage";
-export const DiscoverPage = placeholder("/discover");
+export { DiscoverPage } from "@/features/discover/DiscoverPage";
 export const CollectionsPage = placeholder("/collections");
 export const ReviewsPage = placeholder("/reviews");
 export const StatsPage = placeholder("/stats");

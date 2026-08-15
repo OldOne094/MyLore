@@ -10,6 +10,9 @@
 use sqlx::sqlite::{SqlitePool, SqliteRow};
 use sqlx::{QueryBuilder, Row};
 
+use crate::domain::identity::IdentityCandidate;
+use crate::domain::value_objects::ExternalId as DomainExternalId;
+use crate::domain::value_objects::{MediaId, ProviderId, Title};
 use crate::error::AppError;
 use crate::infrastructure::fts;
 
@@ -339,6 +342,75 @@ pub async fn find_by_external_id(
             .fetch_optional(pool)
             .await?;
     Ok(result.map(|(media_id,)| media_id))
+}
+
+/// Load every library row as an identity candidate (MISSION-059). This is the
+/// library side of the external-search dedup check: the search service matches
+/// each provider hit against these (titles + external ids) to flag it as
+/// already-in-library / duplicate / new. Rows with titles that violate the
+/// domain invariants are skipped defensively (they can't match anyway).
+pub async fn identity_candidates(pool: &SqlitePool) -> Result<Vec<IdentityCandidate>, AppError> {
+    let rows = sqlx::query_as::<_, (String, String, Option<String>)>(
+        "SELECT id, title_main, title_original FROM media",
+    )
+    .fetch_all(pool)
+    .await?;
+
+    let alt_rows = sqlx::query_as::<_, (String, String)>(
+        "SELECT media_id, title FROM media_alt_title ORDER BY title",
+    )
+    .fetch_all(pool)
+    .await?;
+
+    let ext_rows = sqlx::query_as::<_, (String, String, String, Option<String>)>(
+        "SELECT media_id, provider, ext_id, url FROM media_external_id ORDER BY provider",
+    )
+    .fetch_all(pool)
+    .await?;
+
+    let mut alt_titles: std::collections::HashMap<String, Vec<String>> =
+        std::collections::HashMap::new();
+    for (media_id, title) in alt_rows {
+        alt_titles.entry(media_id).or_default().push(title);
+    }
+
+    let mut external_ids: std::collections::HashMap<String, Vec<(String, String, Option<String>)>> =
+        std::collections::HashMap::new();
+    for (media_id, provider, ext_id, url) in ext_rows {
+        external_ids
+            .entry(media_id)
+            .or_default()
+            .push((provider, ext_id, url));
+    }
+
+    let mut candidates = Vec::new();
+    for (id, title_main, title_original) in rows {
+        let Ok(media_id) = MediaId::new(id.clone()) else {
+            continue;
+        };
+        let Ok(titles) = Title::new(
+            title_main,
+            title_original,
+            alt_titles.remove(&id).unwrap_or_default(),
+        ) else {
+            continue;
+        };
+        let ext_ids = external_ids
+            .remove(&id)
+            .unwrap_or_default()
+            .into_iter()
+            .filter_map(|(provider, ext_id, url)| {
+                let provider = ProviderId::new(provider).ok()?;
+                DomainExternalId::new(provider, ext_id, url).ok()
+            })
+            .collect();
+        candidates.push(IdentityCandidate {
+            media_id,
+            titles,
+            external_ids: ext_ids,
+        });
+    }
+    Ok(candidates)
 }
 
 /// Library listing with filter/sort/pagination.
@@ -843,6 +915,45 @@ mod tests {
             .await
             .expect("find");
         assert_eq!(missing, None, "unknown provider must not match");
+        pool.close().await;
+        cleanup_files(&path);
+    }
+
+    #[tokio::test]
+    async fn identity_candidates_aggregate_titles_and_external_ids() {
+        let (pool, path) = migrated_pool("media_repo_identity_candidates.db").await;
+        ensure_person(&pool).await;
+        let mut one = with_links(sample_media("m-1", "Sword of the Dawn"));
+        one.title_original = Some("Dawn".to_string());
+        create(&pool, &one).await.expect("create one");
+        create(&pool, &sample_media("m-2", "Berserk"))
+            .await
+            .expect("create two");
+
+        let candidates = identity_candidates(&pool).await.expect("candidates");
+        assert_eq!(candidates.len(), 2);
+
+        let first = candidates
+            .iter()
+            .find(|c| c.media_id.as_str() == "m-1")
+            .unwrap();
+        assert_eq!(first.titles.main(), "Sword of the Dawn");
+        assert_eq!(first.titles.original(), Some("Dawn"));
+        assert_eq!(
+            first.titles.alternatives().len(),
+            1,
+            "alt titles aggregated"
+        );
+        assert_eq!(first.external_ids.len(), 1);
+        assert_eq!(first.external_ids[0].provider().as_str(), "anilist");
+        assert_eq!(first.external_ids[0].value(), "42");
+
+        let second = candidates
+            .iter()
+            .find(|c| c.media_id.as_str() == "m-2")
+            .unwrap();
+        assert!(second.external_ids.is_empty(), "no links on plain row");
+
         pool.close().await;
         cleanup_files(&path);
     }

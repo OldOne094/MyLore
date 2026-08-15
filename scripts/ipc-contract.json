@@ -25,6 +25,26 @@
     {
       "name": "DashboardSummary",
       "shape": "continue_watching: MediaListItem[]; recently_completed: MediaListItem[]; recently_added: MediaListItem[]"
+    },
+    {
+      "name": "ExternalSearchView",
+      "shape": "local: MediaListItem[]; groups: ExternalProviderGroup[]; failures: ExternalProviderFailure[]"
+    },
+    {
+      "name": "ExternalProviderGroup",
+      "shape": "provider: string; name: string; hits: ExternalHit[]"
+    },
+    {
+      "name": "ExternalHit",
+      "shape": "provider: string; provider_id: string; title: string; content_type: string; release_year: number | null; cover_url: string | null; synopsis: string | null; url: string | null; identity: ExternalIdentityFlag"
+    },
+    {
+      "name": "ExternalIdentityFlag",
+      "shape": "kind: string; media_id: string | null; score: number | null"
+    },
+    {
+      "name": "ExternalProviderFailure",
+      "shape": "provider: string; message: string"
     }
   ],
   "commands": [
@@ -90,6 +110,15 @@
       "args": { "query": "string" },
       "returns": "MediaListItem[]",
       "doc": "Local full-text search over the library. Resolves with summary rows (each carrying its progress summary) or rejects with an AppError string."
+    },
+    {
+      "name": "search_external",
+      "args": {
+        "query": "string",
+        "content_type": "string | null"
+      },
+      "returns": "ExternalSearchView",
+      "doc": "External (provider) search grouped by provider, with identity flags. `content_type` narrows the fan-out when provided; null searches every enabled provider (domain-agnostic). Resolves with local hits + provider groups + per-provider failures, or rejects with an AppError string."
     },
     {
       "name": "dashboard_summary",
