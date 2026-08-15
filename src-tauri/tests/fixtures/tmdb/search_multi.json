@@ -1,0 +1,45 @@
+{
+  "page": 1,
+  "results": [
+    {
+      "adult": false,
+      "backdrop_path": "/fNG7i7RqMErkcqhohV2a6cV1Ehy.jpg",
+      "id": 603,
+      "title": "The Matrix",
+      "original_language": "en",
+      "original_title": "The Matrix",
+      "overview": "Set in the 22nd century, The Matrix tells the story of a computer hacker who joins a group of underground insurgents fighting the vast and powerful computers who now rule the earth.",
+      "poster_path": "/f89U3ADr1oiB1s9GkdPOEpXUk5H.jpg",
+      "media_type": "movie",
+      "genre_ids": [28, 53, 878],
+      "popularity": 100,
+      "release_date": "1999-03-31",
+      "video": false,
+      "vote_average": 8.2,
+      "vote_count": 28000
+    },
+    {
+      "adult": false,
+      "id": 1396,
+      "name": "Breaking Bad",
+      "original_language": "en",
+      "original_name": "Breaking Bad",
+      "overview": "A high school chemistry teacher diagnosed with inoperable lung cancer turns to manufacturing and selling methamphetamine.",
+      "poster_path": "/ggFHVNu6YYI5L9pCfOacjizRGt.jpg",
+      "media_type": "tv",
+      "genre_ids": [18, 80],
+      "popularity": 200,
+      "first_air_date": "2008-01-20",
+      "vote_average": 8.9
+    },
+    {
+      "adult": false,
+      "id": 42,
+      "title": "Kill Bill",
+      "media_type": "movie",
+      "overview": null,
+      "poster_path": null,
+      "release_date": null
+    }
+  ]
+}

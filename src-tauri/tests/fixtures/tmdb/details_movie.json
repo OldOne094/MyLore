@@ -1,0 +1,46 @@
+{
+  "adult": false,
+  "backdrop_path": "/fNG7i7RqMErkcqhohV2a6cV1Ehy.jpg",
+  "budget": 63000000,
+  "genres": [
+    { "id": 28, "name": "Action" },
+    { "id": 53, "name": "Thriller" },
+    { "id": 878, "name": "Science Fiction" }
+  ],
+  "homepage": "http://www.warnerbros.com/movies/matrix/",
+  "id": 603,
+  "original_language": "en",
+  "original_title": "The Matrix",
+  "overview": "Set in the 22nd century, The Matrix tells the story of a computer hacker who joins a group of underground insurgents fighting the vast and powerful computers who now rule the earth.",
+  "popularity": 100,
+  "poster_path": "/f89U3ADr1oiB1s9GkdPOEpXUk5H.jpg",
+  "production_companies": [
+    { "id": 174, "logo_path": null, "name": "Warner Bros. Pictures", "origin_country": "US" },
+    { "id": 1885, "logo_path": null, "name": "Silver Pictures", "origin_country": "US" }
+  ],
+  "production_countries": [{ "iso_3166_1": "US", "name": "United States of America" }],
+  "release_date": "1999-03-31",
+  "revenue": 467000000,
+  "runtime": 136,
+  "status": "Released",
+  "tagline": "Welcome to the Real World.",
+  "title": "The Matrix",
+  "video": false,
+  "vote_average": 8.2,
+  "vote_count": 28000,
+  "credits": {
+    "cast": [{ "id": 6384, "name": "Keanu Reeves", "character": "Neo", "order": 0 }],
+    "crew": [
+      { "id": 1333, "department": "Directing", "job": "Director", "name": "Lana Wachowski" },
+      { "id": 1334, "department": "Directing", "job": "Director", "name": "Lilly Wachowski" },
+      { "id": 1335, "department": "Writing", "job": "Writer", "name": "The Wachowskis" },
+      { "id": 289, "department": "Production", "job": "Producer", "name": "Joel Silver" }
+    ]
+  },
+  "external_ids": {
+    "imdb_id": "tt0133093",
+    "tvdb_id": null,
+    "tvrage_id": null,
+    "wikidata_id": "Q253732"
+  }
+}

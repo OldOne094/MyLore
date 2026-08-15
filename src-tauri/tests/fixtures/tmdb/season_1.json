@@ -1,0 +1,28 @@
+{
+  "id": 3572,
+  "name": "Season 1",
+  "overview": "A chemistry teacher's life changes after a cancer diagnosis.",
+  "season_number": 1,
+  "episodes": [
+    {
+      "air_date": "2008-01-20",
+      "episode_number": 1,
+      "id": 62085,
+      "name": "Pilot",
+      "overview": "Diagnosed with terminal lung cancer, chemistry teacher Walter White experiments with drugs.",
+      "runtime": 58,
+      "season_number": 1,
+      "still_path": "/eNXjEH6fY1F7PpNYYgjYfG5wQt.jpg"
+    },
+    {
+      "air_date": "2008-01-27",
+      "episode_number": 2,
+      "id": 62086,
+      "name": "Cat's in the Bag...",
+      "overview": "Walt and Jesse attempt to dispose of their first victim.",
+      "runtime": 48,
+      "season_number": 1,
+      "still_path": null
+    }
+  ]
+}
