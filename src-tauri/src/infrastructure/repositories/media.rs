@@ -416,13 +416,12 @@ pub async fn identity_candidates(pool: &SqlitePool) -> Result<Vec<IdentityCandid
 
 /// Find-or-create a person by (name, role); resolves with its id (MISSION-060).
 pub async fn ensure_person(pool: &SqlitePool, name: &str, role: &str) -> Result<String, AppError> {
-    let existing: Option<(String,)> = sqlx::query_as(
-        "SELECT id FROM person WHERE name = ? COLLATE NOCASE AND role = ?",
-    )
-    .bind(name)
-    .bind(role)
-    .fetch_optional(pool)
-    .await?;
+    let existing: Option<(String,)> =
+        sqlx::query_as("SELECT id FROM person WHERE name = ? COLLATE NOCASE AND role = ?")
+            .bind(name)
+            .bind(role)
+            .fetch_optional(pool)
+            .await?;
     if let Some((id,)) = existing {
         return Ok(id);
     }
@@ -476,6 +475,85 @@ pub async fn ensure_domain_tag(pool: &SqlitePool, name: &str) -> Result<String, 
         .execute(pool)
         .await?;
     Ok(id)
+}
+
+/// Update only `metadata_refreshed_at` (enrich with no field changes still
+/// records that the provider was consulted). User-owned columns are untouched.
+pub async fn stamp_metadata_refreshed(
+    pool: &SqlitePool,
+    id: &str,
+    refreshed_at: &str,
+) -> Result<(), AppError> {
+    sqlx::query("UPDATE media SET metadata_refreshed_at = ? WHERE id = ?")
+        .bind(refreshed_at)
+        .bind(id)
+        .execute(pool)
+        .await?;
+    Ok(())
+}
+
+/// Resolve person ids to `(name, role)` pairs (enrich diff labels).
+pub async fn person_info(
+    pool: &SqlitePool,
+    ids: &[String],
+) -> Result<std::collections::HashMap<String, (String, String)>, AppError> {
+    let mut map = std::collections::HashMap::new();
+    if ids.is_empty() {
+        return Ok(map);
+    }
+    let mut qb = QueryBuilder::new("SELECT id, name, role FROM person WHERE id IN (");
+    let mut separated = qb.separated(", ");
+    for id in ids {
+        separated.push_bind(id);
+    }
+    separated.push_unseparated(")");
+    for row in qb.build().fetch_all(pool).await? {
+        map.insert(row.get(0), (row.get(1), row.get(2)));
+    }
+    Ok(map)
+}
+
+/// Resolve genre ids to display names (enrich diff labels).
+pub async fn genre_names(
+    pool: &SqlitePool,
+    ids: &[String],
+) -> Result<std::collections::HashMap<String, String>, AppError> {
+    let mut map = std::collections::HashMap::new();
+    if ids.is_empty() {
+        return Ok(map);
+    }
+    let mut qb = QueryBuilder::new("SELECT id, name FROM genre WHERE id IN (");
+    let mut separated = qb.separated(", ");
+    for id in ids {
+        separated.push_bind(id);
+    }
+    separated.push_unseparated(")");
+    for row in qb.build().fetch_all(pool).await? {
+        map.insert(row.get(0), row.get(1));
+    }
+    Ok(map)
+}
+
+/// Resolve tag ids to `(name, scope)` pairs (enrich diff labels; distinguishes
+/// provider-owned domain tags from user-owned personal tags).
+pub async fn tag_info(
+    pool: &SqlitePool,
+    ids: &[String],
+) -> Result<std::collections::HashMap<String, (String, String)>, AppError> {
+    let mut map = std::collections::HashMap::new();
+    if ids.is_empty() {
+        return Ok(map);
+    }
+    let mut qb = QueryBuilder::new("SELECT id, name, scope FROM tag WHERE id IN (");
+    let mut separated = qb.separated(", ");
+    for id in ids {
+        separated.push_bind(id);
+    }
+    separated.push_unseparated(")");
+    for row in qb.build().fetch_all(pool).await? {
+        map.insert(row.get(0), (row.get(1), row.get(2)));
+    }
+    Ok(map)
 }
 
 /// Library listing with filter/sort/pagination.
@@ -632,6 +710,21 @@ pub async fn add_tag_to_many(
     }
     tx.commit().await?;
     Ok(added)
+}
+
+/// Tag ids linked to a media that are personal (user-owned, scope `personal`).
+/// Enrichment rewrites the tag link set wholesale, so it must carry personal
+/// tags back in to avoid deleting them (MISSION-061).
+pub async fn personal_tag_ids(pool: &SqlitePool, media_id: &str) -> Result<Vec<String>, AppError> {
+    let rows = sqlx::query_as::<_, (String,)>(
+        "SELECT t.id FROM tag t \
+         JOIN media_tag mt ON mt.tag_id = t.id \
+         WHERE mt.media_id = ? AND t.scope = 'personal' ORDER BY t.id",
+    )
+    .bind(media_id)
+    .fetch_all(pool)
+    .await?;
+    Ok(rows.into_iter().map(|(id,)| id).collect())
 }
 
 /// Full-text search over both tokenizers, best matches first.
@@ -1277,6 +1370,58 @@ mod tests {
             .await
             .expect("count");
         assert_eq!(n, 3, "no duplicate media_tag rows");
+
+        pool.close().await;
+        cleanup_files(&path);
+    }
+
+    #[tokio::test]
+    async fn enrich_helpers_resolve_labels_and_scope() {
+        let (pool, path) = migrated_pool("media_repo_enrich_helpers.db").await;
+        ensure_person(&pool).await;
+        create(&pool, &with_links(sample_media("m-1", "Sword of the Dawn")))
+            .await
+            .expect("create");
+        create_personal_tag(&pool, "pt-1", "Backlog")
+            .await
+            .expect("personal tag");
+        add_tag_to_many(&pool, "pt-1", &["m-1".to_string()])
+            .await
+            .expect("link personal tag");
+
+        let person = person_info(&pool, &["p-1".to_string()])
+            .await
+            .expect("person info");
+        assert_eq!(
+            person.get("p-1"),
+            Some(&("Test Author".to_string(), "author".to_string()))
+        );
+
+        let genre = genre_names(&pool, &["fantasy".to_string()])
+            .await
+            .expect("genre names");
+        assert_eq!(genre.get("fantasy").map(String::as_str), Some("Fantasy"));
+
+        let tag = tag_info(&pool, &["isekai".to_string(), "pt-1".to_string()])
+            .await
+            .expect("tag info");
+        assert_eq!(tag.get("isekai").map(|(_, s)| s.as_str()), Some("domain"));
+        assert_eq!(
+            tag.get("pt-1").map(|(_, s)| s.as_str()),
+            Some("personal"),
+            "scope distinguishes user-owned tags"
+        );
+
+        let personal = personal_tag_ids(&pool, "m-1").await.expect("personal ids");
+        assert_eq!(personal, vec!["pt-1".to_string()], "only personal tags");
+
+        stamp_metadata_refreshed(&pool, "m-1", "2026-02-01")
+            .await
+            .expect("stamp");
+        let got = get(&pool, "m-1").await.expect("get").expect("exists");
+        assert_eq!(got.metadata_refreshed_at.as_deref(), Some("2026-02-01"));
+        assert_eq!(got.updated_at, "2026-01-01", "updated_at untouched");
+        assert_eq!(got.ch_count, Some(120), "provider fields untouched");
 
         pool.close().await;
         cleanup_files(&path);

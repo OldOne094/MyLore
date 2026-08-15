@@ -6,6 +6,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useTranslation } from "react-i18next";
 import {
   media_create,
+  media_enrich,
   media_facets,
   media_get,
   media_list,
@@ -176,6 +177,23 @@ export function useMediaDetailQuery(id: string) {
   return useQuery({
     queryKey: queryKeys.media.detail(id),
     queryFn: () => media_get({ id }),
+  });
+}
+
+/**
+ * MISSION-061 — refresh provider-owned metadata from the title's provider and
+ * surface the diff. Invalidates the detail row plus every list/facet/dashboard
+ * fan-out so refreshed fields propagate everywhere.
+ */
+export function useEnrichMedia() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (mediaId: string) => media_enrich({ media_id: mediaId }),
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({ queryKey: queryKeys.media.lists() });
+      await queryClient.invalidateQueries({ queryKey: queryKeys.media.facets() });
+      await queryClient.invalidateQueries({ queryKey: queryKeys.dashboard.all() });
+    },
   });
 }
 

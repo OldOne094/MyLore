@@ -91,6 +91,18 @@ export interface ProviderImportView {
   title: string;
   content_type: string;
 }
+export interface EnrichChange {
+  field: string;
+  before: string | null;
+  after: string | null;
+}
+export interface EnrichView {
+  media_id: string;
+  provider: string;
+  refreshed_at: string;
+  changed: boolean;
+  changes: EnrichChange[];
+}
 
 /** Placeholder greeting command (create-tauri-app scaffold). Resolves with the greeting or rejects with an AppError string. */
 export function greet(args: { name: string }): Promise<string> {
@@ -235,6 +247,11 @@ export function import_provider(args: {
   provider_id: string;
 }): Promise<ProviderImportView> {
   return invoke<ProviderImportView>("import_provider", args);
+}
+
+/** Refresh a media's provider-owned metadata from its provider and report what changed (per-field before → after). Never touches user data (tracking, review, collections, personal tags, asset ids). Resolves with the diff view or rejects with an AppError string. */
+export function media_enrich(args: { media_id: string }): Promise<EnrichView> {
+  return invoke<EnrichView>("media_enrich", args);
 }
 
 /** Resolve the dashboard widget lists (continue watching, recently completed, recently added). `limit` is optional and clamped per widget (1..=20). Resolves with the DashboardSummary or rejects with an AppError string. */

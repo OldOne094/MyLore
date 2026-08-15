@@ -49,6 +49,14 @@
     {
       "name": "ProviderImportView",
       "shape": "media_id: string; created: boolean; identity_kind: string; title: string; content_type: string"
+    },
+    {
+      "name": "EnrichChange",
+      "shape": "field: string; before: string | null; after: string | null"
+    },
+    {
+      "name": "EnrichView",
+      "shape": "media_id: string; provider: string; refreshed_at: string; changed: boolean; changes: EnrichChange[]"
     }
   ],
   "commands": [
@@ -132,6 +140,14 @@
       },
       "returns": "ProviderImportView",
       "doc": "Import one provider title into the library (details → identity check → add). Resolves with the media that owns the title — newly created (created: true) or an existing library row the identity check matched (created: false), or rejects with an AppError string."
+    },
+    {
+      "name": "media_enrich",
+      "args": {
+        "media_id": "string"
+      },
+      "returns": "EnrichView",
+      "doc": "Refresh a media's provider-owned metadata from its provider and report what changed (per-field before → after). Never touches user data (tracking, review, collections, personal tags, asset ids). Resolves with the diff view or rejects with an AppError string."
     },
     {
       "name": "dashboard_summary",

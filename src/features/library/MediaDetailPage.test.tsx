@@ -223,4 +223,89 @@ describe("MediaDetailPage", () => {
 
     expect(await screen.findByText("Couldn't delete the title")).toBeInTheDocument();
   });
+
+  it("refreshes from the provider and shows the diff dialog when fields changed", async () => {
+    const PROVIDER_DETAIL: MediaDetail = {
+      ...DETAIL,
+      provider: "anilist",
+      provider_url: "https://anilist.co/anime/9253",
+    };
+    const ENRICH_VIEW = {
+      media_id: "m-111",
+      provider: "anilist",
+      refreshed_at: "2026-03-01T00:00:00Z",
+      changed: true,
+      changes: [
+        { field: "title_main", before: "Steins;Gate", after: "Steins;Gate 0" },
+        { field: "ch_count", before: null, after: "24" },
+      ],
+    };
+    vi.mocked(invoke).mockImplementation((cmd: string) => {
+      if (cmd === "media_get") return Promise.resolve(PROVIDER_DETAIL);
+      if (cmd === "media_enrich") return Promise.resolve(ENRICH_VIEW);
+      return Promise.resolve(undefined);
+    });
+    renderPage();
+    await screen.findByRole("heading", { name: "Steins;Gate" });
+
+    const refresh = screen.getByRole("button", { name: "Refresh Steins;Gate from anilist" });
+    await userEvent.click(refresh);
+
+    expect(invoke).toHaveBeenCalledWith("media_enrich", { media_id: "m-111" });
+    expect(await screen.findByText("Metadata refresh")).toBeInTheDocument();
+    expect(screen.getByText("Refreshed “Steins;Gate” from anilist")).toBeInTheDocument();
+    expect(screen.getByText("Title")).toBeInTheDocument();
+    expect(screen.getAllByText("Steins;Gate 0").length).toBeGreaterThanOrEqual(1);
+  });
+
+  it("refreshes and reports when nothing changed, without showing the dialog", async () => {
+    const PROVIDER_DETAIL: MediaDetail = {
+      ...DETAIL,
+      provider: "tmdb",
+      provider_url: "https://www.themoviedb.org/movie/1",
+    };
+    const ENRICH_VIEW = {
+      media_id: "m-111",
+      provider: "tmdb",
+      refreshed_at: "2026-03-01T00:00:00Z",
+      changed: false,
+      changes: [],
+    };
+    vi.mocked(invoke).mockImplementation((cmd: string) => {
+      if (cmd === "media_get") return Promise.resolve(PROVIDER_DETAIL);
+      if (cmd === "media_enrich") return Promise.resolve(ENRICH_VIEW);
+      return Promise.resolve(undefined);
+    });
+    renderPage();
+    await screen.findByRole("heading", { name: "Steins;Gate" });
+
+    await userEvent.click(screen.getByRole("button", { name: "Refresh Steins;Gate from tmdb" }));
+
+    expect(await screen.findByText("“Steins;Gate” is already up to date")).toBeInTheDocument();
+    expect(screen.queryByText("Metadata refresh")).not.toBeInTheDocument();
+  });
+
+  it("shows an error toast when the refresh fails", async () => {
+    const PROVIDER_DETAIL: MediaDetail = {
+      ...DETAIL,
+      provider: "anilist",
+      provider_url: "https://anilist.co/anime/9253",
+    };
+    vi.mocked(invoke).mockResolvedValueOnce(PROVIDER_DETAIL).mockRejectedValueOnce("boom");
+    renderPage();
+    await screen.findByRole("heading", { name: "Steins;Gate" });
+
+    await userEvent.click(screen.getByRole("button", { name: "Refresh Steins;Gate from anilist" }));
+
+    expect(await screen.findByText("Couldn't refresh “Steins;Gate”")).toBeInTheDocument();
+    expect(screen.queryByText("Metadata refresh")).not.toBeInTheDocument();
+  });
+
+  it("hides the refresh button when the title has no provider", async () => {
+    vi.mocked(invoke).mockResolvedValue(DETAIL);
+    renderPage();
+    await screen.findByRole("heading", { name: "Steins;Gate" });
+
+    expect(screen.queryByRole("button", { name: /Refresh .* from .*/ })).not.toBeInTheDocument();
+  });
 });

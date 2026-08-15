@@ -13,9 +13,11 @@ import {
   TabsTrigger,
   useToast,
 } from "@/components/ui";
-import { useMediaDetailQuery } from "./api";
+import { useMediaDetailQuery, useEnrichMedia } from "./api";
+import type { EnrichView } from "@/api";
 import { NodeTree } from "./NodeTree";
 import { TrackingTab } from "./TrackingTab";
+import { EnrichDialog } from "./EnrichDialog";
 import { useDeleteMedia, useRestoreTrashItem } from "@/features/trash/api";
 import { STATUS_VARIANTS, TYPE_ICONS } from "./mediaMeta";
 
@@ -73,9 +75,28 @@ export function MediaDetailPage() {
   const navigate = useNavigate();
   const toast = useToast();
   const [tab, setTab] = useState<DetailTab>("overview");
+  const [enrichView, setEnrichView] = useState<EnrichView | null>(null);
   const { data, isPending, isError, refetch } = useMediaDetailQuery(id ?? "");
   const deleteMedia = useDeleteMedia();
   const restoreTrashItem = useRestoreTrashItem();
+  const enrichMedia = useEnrichMedia();
+
+  const handleEnrich = () => {
+    if (!data) return;
+    enrichMedia.mutate(data.id, {
+      onSuccess: (view) => {
+        if (view.changed) {
+          setEnrichView(view);
+          toast.success({
+            title: t("enrich.updatedToast", { title: data.title_main, provider: view.provider }),
+          });
+        } else {
+          toast.success({ title: t("enrich.unchangedToast", { title: data.title_main }) });
+        }
+      },
+      onError: () => toast.error({ title: t("enrich.errorToast", { title: data.title_main }) }),
+    });
+  };
 
   const handleDelete = () => {
     if (!data) return;
@@ -152,16 +173,34 @@ export function MediaDetailPage() {
                   <p className="mt-1 text-sm text-text-tertiary">{data.title_original}</p>
                 ) : null}
               </div>
-              <Button
-                variant="secondary"
-                size="sm"
-                onClick={handleDelete}
-                disabled={deleteMedia.isPending || restoreTrashItem.isPending}
-                aria-label={t("trash.deleteAria", { title })}
-              >
-                <Trash2 size={14} aria-hidden="true" />
-                {t("trash.delete")}
-              </Button>
+              <div className="flex shrink-0 items-center gap-2">
+                {data.provider ? (
+                  <Button
+                    variant="secondary"
+                    size="sm"
+                    onClick={handleEnrich}
+                    disabled={enrichMedia.isPending}
+                    aria-label={t("enrich.refreshAria", { title, provider: data.provider })}
+                  >
+                    <RefreshCcw
+                      size={14}
+                      aria-hidden="true"
+                      className={enrichMedia.isPending ? "animate-spin" : undefined}
+                    />
+                    {enrichMedia.isPending ? t("enrich.refreshing") : t("enrich.refresh")}
+                  </Button>
+                ) : null}
+                <Button
+                  variant="secondary"
+                  size="sm"
+                  onClick={handleDelete}
+                  disabled={deleteMedia.isPending || restoreTrashItem.isPending}
+                  aria-label={t("trash.deleteAria", { title })}
+                >
+                  <Trash2 size={14} aria-hidden="true" />
+                  {t("trash.delete")}
+                </Button>
+              </div>
             </div>
             <div className="flex flex-wrap items-center gap-2">
               <Badge variant="accent">{t(`contentType.${data.content_type}`)}</Badge>
@@ -250,6 +289,15 @@ export function MediaDetailPage() {
           </TabsContent>
         </Tabs>
       </div>
+      {enrichView ? (
+        <EnrichDialog
+          view={enrichView}
+          open
+          onOpenChange={(open) => {
+            if (!open) setEnrichView(null);
+          }}
+        />
+      ) : null}
     </section>
   );
 }
