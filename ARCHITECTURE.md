@@ -118,6 +118,10 @@ ProviderCapabilities: { search:bool, details:bool, nodes:bool, related:bool,
 | BookBrainz | books (open data) | none | yes | bibliographic + relationships |
 | SIMKL | anime+TV+movies | key | yes | aggregate source; has import API |
 | Annict | anime (JP) | OAuth | yes | niche; optional |
+| NovelUpdates | web novels+light novels | none (HTML scrape) | yes | no API; LNReader-plugin selectors (NU-moderator project); ~1 rps self-throttled; search/details/chapter-tree only (MISSION-065) |
+| Hardcover | books (indie) | none (public read) | yes | GraphQL; optional third book provider |
+| Bangumi | CN ACGN | none | yes | ~1 rps; optional LN/WN/CN metadata + cross-ids |
+| ISBNDB | books (ISBN lookup) | API key | free tier | 100 req/mo; optional paid fallback |
 
 ## 5. Search architecture
 

@@ -16,7 +16,7 @@ import {
 
 /* MISSION-036 — Command palette skeleton. Opens with Ctrl/Cmd+K, filters
    commands by label/keywords, navigates with ↑/↓ + Enter, runs on click.
-   Full action map ships with MISSION-089. */
+   Full action map ships with MISSION-090. */
 
 export function CommandPalette() {
   const { t } = useTranslation();

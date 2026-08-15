@@ -163,7 +163,29 @@
   tags and relations, covers; AniList already links Bangumi ids (cross-ids).
 - **Our use:** optional light-novel/web-novel/Chinese metadata source + cross-id resolution.
 
-## 14. ISBNDB — ISBN lookup (commercial)
+## 14. NovelUpdates — web novels & light novels (HTML scrape)
+
+- **No official API.** The authoritative integration path is the **LNReader plugin**
+  (`https://github.com/lnreader/lnreader-plugins`, `plugins/english/novelupdates.ts`),
+  maintained by an NU moderator — its selectors are the reference for this adapter (MISSION-065).
+- **Rate limits:** none documented; we self-throttle to ~1 rps with a mobile UA and cache results.
+  ToS discourages automated scraping — we do search/details/chapter-tree at a modest rate and
+  **never** fetch chapter bodies (NU hosts none; links redirect to translator sites).
+- **Endpoints:**
+  - Search: `GET https://www.novelupdates.com/series-finder/?sf=1&sh={query}&sort=srank&order=asc&pg={page}`
+    → `.search_main_box_nu`, title/url `.search_title > a`, cover `img`.
+  - Details: `GET https://www.novelupdates.com/series/{slug}/` → `.seriestitlenu` (title),
+    `.wpb_wrapper img` (cover), `#authtag` (authors), `#seriesgenre a` (genres), `#editstatus`
+    (Ongoing/Completed/Hiatus), `#showtype` (Light Novel/Web Novel/Published Novel),
+    `#editdescription` (synopsis), `.seriesother .uvotes` (rating), `input#mypostid` (numeric NU id).
+  - Chapters: `POST https://www.novelupdates.com/wp-admin/admin-ajax.php` form-data
+    `action=nd_getchapters&mygrr=0&mypostid={id}` → `li.sp_li_chp` (e.g. `v1c1part1`).
+- **Cloudflare:** detect captcha pages by `<title>` ("Just a moment…"/"bot verification") and
+  surface a clear provider error instead of garbage.
+- **Our use:** the primary **web-novel/light-novel provider** (search/details/chapters/external id),
+  alongside OpenLibrary/Google Books for published books.
+
+## 15. ISBNDB — ISBN lookup (commercial)
 
 - **Docs:** https://isbndb.com · **Auth:** API key.
 - **Pricing (verified):** free 100 requests/month, 10 req/min; Pro $99/mo (120k req/mo);
@@ -172,7 +194,7 @@
 - **Our use:** not needed for MVP (OpenLibrary covers ISBNs free); optional paid fallback for
   high-volume ISBN enrichment.
 
-## 15. Evaluated and NOT used (with reasons)
+## 16. Evaluated and NOT used (with reasons)
 
 | Service | Reason |
 |---------|--------|
@@ -180,18 +202,20 @@
 | Kitsu API | Project effectively inactive as of 2026 (apps pulled 2024); risk of data rot. |
 | AniDB | No open public API without application; not usable out-of-the-box. |
 | Anime-Planet / MangaUpdates / Goodreads / StoryGraph | No public API (Goodreads API legacy/deprecated). |
-| NovelUpdates | No official API; ToS prohibits scraping; no official export → not a provider or import source. Adopt its genre/tag taxonomy + tracking modes as conventions only. |
+| NovelUpdates | No official API. HTML scraping is against the letter of the ToS, but the **LNReader plugin** (maintained by an NU moderator) publishes authoritative selectors we follow at a modest rate (MISSION-065) — search/details/chapter-tree only, no reading content (NU hosts none). NovelUpdates genre/tag taxonomy + tracking modes adopted as conventions too. |
 | Bookwyrm | Federated; Anti-Capitalist Software License v1.4 (not OSI) → legal friction; instance-dependent data quality. |
 | OMDb | Freemium paywall; TMDB covers movies/TV better. |
 
-## 16. Provider risks & mitigations
+## 17. Provider risks & mitigations
 
 - **AniList/MangaDex/TMDB** are the spine; Jikan + Google Books are cheap fallbacks → no single
   point of failure for any content type (spec §45, §73).
 - **Novels/web novels/light novels have no single strong open provider** (NovelUpdates has no
-  API; AniList indexes LNs only). Mitigation: OpenLibrary + Google Books (+ optional Hardcover/
-  Bangumi later) cover metadata; NovelUpdates' taxonomy is adopted as tag conventions, never
-  scraped. Book imports come via Goodreads/StoryGraph CSV (user-owned data), not an API.
+  API; AniList indexes LNs only). Mitigation: the **NovelUpdates adapter (MISSION-065)** — search/
+  details/chapter-tree via HTML scraping following the LNReader plugin's selectors at a modest
+  rate, no chapter content (NU hosts none) — plus OpenLibrary + Google Books (+ optional Hardcover/
+  Bangumi) cover metadata; NovelUpdates' taxonomy is adopted as tag conventions. Book imports come
+  via Goodreads/StoryGraph CSV (user-owned data), not an API.
 - All provider calls go through the coordinator: timeout, retry w/ backoff, cancellation,
   rate-limit awareness, fixture-recorded tests offline (`TESTING.md`).
 - Attribution obligations: TMDB logo/link on movie/TV data; MangaDex credit line in About.

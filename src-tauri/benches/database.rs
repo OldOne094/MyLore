@@ -4,7 +4,7 @@
 //!   - `insert/repo_create_*`   — single-add through the repository (`media::create`,
 //!     its own transaction + FTS triggers), the manual-add path.
 //!   - `insert/bulk_*`          — bulk import timing: raw multi-row insert in one
-//!     transaction (the MISSION-066 import path) vs. a naive per-row repo loop.
+//!     transaction (the MISSION-067 import path) vs. a naive per-row repo loop.
 //!   - `search/fts_*`           — FTS5 `media::search` latency on 10k/50k/100k rows.
 //!
 //! Run with `cargo bench --bench database` (release). Each insert iteration runs

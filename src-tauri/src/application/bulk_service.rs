@@ -2,7 +2,7 @@
 //!
 //! Actions behind the library action bar: set tracking status, add a personal
 //! tag, soft-delete (to trash), and add to a collection. All four operate on a
-//! set of media ids selected in the UI. MISSION-077 extends this with
+//! set of media ids selected in the UI. MISSION-078 extends this with
 //! filtered-selection bulk ops that carry a change summary.
 //!
 //! Status uses the domain status engine per media, so stamps (started_at /

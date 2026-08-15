@@ -92,8 +92,11 @@ API support. We adopt **ideas, never assets or branding** (spec §97).
 ### NovelUpdates (web novels & light novels)
 - Type: the definitive directory + reading-list tracker for EN-translated web novels (CN/KR/JP:
   wuxia, xianxia, cultivation, isekai, otome…) · Web · Free, ad-heavy.
-- **No official public API**; ToS prohibits automated scraping; third-party scraping APIs are
-  fragile. Not usable as a metadata provider or import source.
+- **No official public API**; ToS prohibits automated scraping and third-party scraping APIs are
+  fragile. The LNReader plugin (`github.com/lnreader/lnreader-plugins`), maintained by an NU
+  moderator, publishes authoritative HTML-scrape selectors for search/details/chapter-tree — we
+  follow those at a modest rate as a metadata provider (MISSION-065), not for reading content (NU
+  hosts none).
 - Strengths: unrivaled WN/LN catalog + taxonomy (**genres** incl. wuxia/xianxia/cultivation,
   **tags** incl. smut/shoujo-ai/yuri, **translation status**, **chapter release feed** with
   dates), reading list with **Normal mode** (auto-track chapters via release feed) vs
@@ -176,8 +179,10 @@ API support. We adopt **ideas, never assets or branding** (spec §97).
 10. **The import story extends to books:** Goodreads and StoryGraph both export CSV (title, ISBN,
     rating, shelves, dates, review) → one shared book-CSV import path is a major onboarding lever.
 11. **No open provider serves web novels/light novels** (NovelUpdates has no API; AniList indexes
-    light novels only). Strategy: books providers (OpenLibrary/Google Books) + AniList-LN fill
-    metadata; NovelUpdates taxonomy adopted as tag conventions, never scraped.
+    light novels only). Strategy: a NovelUpdates HTML-scrape adapter (selectors from the LNReader
+    plugin, an NU-moderator project; MISSION-065) for WN/LN search/details/chapters, plus books
+    providers (OpenLibrary/Google Books) + AniList-LN fill metadata; NovelUpdates taxonomy adopted
+    as tag conventions.
 
 ## 5. Positioning statement
 
@@ -194,7 +199,7 @@ with AniList/MangaDex/TMDB/OpenLibrary-grade data quality (research §3) instead
 - MAL ownership change (Gaudiy, May 2025) reported in 2026 comparisons.
 - Goodreads API status: goodreads.com/api (legacy/deprecated), 2026 community reports; CSV export format.
 - StoryGraph: thestorygraph.com (features, ~5M signups 2026); no public API.
-- NovelUpdates: novelupdates.com (reading-list modes, genres/tags, ~55M visits/mo); no API, ToS restricts scraping.
+- NovelUpdates: novelupdates.com (reading-list modes, genres/tags, ~55M visits/mo); no API — HTML-scrape selectors adopted from the LNReader plugin (github.com/lnreader/lnreader-plugins, maintained by an NU moderator).
 - Hardcover: hardcover.app GraphQL API docs ("Goodreads alternative").
 - Bookwyrm: bookwyrm.social (Anti-Capitalist Software License v1.4).
 - Bangumi: github.com/bangumi/api (OpenAPI 3.0 spec, api.bgm.tv, ~1 req/s rate limits).

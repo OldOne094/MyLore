@@ -150,10 +150,12 @@ Format per task: `TASK-NNN — Title · Deps: … · Pri: Core|Important|Optiona
 | TASK-068 | Provider imports: AniList user export, MAL (Jikan), Goodreads CSV, StoryGraph CSV, Trakt (optional). | TASK-063,053,057 | Optional |
 | TASK-069 | Import/export integration tests + fixture data. | TASK-064..067 | Core |
 
-> Note: novels/web novels/light novels have no clean open provider (NovelUpdates has no API, ToS
-> forbids scraping; AniList indexes LNs only). Use OpenLibrary/Google Books (+ optional Hardcover/
-> Bangumi adapters later) for metadata; adopt NovelUpdates' genre/tag taxonomy as conventions.
-> Book imports come from Goodreads/StoryGraph CSV (user-owned data). `API_PROVIDERS.md` §12–15.
+> Note: novels/web novels/light novels have no clean *open* provider (NovelUpdates has no API —
+> the LNReader plugin, maintained by an NU moderator, publishes authoritative HTML-scrape selectors
+> we follow at a modest rate in MISSION-065; AniList indexes LNs only). Use NovelUpdates +
+> OpenLibrary/Google Books (+ optional Hardcover/Bangumi adapters later) for metadata; adopt
+> NovelUpdates' genre/tag taxonomy as conventions.
+> Book imports come from Goodreads/StoryGraph CSV (user-owned data). `API_PROVIDERS.md` §12–17.
 
 ### EPIC-009 Reviews & Collections (M9)
 

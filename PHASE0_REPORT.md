@@ -60,8 +60,10 @@ Goodreads, StoryGraph, NovelUpdates, Hardcover, Bookwyrm, Bangumi, and self-host
 Ryot/Yamtrack/Watcharr/Scrob + readers (Mihon, Kavita). Books/web-novel findings: Goodreads API
 is dead → **CSV export is the import bridge**; StoryGraph = best-in-class book UX (mood/pace/
 content warnings, DNF, stats) but no API; NovelUpdates = definitive WN/LN directory but no API
-(ToS restricts scraping) → adopt its genre/tag taxonomy + Normal/Manual tracking modes, not its
-data. Cross-cutting: status tabs, ≤2-step progress, filter-first libraries, import stories,
+(ToS restricts scraping → the LNReader plugin, maintained by an NU moderator, publishes the
+authoritative selectors we follow in MISSION-065 at a modest rate) → adopt its genre/tag taxonomy
++ Normal/Manual tracking modes, and its metadata via the adapter. Cross-cutting: status tabs,
+≤2-step progress, filter-first libraries, import stories,
 calendar/stats, and the gap — **no offline local option exists**; that is our wedge. `RESEARCH.md`.
 
 ## 7. Competitor Analysis
@@ -75,7 +77,7 @@ calendar/stats, and the gap — **no offline local option exists**; that is our 
 | Yamtrack | self-hosted | per-season tracking, custom entries, calendar/iCal | server app | custom manual entries, per-season UX, CSV round-trip |
 | Goodreads | books web | largest catalog, shelves, currently-reading | API dead, ads, no offline | CSV import bridge, shelves→collections |
 | StoryGraph | books web | mood/pace/content-warning/DNF UX, reading stats | no API, social-first | mood/pace tags, reading stats, DNF-with-% |
-| NovelUpdates | web novels/LN directory | unrivaled WN/LN taxonomy + release feed | no API, ToS no-scrape, ads | WN/LN genre/tag taxonomy, Normal/Manual chapter modes |
+| NovelUpdates | web novels/LN directory | unrivaled WN/LN taxonomy + release feed | no API; scrape selectors from the LNReader plugin (NU-moderator project) — MISSION-065 | WN/LN genre/tag taxonomy, Normal/Manual chapter modes + metadata adapter |
 | Kitsu | anime/manga | (historic) | inactive 2026 | — (avoid) |
 
 `RESEARCH.md` has full rows.
@@ -89,8 +91,9 @@ attribution), **TVDB v4** (free tier), **Trakt** (free personal, 2026 caps, ~1 r
 **OpenLibrary** (free, 1 rps, 3 rps identified), **Google Books** (free key, ~100 q/min),
 **Hardcover** (free GraphQL book API, young), **Bangumi** (open CN ACGN API, ~1 rps),
 **ISBNDB** (free 100 req/mo ISBN lookup), BookBrainz/Annict/SIMKL optional. Excluded: MAL official,
-Kitsu, AniDB, Goodreads/Anime-Planet/StoryGraph/NovelUpdates (no usable public API; NovelUpdates
-ToS also prohibits scraping). `API_PROVIDERS.md`.
+Kitsu, AniDB, Goodreads/Anime-Planet/StoryGraph (no usable public API); NovelUpdates is included via
+MISSION-065's HTML-scrape adapter (no API — selectors from the LNReader plugin, an NU-moderator
+project). `API_PROVIDERS.md`.
 
 ## 9. Technology Stack Decision
 
@@ -219,7 +222,7 @@ Stats & Calendar → M11 Backup & Recovery → M12 UX Polish → M13 Testing & R
 
 ## 29. Complete Task Breakdown
 
-**99 missions** (MISSION-001…099, M1–M13) + future-scope (MISSION-100+), each with deps, priority,
+**100 missions** (MISSION-001…100, M1–M13) + future-scope (MISSION-101+), each with deps, priority,
 files, tests, and acceptance criteria. Master mission list: `ROADMAP.md`; detailed reference:
 `DEVELOPMENT_PLAN.md §3`.
 

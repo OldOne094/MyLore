@@ -22,7 +22,7 @@ import { STATUS_VARIANTS, TYPE_ICONS } from "./mediaMeta";
 /* MISSION-042 — Media detail page. Hero (cover, title, meta badges, actions)
    above tabbed sections: Overview / Details / Tracking / Review. Overview and
    Details render the aggregate fields; Tracking is the MISSION-048 status
-   picker; Review remains a shell wired to MISSION-073. */
+   picker; Review remains a shell wired to MISSION-074. */
 
 type DetailTab = "overview" | "details" | "tracking" | "review";
 

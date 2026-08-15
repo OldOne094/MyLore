@@ -374,7 +374,7 @@ numbers are independent of prior samples. Full results in `src-tauri/benches/dat
 
 - **Search is index-bound, not data-bound:** latency is ~110 µs at 10k and unchanged at 100k
   rows — FTS5 `rank` queries cost O(log n); there is no scan penalty at library scale.
-- **Bulk import (MISSION-066) should batch in one transaction:** raw one-tx inserts are ~2×
+- **Bulk import (MISSION-067) should batch in one transaction:** raw one-tx inserts are ~2×
   faster than a per-row repository loop (1.90 s vs 3.76 s for 10k), in addition to providing
   atomicity + a per-item savepoint report.
 - The repo path is the floor for single adds (~0.35 ms/row); a single `media::create` round-trip
