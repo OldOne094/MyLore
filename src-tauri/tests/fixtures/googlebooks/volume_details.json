@@ -1,0 +1,26 @@
+{
+  "kind": "books#volume",
+  "id": "l4YzAwAAQBAJ",
+  "etag": "abcdefg",
+  "selfLink": "https://www.googleapis.com/books/v1/volumes/l4YzAwAAQBAJ",
+  "volumeInfo": {
+    "title": "Dune",
+    "subtitle": "The First Dune Trilogy",
+    "authors": ["Frank Herbert"],
+    "publisher": "Ace",
+    "publishedDate": "1965",
+    "description": "Set on the desert planet Arrakis, Dune is the story of Paul Atreides.",
+    "pageCount": 704,
+    "categories": ["Fiction", "Science fiction"],
+    "language": "en",
+    "imageLinks": {
+      "smallThumbnail": "http://books.google.com/books/content?id=l4YzAwAAQBAJ&printsec=frontcover&img=1&zoom=5",
+      "thumbnail": "http://books.google.com/books/content?id=l4YzAwAAQBAJ&printsec=frontcover&img=1&zoom=1"
+    },
+    "industryIdentifiers": [
+      { "type": "ISBN_10", "identifier": "0441172717" },
+      { "type": "ISBN_13", "identifier": "9780441172719" }
+    ],
+    "canonicalVolumeLink": "https://books.google.com/books?id=l4YzAwAAQBAJ"
+  }
+}

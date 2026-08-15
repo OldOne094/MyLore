@@ -2,16 +2,24 @@
 //!
 //! Each adapter is a thin normalizer: provider HTTP → unified domain types
 //! (`domain::provider`) + typed `ProviderError`s, with all policy applied by
-//! `application::providers::coordinator`. AniList, TMDB, MangaDex and
-//! OpenLibrary land here first; the fallback providers (Jikan/Google Books)
-//! follow in MISSION-058.
+//! `application::providers::coordinator`. AniList, TMDB, MangaDex, OpenLibrary,
+//! Jikan (anime fallback) and Google Books (book fallback) land here. The
+//! coordinator fans out to *every* provider that serves a domain, so a primary
+//! that fails never fails the search — that's how fallbacks work (MISSION-058).
 
 pub mod anilist;
+pub mod googlebooks;
+pub mod jikan;
 pub mod mangadex;
 pub mod openlibrary;
 pub mod tmdb;
 
 pub use anilist::{anilist_config, AniListClient, AniListProvider, PROVIDER_ID};
+pub use googlebooks::{
+    googlebooks_config, GoogleBooksClient, GoogleBooksProvider,
+    PROVIDER_ID as GOOGLEBOOKS_PROVIDER_ID,
+};
+pub use jikan::{jikan_config, JikanClient, JikanProvider, PROVIDER_ID as JIKAN_PROVIDER_ID};
 pub use mangadex::{
     mangadex_config, MangaDexClient, MangaDexProvider, PROVIDER_ID as MANGADEX_PROVIDER_ID,
 };
@@ -46,6 +54,14 @@ pub fn default_provider_entries() -> Vec<(ProviderConfig, Arc<dyn Provider>)> {
         (
             openlibrary_config(),
             Arc::new(OpenLibraryProvider::new(OpenLibraryClient::new())) as Arc<dyn Provider>,
+        ),
+        (
+            jikan_config(),
+            Arc::new(JikanProvider::new(JikanClient::new())) as Arc<dyn Provider>,
+        ),
+        (
+            googlebooks_config(),
+            Arc::new(GoogleBooksProvider::new(GoogleBooksClient::new())) as Arc<dyn Provider>,
         ),
     ]
 }
@@ -87,5 +103,23 @@ pub(crate) mod test_support {
             env!("CARGO_MANIFEST_DIR")
         ))
         .expect("openlibrary fixture file exists")
+    }
+
+    /// Read a recorded fixture under `tests/fixtures/jikan/`.
+    pub(crate) fn jikan_fixture(name: &str) -> String {
+        std::fs::read_to_string(format!(
+            "{}/tests/fixtures/jikan/{name}",
+            env!("CARGO_MANIFEST_DIR")
+        ))
+        .expect("jikan fixture file exists")
+    }
+
+    /// Read a recorded fixture under `tests/fixtures/googlebooks/`.
+    pub(crate) fn googlebooks_fixture(name: &str) -> String {
+        std::fs::read_to_string(format!(
+            "{}/tests/fixtures/googlebooks/{name}",
+            env!("CARGO_MANIFEST_DIR")
+        ))
+        .expect("googlebooks fixture file exists")
     }
 }

@@ -1,0 +1,30 @@
+{
+  "pagination": {
+    "last_visible_page": 1,
+    "has_next_page": false,
+    "current_page": 1,
+    "items": { "count": 2, "total": 148, "per_page": 100 }
+  },
+  "data": [
+    {
+      "mal_id": 11101,
+      "url": "https://myanimelist.net/anime/11061/Hunter_x_Hunter_2011/episode/1",
+      "title": "Departure × And × Friends",
+      "title_japanese": "タビダチ×ト×ナカマタチ",
+      "title_romanji": "Tabidachi × to × Nakama-tachi",
+      "aired": "Oct 2, 2011",
+      "score": 8.2,
+      "forum_url": "https://myanimelist.net/forum/?topicid=337611"
+    },
+    {
+      "mal_id": 11102,
+      "url": "https://myanimelist.net/anime/11061/Hunter_x_Hunter_2011/episode/2",
+      "title": "Test × Test",
+      "title_japanese": "シケン×ト×シケン",
+      "title_romanji": "Shiken × to × Shiken",
+      "aired": "Oct 9, 2011",
+      "score": 8.0,
+      "forum_url": "https://myanimelist.net/forum/?topicid=337612"
+    }
+  ]
+}

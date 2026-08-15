@@ -1,0 +1,39 @@
+{
+  "data": {
+    "mal_id": 11061,
+    "url": "https://myanimelist.net/anime/11061/Hunter_x_Hunter_2011",
+    "images": {
+      "jpg": {
+        "image_url": "https://cdn.myanimelist.net/images/anime/11/33657.jpg",
+        "small_image_url": "https://cdn.myanimelist.net/images/anime/11/33657t.jpg",
+        "large_image_url": "https://cdn.myanimelist.net/images/anime/11/33657l.jpg"
+      }
+    },
+    "title": "Hunter x Hunter (2011)",
+    "title_english": "Hunter x Hunter",
+    "title_japanese": "ハンター×ハンター",
+    "title_synonyms": ["HxH"],
+    "type": "TV",
+    "source": "Manga",
+    "episodes": 148,
+    "status": "Finished Airing",
+    "airing": false,
+    "aired": {
+      "from": "2011-10-02T00:00:00+00:00",
+      "to": "2014-09-24T00:00:00+00:00"
+    },
+    "duration": "24 min per ep",
+    "rating": "PG-13 - Teens 13 or older",
+    "score": 9.1,
+    "scored_by": 2200000,
+    "synopsis": "Gon Freecss aims to become a Hunter and find his missing father, Ging.",
+    "season": "fall",
+    "year": 2011,
+    "studios": [{ "mal_id": 11, "type": "anime", "name": "Madhouse" }],
+    "genres": [
+      { "mal_id": 1, "type": "anime", "name": "Action" },
+      { "mal_id": 10, "type": "anime", "name": "Fantasy" }
+    ],
+    "themes": [{ "mal_id": 27, "type": "anime", "name": "Shounen" }]
+  }
+}
