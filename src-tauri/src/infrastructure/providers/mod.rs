@@ -2,13 +2,17 @@
 //!
 //! Each adapter is a thin normalizer: provider HTTP → unified domain types
 //! (`domain::provider`) + typed `ProviderError`s, with all policy applied by
-//! `application::providers::coordinator`. AniList and TMDB land here first;
-//! MangaDex and OpenLibrary follow (MISSION-056/057).
+//! `application::providers::coordinator`. AniList, TMDB and MangaDex land here
+//! first; OpenLibrary follows (MISSION-057).
 
 pub mod anilist;
+pub mod mangadex;
 pub mod tmdb;
 
 pub use anilist::{anilist_config, AniListClient, AniListProvider, PROVIDER_ID};
+pub use mangadex::{
+    mangadex_config, MangaDexClient, MangaDexProvider, PROVIDER_ID as MANGADEX_PROVIDER_ID,
+};
 pub use tmdb::{tmdb_config, TmdbClient, TmdbProvider, PROVIDER_ID as TMDB_PROVIDER_ID};
 
 use std::sync::Arc;
@@ -28,6 +32,10 @@ pub fn default_provider_entries() -> Vec<(ProviderConfig, Arc<dyn Provider>)> {
         (
             tmdb_config(),
             Arc::new(TmdbProvider::new(TmdbClient::new())) as Arc<dyn Provider>,
+        ),
+        (
+            mangadex_config(),
+            Arc::new(MangaDexProvider::new(MangaDexClient::new())) as Arc<dyn Provider>,
         ),
     ]
 }
@@ -51,5 +59,14 @@ pub(crate) mod test_support {
             env!("CARGO_MANIFEST_DIR")
         ))
         .expect("tmdb fixture file exists")
+    }
+
+    /// Read a recorded fixture under `tests/fixtures/mangadex/`.
+    pub(crate) fn mangadex_fixture(name: &str) -> String {
+        std::fs::read_to_string(format!(
+            "{}/tests/fixtures/mangadex/{name}",
+            env!("CARGO_MANIFEST_DIR")
+        ))
+        .expect("mangadex fixture file exists")
     }
 }

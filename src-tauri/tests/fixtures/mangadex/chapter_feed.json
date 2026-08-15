@@ -1,0 +1,52 @@
+{
+  "result": "ok",
+  "data": [
+    {
+      "id": "ch-0001",
+      "type": "chapter",
+      "attributes": {
+        "volume": "1",
+        "chapter": "1",
+        "title": "The Brand of the Sacrifice",
+        "publishAt": "2018-01-01T00:00:00+00:00",
+        "pages": 29
+      }
+    },
+    {
+      "id": "ch-0002",
+      "type": "chapter",
+      "attributes": {
+        "volume": "1",
+        "chapter": "2",
+        "title": "The Brand of the Sacrifice II",
+        "publishAt": "2018-01-02T00:00:00+00:00",
+        "pages": 25
+      }
+    },
+    {
+      "id": "ch-0003",
+      "type": "chapter",
+      "attributes": {
+        "volume": "2",
+        "chapter": "3",
+        "title": "The Sword Master",
+        "publishAt": "2018-02-01T00:00:00+00:00",
+        "pages": 31
+      }
+    },
+    {
+      "id": "ch-0004",
+      "type": "chapter",
+      "attributes": {
+        "volume": null,
+        "chapter": null,
+        "title": "Side Story: A Hunters Campfire",
+        "publishAt": "2018-03-01T00:00:00+00:00",
+        "pages": 18
+      }
+    }
+  ],
+  "limit": 500,
+  "offset": 0,
+  "total": 4
+}

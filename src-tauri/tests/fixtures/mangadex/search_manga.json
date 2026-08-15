@@ -1,0 +1,91 @@
+{
+  "result": "ok",
+  "data": [
+    {
+      "id": "11111111-1111-1111-1111-111111111111",
+      "type": "manga",
+      "attributes": {
+        "title": { "en": "Berserk", "ja": "ベルセルク" },
+        "altTitles": [{ "en": "Berserk (Miura, Kentarou)" }, { "ja": "ベルセルク" }],
+        "description": {
+          "en": "A dark fantasy following the mercenary Guts across a brutal medieval world."
+        },
+        "originalLanguage": "ja",
+        "year": 1989,
+        "status": "ongoing",
+        "format": "manga",
+        "tags": [
+          {
+            "id": "t1",
+            "type": "tag",
+            "attributes": { "name": { "en": "Action" }, "group": "genre" }
+          },
+          {
+            "id": "t2",
+            "type": "tag",
+            "attributes": { "name": { "en": "Dark Fantasy" }, "group": "genre" }
+          },
+          {
+            "id": "t3",
+            "type": "tag",
+            "attributes": { "name": { "en": "Survival" }, "group": "theme" }
+          }
+        ],
+        "contentRating": "safe"
+      },
+      "relationships": [
+        { "id": "a1", "type": "author", "attributes": { "name": "Kentarou Miura" } },
+        { "id": "a2", "type": "artist", "attributes": { "name": "Kentarou Miura" } },
+        { "id": "c1", "type": "cover_art", "attributes": { "fileName": "f1" } }
+      ]
+    },
+    {
+      "id": "22222222-2222-2222-2222-222222222222",
+      "type": "manga",
+      "attributes": {
+        "title": { "en": "Solo Leveling", "ko": "나 혼자만 레벨업" },
+        "altTitles": [{ "ja": "ソロ・レベルアップ" }],
+        "description": { "en": "The weakest hunter becomes the strongest." },
+        "originalLanguage": "ko",
+        "year": 2018,
+        "status": "ongoing",
+        "format": "manhwa",
+        "tags": [
+          {
+            "id": "t4",
+            "type": "tag",
+            "attributes": { "name": { "en": "Action" }, "group": "genre" }
+          }
+        ],
+        "contentRating": "safe"
+      },
+      "relationships": [
+        { "id": "a3", "type": "author", "attributes": { "name": "Chugong" } },
+        { "id": "c2", "type": "cover_art", "attributes": { "fileName": "f2" } }
+      ]
+    },
+    {
+      "id": "33333333-3333-3333-3333-333333333333",
+      "type": "manga",
+      "attributes": {
+        "title": { "en": "Overlord", "ja": "オーバーロード" },
+        "altTitles": [],
+        "description": {
+          "en": "A salaryman is trapped inside a game world as his undead character."
+        },
+        "originalLanguage": "ja",
+        "year": 2010,
+        "status": "completed",
+        "format": "novel",
+        "tags": [],
+        "contentRating": "suggestive"
+      },
+      "relationships": [
+        { "id": "a4", "type": "author", "attributes": { "name": "Kugane Maruyama" } }
+      ]
+    }
+  ],
+  "limit": 20,
+  "offset": 0,
+  "total": 3
+}
