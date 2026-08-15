@@ -3,14 +3,16 @@
 //! Each adapter is a thin normalizer: provider HTTP → unified domain types
 //! (`domain::provider`) + typed `ProviderError`s, with all policy applied by
 //! `application::providers::coordinator`. AniList, TMDB, MangaDex, OpenLibrary,
-//! Jikan (anime fallback) and Google Books (book fallback) land here. The
-//! coordinator fans out to *every* provider that serves a domain, so a primary
-//! that fails never fails the search — that's how fallbacks work (MISSION-058).
+//! NovelUpdates, Jikan (anime fallback) and Google Books (book fallback) land
+//! here. The coordinator fans out to *every* provider that serves a domain, so
+//! a primary that fails never fails the search — that's how fallbacks work
+//! (MISSION-058).
 
 pub mod anilist;
 pub mod googlebooks;
 pub mod jikan;
 pub mod mangadex;
+pub mod novelupdates;
 pub mod openlibrary;
 pub mod tmdb;
 
@@ -22,6 +24,10 @@ pub use googlebooks::{
 pub use jikan::{jikan_config, JikanClient, JikanProvider, PROVIDER_ID as JIKAN_PROVIDER_ID};
 pub use mangadex::{
     mangadex_config, MangaDexClient, MangaDexProvider, PROVIDER_ID as MANGADEX_PROVIDER_ID,
+};
+pub use novelupdates::{
+    novelupdates_config, NovelUpdatesClient, NovelUpdatesProvider,
+    PROVIDER_ID as NOVELUPDATES_PROVIDER_ID,
 };
 pub use openlibrary::{
     openlibrary_config, OpenLibraryClient, OpenLibraryProvider,
@@ -54,6 +60,11 @@ pub fn default_provider_entries() -> Vec<(ProviderConfig, Arc<dyn Provider>)> {
         (
             openlibrary_config(),
             Arc::new(OpenLibraryProvider::new(OpenLibraryClient::new())) as Arc<dyn Provider>,
+        ),
+        (
+            novelupdates_config(),
+            Arc::new(NovelUpdatesProvider::new(NovelUpdatesClient::new()))
+                as Arc<dyn Provider>,
         ),
         (
             jikan_config(),
@@ -121,5 +132,15 @@ pub(crate) mod test_support {
             env!("CARGO_MANIFEST_DIR")
         ))
         .expect("googlebooks fixture file exists")
+    }
+
+    /// Read a fixture under `tests/fixtures/novelupdates/` (hand-built from the
+    /// LNReader plugin's selectors — NU's Cloudflare layer blocks recording).
+    pub(crate) fn novelupdates_fixture(name: &str) -> String {
+        std::fs::read_to_string(format!(
+            "{}/tests/fixtures/novelupdates/{name}",
+            env!("CARGO_MANIFEST_DIR")
+        ))
+        .expect("novelupdates fixture file exists")
     }
 }
