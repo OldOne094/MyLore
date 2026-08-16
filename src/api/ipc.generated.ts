@@ -111,6 +111,18 @@ export interface AssetView {
   remote_url: string | null;
   mime_type: string | null;
 }
+export interface ProviderSettingsView {
+  provider: string;
+  name: string;
+  enabled: boolean;
+  requires_key: boolean;
+  has_key: boolean;
+}
+export interface ProviderTestView {
+  ok: boolean;
+  message: string;
+  results: number;
+}
 
 /** Placeholder greeting command (create-tauri-app scaffold). Resolves with the greeting or rejects with an AppError string. */
 export function greet(args: { name: string }): Promise<string> {
@@ -260,6 +272,32 @@ export function import_provider(args: {
 /** Refresh a media's provider-owned metadata from its provider and report what changed (per-field before → after). Never touches user data (tracking, review, collections, personal tags, asset ids). Resolves with the diff view or rejects with an AppError string. */
 export function media_enrich(args: { media_id: string }): Promise<EnrichView> {
   return invoke<EnrichView>("media_enrich", args);
+}
+
+/** Snapshot every registered provider for the settings UI. Resolves with the rows in registration order, or rejects with an AppError string. */
+export function providers_list(): Promise<ProviderSettingsView[]> {
+  return invoke<ProviderSettingsView[]>("providers_list");
+}
+
+/** Toggle one provider on/off. Persists the flag and takes effect immediately (routing rebuilds the coordinator). Resolves with the updated row or rejects with an AppError string. */
+export function provider_set_enabled(args: {
+  provider: string;
+  enabled: boolean;
+}): Promise<ProviderSettingsView> {
+  return invoke<ProviderSettingsView>("provider_set_enabled", args);
+}
+
+/** Store (or clear, when blank) a provider's API key in the OS keyring. The key is never persisted in settings files and never returned to the webview. Resolves with the updated row or rejects with an AppError string. */
+export function provider_set_key(args: {
+  provider: string;
+  api_key: string;
+}): Promise<ProviderSettingsView> {
+  return invoke<ProviderSettingsView>("provider_set_key", args);
+}
+
+/** Ping one provider with a probe search. Runs even when the provider is disabled so a key can be verified before enabling. Resolves with the test outcome (never rejects for a provider failure) or rejects with an AppError. */
+export function provider_test_connection(args: { provider: string }): Promise<ProviderTestView> {
+  return invoke<ProviderTestView>("provider_test_connection", args);
 }
 
 /** Resolve the dashboard widget lists (continue watching, recently completed, recently added). `limit` is optional and clamped per widget (1..=20). Resolves with the DashboardSummary or rejects with an AppError string. */

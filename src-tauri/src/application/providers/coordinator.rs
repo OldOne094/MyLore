@@ -261,6 +261,41 @@ impl ProviderCoordinator {
         .await
     }
 
+    /// One explicit search on a single provider (MISSION-063). Unlike the
+    /// `search_all` fan-out — and unlike `get_details`/`get_nodes` — this does
+    /// *not* gate on `enabled`: it is a diagnostic ping for the settings UI so
+    /// a provider can be tested before (or without) being enabled. It still
+    /// runs under the full policy (timeout, retry/backoff, rate limit) and
+    /// requires the `search` capability.
+    pub async fn search_provider(
+        &self,
+        provider_id: &str,
+        query: &str,
+        content_type: Option<ContentType>,
+        token: &CancellationToken,
+    ) -> Result<Vec<ProviderCandidate>, ProviderError> {
+        let entry = self
+            .entry(provider_id)
+            .ok_or_else(|| ProviderError::Unsupported {
+                provider: provider_id.to_string(),
+                operation: "search".to_string(),
+            })?;
+        if !entry.provider.capabilities().search {
+            return Err(ProviderError::Unsupported {
+                provider: provider_id.to_string(),
+                operation: "search".to_string(),
+            });
+        }
+        let provider = entry.provider.clone();
+        let query = query.to_string();
+        self.execute(provider_id, token, move || {
+            let provider = provider.clone();
+            let query = query.clone();
+            async move { provider.search(&query, content_type).await }
+        })
+        .await
+    }
+
     /// Search every enabled provider that can serve `content_type` (empty set =
     /// domain-agnostic) in parallel. Returns partial hits + per-provider
     /// failures; never aborts the whole search because one provider errored.
@@ -795,6 +830,43 @@ mod tests {
         let got = c.get_nodes("fake", "x1", &token).await.expect("nodes");
         assert_eq!(got.len(), 1);
         assert_eq!(got[0].id, "vol-1");
+    }
+
+    #[tokio::test(start_paused = true)]
+    async fn search_provider_runs_an_explicit_provider_search() {
+        let provider = FakeProvider::make(
+            "fake",
+            ProviderCapabilities {
+                search: true,
+                ..Default::default()
+            },
+            Behavior::Ok(hits(2)),
+        );
+        let mut config = base_config("fake");
+        config.enabled = false; // diagnostic call ignores the enabled flag
+        let c = coord(vec![(config, provider)]);
+        let token = c.token();
+        let found = c
+            .search_provider("fake", "ping", None, &token)
+            .await
+            .expect("search");
+        assert_eq!(found.len(), 2);
+    }
+
+    #[tokio::test(start_paused = true)]
+    async fn search_provider_requires_the_search_capability() {
+        let provider = FakeProvider::make(
+            "fake",
+            ProviderCapabilities::default(),
+            Behavior::Ok(hits(1)),
+        );
+        let c = coord(vec![(base_config("fake"), provider)]);
+        let token = c.token();
+        let err = c
+            .search_provider("fake", "ping", None, &token)
+            .await
+            .unwrap_err();
+        assert!(matches!(err, ProviderError::Unsupported { .. }));
     }
 
     #[tokio::test(start_paused = true)]

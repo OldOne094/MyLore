@@ -9,7 +9,7 @@ use tracing::info;
 use std::sync::Arc;
 
 use crate::application::enrich_service::{EnrichService, EnrichView};
-use crate::application::providers::coordinator::ProviderCoordinator;
+use crate::application::providers::settings::ProviderSettingsService;
 use crate::error::AppError;
 
 /// Refresh a media's provider-owned metadata from its provider and report what
@@ -18,10 +18,10 @@ use crate::error::AppError;
 #[command]
 pub async fn media_enrich(
     state: State<'_, SqlitePool>,
-    coordinator: State<'_, Arc<ProviderCoordinator>>,
+    settings: State<'_, Arc<ProviderSettingsService>>,
     media_id: String,
 ) -> Result<EnrichView, AppError> {
     info!(media_id, "media_enrich invoked");
-    let service = EnrichService::new(state.inner().clone(), coordinator.inner().clone());
+    let service = EnrichService::new(state.inner().clone(), settings.coordinator());
     service.enrich_from_provider(&media_id).await
 }

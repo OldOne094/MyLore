@@ -9,7 +9,7 @@ use tracing::info;
 use std::sync::Arc;
 
 use crate::application::import_service::{ImportService, ProviderImportView};
-use crate::application::providers::coordinator::ProviderCoordinator;
+use crate::application::providers::settings::ProviderSettingsService;
 use crate::error::AppError;
 
 /// Import one provider title into the library (search → details → identity
@@ -19,11 +19,11 @@ use crate::error::AppError;
 #[command]
 pub async fn import_provider(
     state: State<'_, SqlitePool>,
-    coordinator: State<'_, Arc<ProviderCoordinator>>,
+    settings: State<'_, Arc<ProviderSettingsService>>,
     provider: String,
     provider_id: String,
 ) -> Result<ProviderImportView, AppError> {
     info!(provider, provider_id, "import_provider invoked");
-    let service = ImportService::new(state.inner().clone(), coordinator.inner().clone());
+    let service = ImportService::new(state.inner().clone(), settings.coordinator());
     service.import_from_provider(&provider, &provider_id).await
 }

@@ -14,6 +14,7 @@ pub mod images;
 pub mod import;
 pub mod media;
 pub mod node;
+pub mod providers;
 pub mod tracking;
 pub mod trash;
 

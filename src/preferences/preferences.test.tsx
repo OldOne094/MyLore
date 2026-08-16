@@ -1,7 +1,8 @@
-import { describe, expect, it, afterEach, beforeEach } from "vitest";
+import { describe, expect, it, afterEach, beforeEach, vi } from "vitest";
 import { render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { createMemoryRouter, RouterProvider } from "react-router";
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { ThemeProvider } from "@/themes/ThemeProvider";
 import { ToastProvider } from "@/components/ui";
 import { PreferencesProvider } from "@/preferences/PreferencesProvider";
@@ -11,18 +12,27 @@ import { appRoutes } from "@/routes";
 import "@/i18n";
 import i18n from "@/i18n";
 
+vi.mock("@tauri-apps/api/core", () => ({
+  invoke: vi.fn(),
+}));
+
+import { invoke } from "@tauri-apps/api/core";
+
 const PREFERENCES_KEY = "mylore.preferences";
 
 function renderSettings() {
   const router = createMemoryRouter(appRoutes, { initialEntries: ["/settings"] });
+  const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   return render(
-    <ThemeProvider>
-      <PreferencesProvider>
-        <ToastProvider>
-          <RouterProvider router={router} />
-        </ToastProvider>
-      </PreferencesProvider>
-    </ThemeProvider>,
+    <QueryClientProvider client={client}>
+      <ThemeProvider>
+        <PreferencesProvider>
+          <ToastProvider>
+            <RouterProvider router={router} />
+          </ToastProvider>
+        </PreferencesProvider>
+      </ThemeProvider>
+    </QueryClientProvider>,
   );
 }
 
@@ -31,9 +41,11 @@ beforeEach(() => {
   document.documentElement.removeAttribute("data-theme");
   document.documentElement.removeAttribute("dir");
   document.documentElement.removeAttribute("lang");
+  vi.mocked(invoke).mockResolvedValue([]);
 });
 
 afterEach(async () => {
+  vi.mocked(invoke).mockReset();
   await i18n.changeLanguage("en");
 });
 

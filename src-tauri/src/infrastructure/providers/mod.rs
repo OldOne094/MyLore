@@ -38,42 +38,87 @@ pub use tmdb::{tmdb_config, TmdbClient, TmdbProvider, PROVIDER_ID as TMDB_PROVID
 use std::sync::Arc;
 
 use crate::application::providers::config::ProviderConfig;
+use crate::application::providers::settings::{EntryBuilder, ProviderEntry};
 use crate::domain::provider::Provider;
+
+/// Construct one provider adapter by id, injecting its API key when the adapter
+/// reads one from its client (TMDB, Google Books). Unknown ids are rejected.
+/// The settings service (MISSION-063) rebuilds the coordinator through this so
+/// a key change takes effect without a restart — keys are never logged.
+pub fn build_adapter(id: &str, api_key: Option<&str>) -> Result<Arc<dyn Provider>, String> {
+    match id {
+        anilist::PROVIDER_ID => Ok(Arc::new(AniListProvider::new(AniListClient::new()))),
+        tmdb::PROVIDER_ID => {
+            let mut client = TmdbClient::new();
+            if let Some(key) = api_key {
+                client = client.with_api_key(key);
+            }
+            Ok(Arc::new(TmdbProvider::new(client)))
+        }
+        mangadex::PROVIDER_ID => Ok(Arc::new(MangaDexProvider::new(MangaDexClient::new()))),
+        openlibrary::PROVIDER_ID => Ok(Arc::new(OpenLibraryProvider::new(OpenLibraryClient::new()))),
+        novelupdates::PROVIDER_ID => Ok(Arc::new(NovelUpdatesProvider::new(
+            NovelUpdatesClient::new(),
+        ))),
+        jikan::PROVIDER_ID => Ok(Arc::new(JikanProvider::new(JikanClient::new()))),
+        googlebooks::PROVIDER_ID => {
+            let mut client = GoogleBooksClient::new();
+            if let Some(key) = api_key {
+                client = client.with_api_key(key);
+            }
+            Ok(Arc::new(GoogleBooksProvider::new(client)))
+        }
+        other => Err(format!("unknown provider adapter {other:?}")),
+    }
+}
+
+/// The production `EntryBuilder`: rebuilds every `(config, adapter)` pair from
+/// configs via `build_adapter`. Injectable so settings tests can substitute
+/// fake adapters without touching the network.
+pub struct StdEntryBuilder;
+
+impl EntryBuilder for StdEntryBuilder {
+    fn build(&self, configs: &[ProviderConfig]) -> Result<Vec<ProviderEntry>, String> {
+        configs
+            .iter()
+            .map(|config| Ok((config.clone(), build_adapter(&config.id, config.api_key.as_deref())?)))
+            .collect()
+    }
+}
 
 /// The provider set registered at app startup. Grows as adapters land. TMDB's
 /// API key is injected by the settings UI (MISSION-063) via the OS keyring —
 /// the keyless client here only works against mocks until then.
-pub fn default_provider_entries() -> Vec<(ProviderConfig, Arc<dyn Provider>)> {
+pub fn default_provider_entries() -> Vec<ProviderEntry> {
+    [
+        anilist_config(),
+        tmdb_config(),
+        mangadex_config(),
+        openlibrary_config(),
+        novelupdates_config(),
+        jikan_config(),
+        googlebooks_config(),
+    ]
+    .into_iter()
+    .map(|config| {
+        let adapter = build_adapter(&config.id, config.api_key.as_deref()).expect("known adapter");
+        (config, adapter)
+    })
+    .collect()
+}
+
+/// The default per-provider configs, in registration order (MISSION-063). The
+/// settings service reads persisted enabled flags and keyring keys on top of
+/// these, then rebuilds the coordinator.
+pub fn default_provider_configs() -> Vec<ProviderConfig> {
     vec![
-        (
-            anilist_config(),
-            Arc::new(AniListProvider::new(AniListClient::new())) as Arc<dyn Provider>,
-        ),
-        (
-            tmdb_config(),
-            Arc::new(TmdbProvider::new(TmdbClient::new())) as Arc<dyn Provider>,
-        ),
-        (
-            mangadex_config(),
-            Arc::new(MangaDexProvider::new(MangaDexClient::new())) as Arc<dyn Provider>,
-        ),
-        (
-            openlibrary_config(),
-            Arc::new(OpenLibraryProvider::new(OpenLibraryClient::new())) as Arc<dyn Provider>,
-        ),
-        (
-            novelupdates_config(),
-            Arc::new(NovelUpdatesProvider::new(NovelUpdatesClient::new()))
-                as Arc<dyn Provider>,
-        ),
-        (
-            jikan_config(),
-            Arc::new(JikanProvider::new(JikanClient::new())) as Arc<dyn Provider>,
-        ),
-        (
-            googlebooks_config(),
-            Arc::new(GoogleBooksProvider::new(GoogleBooksClient::new())) as Arc<dyn Provider>,
-        ),
+        anilist_config(),
+        tmdb_config(),
+        mangadex_config(),
+        openlibrary_config(),
+        novelupdates_config(),
+        jikan_config(),
+        googlebooks_config(),
     ]
 }
 

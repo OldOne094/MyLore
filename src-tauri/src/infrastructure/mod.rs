@@ -1,12 +1,13 @@
 //! Infrastructure layer: persistence, providers, fs, keyring, logging.
 //!
-//! `migrations`, `repositories`, `providers`, `image_cache`, `backup`,
-//! `keyring` land with later M2/M7 missions.
+//! `migrations`, `repositories`, `providers`, `image_cache`, `backup` land
+//! with later M2/M7 missions.
 
 pub mod content_node;
 pub mod db;
 pub mod fts;
 pub mod images;
+pub mod keyring;
 pub mod logging;
 pub mod providers;
 pub mod repositories;

@@ -9,7 +9,7 @@ use tracing::info;
 use std::str::FromStr;
 use std::sync::Arc;
 
-use crate::application::providers::coordinator::ProviderCoordinator;
+use crate::application::providers::settings::ProviderSettingsService;
 use crate::application::search_service::{ExternalSearchView, SearchService};
 use crate::domain::enums::ContentType;
 use crate::error::AppError;
@@ -22,7 +22,7 @@ use crate::error::AppError;
 #[command]
 pub async fn search_external(
     state: State<'_, SqlitePool>,
-    coordinator: State<'_, Arc<ProviderCoordinator>>,
+    settings: State<'_, Arc<ProviderSettingsService>>,
     query: String,
     content_type: Option<String>,
 ) -> Result<ExternalSearchView, AppError> {
@@ -31,6 +31,9 @@ pub async fn search_external(
         .as_deref()
         .map(ContentType::from_str)
         .transpose()?;
-    let service = SearchService::new(state.inner().clone(), coordinator.inner().clone());
+    let service = SearchService::new(
+        state.inner().clone(),
+        settings.coordinator(),
+    );
     service.search_external(&query, content_type).await
 }

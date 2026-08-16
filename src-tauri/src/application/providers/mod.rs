@@ -9,9 +9,13 @@
 pub mod config;
 pub mod coordinator;
 pub mod rate_limiter;
+pub mod settings;
 
 pub use config::{interval_for, ProviderConfig, RateLimitConfig};
 pub use coordinator::{
     CancellationToken, ProviderCoordinator, ProviderInfo, SearchFailure, SearchHit, SearchOutcome,
 };
 pub use rate_limiter::RateLimiter;
+pub use settings::{
+    EntryBuilder, ProviderSettingsService, ProviderSettingsView, ProviderTestView,
+};

@@ -71,6 +71,8 @@ export const queryKeys = {
   settings: {
     all: () => ["settings"] as const,
     preferences: () => ["settings", "preferences"] as const,
+    /** Provider settings rows (MISSION-063). */
+    providers: () => ["settings", "providers"] as const,
   },
   task: {
     all: () => ["task"] as const,

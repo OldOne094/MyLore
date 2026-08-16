@@ -61,6 +61,14 @@
     {
       "name": "AssetView",
       "shape": "id: string; kind: string; status: string; local_path: string | null; remote_url: string | null; mime_type: string | null"
+    },
+    {
+      "name": "ProviderSettingsView",
+      "shape": "provider: string; name: string; enabled: boolean; requires_key: boolean; has_key: boolean"
+    },
+    {
+      "name": "ProviderTestView",
+      "shape": "ok: boolean; message: string; results: number"
     }
   ],
   "commands": [
@@ -152,6 +160,38 @@
       },
       "returns": "EnrichView",
       "doc": "Refresh a media's provider-owned metadata from its provider and report what changed (per-field before → after). Never touches user data (tracking, review, collections, personal tags, asset ids). Resolves with the diff view or rejects with an AppError string."
+    },
+    {
+      "name": "providers_list",
+      "args": {},
+      "returns": "ProviderSettingsView[]",
+      "doc": "Snapshot every registered provider for the settings UI. Resolves with the rows in registration order, or rejects with an AppError string."
+    },
+    {
+      "name": "provider_set_enabled",
+      "args": {
+        "provider": "string",
+        "enabled": "boolean"
+      },
+      "returns": "ProviderSettingsView",
+      "doc": "Toggle one provider on/off. Persists the flag and takes effect immediately (routing rebuilds the coordinator). Resolves with the updated row or rejects with an AppError string."
+    },
+    {
+      "name": "provider_set_key",
+      "args": {
+        "provider": "string",
+        "api_key": "string"
+      },
+      "returns": "ProviderSettingsView",
+      "doc": "Store (or clear, when blank) a provider's API key in the OS keyring. The key is never persisted in settings files and never returned to the webview. Resolves with the updated row or rejects with an AppError string."
+    },
+    {
+      "name": "provider_test_connection",
+      "args": {
+        "provider": "string"
+      },
+      "returns": "ProviderTestView",
+      "doc": "Ping one provider with a probe search. Runs even when the provider is disabled so a key can be verified before enabling. Resolves with the test outcome (never rejects for a provider failure) or rejects with an AppError."
     },
     {
       "name": "dashboard_summary",

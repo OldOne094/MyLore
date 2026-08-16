@@ -3,6 +3,7 @@ import { THEME_CHOICES } from "@/themes/preferences";
 import { LANGUAGE_SHORT_LABELS, SUPPORTED_LANGUAGES } from "@/i18n";
 import { usePreferences } from "@/preferences/usePreferences";
 import { cn } from "@/lib/cn";
+import { ProvidersSection } from "./ProvidersSection";
 
 /* Settings page (MISSION-034) — persistent theme + language preferences. These
    mirror the TopBar switchers but manage the full Preferences store. */
@@ -73,6 +74,10 @@ export function SettingsPage() {
             </button>
           ))}
         </div>
+      </Section>
+
+      <Section title={t("settings.providers")} hint={t("settings.providersHint")}>
+        <ProvidersSection />
       </Section>
     </div>
   );

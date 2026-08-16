@@ -14,7 +14,9 @@ use std::sync::Arc;
 use tauri::Manager;
 
 use crate::application::image_service::ImageService;
-use crate::application::providers::coordinator::ProviderCoordinator;
+use crate::application::providers::settings::ProviderSettingsService;
+use crate::infrastructure::keyring::OsKeyring;
+use crate::infrastructure::providers::StdEntryBuilder;
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
@@ -30,11 +32,18 @@ pub fn run() {
             tracing::info!(db = %db_path.display(), "database opened");
             app.manage(pool.clone());
 
-            let coordinator = Arc::new(
-                ProviderCoordinator::new(infrastructure::providers::default_provider_entries())
-                    .map_err(std::io::Error::other)?,
+            // Provider set: default configs, layered with persisted enabled
+            // flags + keyring keys. Rebuilt on settings changes (MISSION-063).
+            let settings = Arc::new(
+                ProviderSettingsService::load(
+                    infrastructure::providers::default_provider_configs(),
+                    data_dir.join("providers.json"),
+                    Box::new(OsKeyring),
+                    Arc::new(StdEntryBuilder),
+                )
+                .map_err(std::io::Error::other)?,
             );
-            app.manage(coordinator);
+            app.manage(settings);
 
             let images_dir = data_dir.join("images");
             app.manage(Arc::new(ImageService::new(pool, &images_dir)));
@@ -51,6 +60,10 @@ pub fn run() {
             commands::discover::search_external,
             commands::import::import_provider,
             commands::enrich::media_enrich,
+            commands::providers::providers_list,
+            commands::providers::provider_set_enabled,
+            commands::providers::provider_set_key,
+            commands::providers::provider_test_connection,
             commands::images::asset_resolve,
             commands::images::assets_resolve,
             commands::dashboard::dashboard_summary,
