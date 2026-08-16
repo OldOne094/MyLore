@@ -145,14 +145,24 @@
 
 ## 12. Hardcover — books (indie, GraphQL)
 
-- **Docs:** https://developers.hardcover.app (GraphQL) · **Auth:** public reads open (verify
-  current auth at build time); user data via OAuth.
+- **Docs:** https://docs.hardcover.app (GraphQL) · **Auth:** personal API token
+  from `hardcover.app/account/api`, sent as `Authorization: Bearer <token>`
+  (verified 2026-08-16 — public reads now require it); user data via the same
+  token.
 - **Free/Paid:** free tier; Pro subscription. **Rate limits:** not published (flagged).
 - **Metadata:** books, authors, series, editions, covers, genres/moods, ratings, reading
   progress/status; strong indie polish; positioned as a Goodreads API alternative.
 - **Reliability:** young indie team — schema churn risk; verify before depending on it.
 - **Our use:** optional third book provider (alongside OpenLibrary/Google Books) for
-  novels/light novels and richer mood/pace-style metadata.
+  novels/light novels and richer mood/pace-style metadata (MISSION-064).
+- **Adapter notes (MISSION-064):** Hasura endpoint `api.hardcover.app/v1/graphql`;
+  `search(query, query_type: "Book")` returns **Typesense JSON blobs** (`results` —
+  no cover URL, no category), so candidates normalize as `Book` and details re-derive
+  the type via `book_category_id` (1 Book · 2 Novella · 9 Web Novel · 10 Light Novel);
+  details via `books(where: {id: {_eq}})` — `image { url }` cover, `contributions`
+  authors, `cached_tags["Genre"]` genres, ISBNs on `editions` (`isbn_10`/`isbn_13`
+  keep underscore names); no chapter tree (editions, not chapters) → `nodes` off;
+  self-throttled ~1 rps.
 
 ## 13. Bangumi — CN ACGN (anime/manga/light novels/web novels/games)
 

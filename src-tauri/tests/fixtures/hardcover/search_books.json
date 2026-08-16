@@ -1,0 +1,40 @@
+{
+  "data": {
+    "search": {
+      "ids": ["3342", "9876", "123456"],
+      "results": [
+        {
+          "id": "3342",
+          "title": "Dune",
+          "subtitle": "",
+          "slug": "dune",
+          "author_names": ["Frank Herbert"],
+          "alternative_titles": [],
+          "description": "Set on the desert planet Arrakis, Dune is the story of Paul Atreides, a brilliant and gifted young man born into a great destiny beyond his understanding on the most dangerous planet in the universe.",
+          "genres": ["Science Fiction", "Fantasy"],
+          "isbns": ["9780441172719"],
+          "pages": 704,
+          "release_year": 1965,
+          "rating": 4.6,
+          "users_count": 1200,
+          "users_read_count": 950
+        },
+        {
+          "id": "9876",
+          "title": "Dune Messiah",
+          "slug": "dune-messiah",
+          "author_names": ["Frank Herbert"],
+          "description": "Dune Messiah continues the story of Paul Atreides.",
+          "isbns": [],
+          "release_year": 1969
+        },
+        {
+          "id": "123456",
+          "title": "",
+          "slug": "empty-title"
+        }
+      ]
+    }
+  },
+  "errors": null
+}

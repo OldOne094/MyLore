@@ -3,13 +3,14 @@
 //! Each adapter is a thin normalizer: provider HTTP → unified domain types
 //! (`domain::provider`) + typed `ProviderError`s, with all policy applied by
 //! `application::providers::coordinator`. AniList, TMDB, MangaDex, OpenLibrary,
-//! NovelUpdates, Jikan (anime fallback) and Google Books (book fallback) land
-//! here. The coordinator fans out to *every* provider that serves a domain, so
-//! a primary that fails never fails the search — that's how fallbacks work
-//! (MISSION-058).
+//! NovelUpdates, Jikan (anime fallback), Google Books (book fallback) and
+//! Hardcover (optional third book provider) land here. The coordinator fans out
+//! to *every* provider that serves a domain, so a primary that fails never
+//! fails the search — that's how fallbacks work (MISSION-058).
 
 pub mod anilist;
 pub mod googlebooks;
+pub mod hardcover;
 pub mod jikan;
 pub mod mangadex;
 pub mod novelupdates;
@@ -20,6 +21,9 @@ pub use anilist::{anilist_config, AniListClient, AniListProvider, PROVIDER_ID};
 pub use googlebooks::{
     googlebooks_config, GoogleBooksClient, GoogleBooksProvider,
     PROVIDER_ID as GOOGLEBOOKS_PROVIDER_ID,
+};
+pub use hardcover::{
+    hardcover_config, HardcoverClient, HardcoverProvider, PROVIDER_ID as HARDCOVER_PROVIDER_ID,
 };
 pub use jikan::{jikan_config, JikanClient, JikanProvider, PROVIDER_ID as JIKAN_PROVIDER_ID};
 pub use mangadex::{
@@ -56,7 +60,9 @@ pub fn build_adapter(id: &str, api_key: Option<&str>) -> Result<Arc<dyn Provider
             Ok(Arc::new(TmdbProvider::new(client)))
         }
         mangadex::PROVIDER_ID => Ok(Arc::new(MangaDexProvider::new(MangaDexClient::new()))),
-        openlibrary::PROVIDER_ID => Ok(Arc::new(OpenLibraryProvider::new(OpenLibraryClient::new()))),
+        openlibrary::PROVIDER_ID => {
+            Ok(Arc::new(OpenLibraryProvider::new(OpenLibraryClient::new())))
+        }
         novelupdates::PROVIDER_ID => Ok(Arc::new(NovelUpdatesProvider::new(
             NovelUpdatesClient::new(),
         ))),
@@ -67,6 +73,13 @@ pub fn build_adapter(id: &str, api_key: Option<&str>) -> Result<Arc<dyn Provider
                 client = client.with_api_key(key);
             }
             Ok(Arc::new(GoogleBooksProvider::new(client)))
+        }
+        hardcover::PROVIDER_ID => {
+            let mut client = HardcoverClient::new();
+            if let Some(key) = api_key {
+                client = client.with_api_key(key);
+            }
+            Ok(Arc::new(HardcoverProvider::new(client)))
         }
         other => Err(format!("unknown provider adapter {other:?}")),
     }
@@ -81,7 +94,12 @@ impl EntryBuilder for StdEntryBuilder {
     fn build(&self, configs: &[ProviderConfig]) -> Result<Vec<ProviderEntry>, String> {
         configs
             .iter()
-            .map(|config| Ok((config.clone(), build_adapter(&config.id, config.api_key.as_deref())?)))
+            .map(|config| {
+                Ok((
+                    config.clone(),
+                    build_adapter(&config.id, config.api_key.as_deref())?,
+                ))
+            })
             .collect()
     }
 }
@@ -98,6 +116,7 @@ pub fn default_provider_entries() -> Vec<ProviderEntry> {
         novelupdates_config(),
         jikan_config(),
         googlebooks_config(),
+        hardcover_config(),
     ]
     .into_iter()
     .map(|config| {
@@ -119,6 +138,7 @@ pub fn default_provider_configs() -> Vec<ProviderConfig> {
         novelupdates_config(),
         jikan_config(),
         googlebooks_config(),
+        hardcover_config(),
     ]
 }
 
@@ -177,6 +197,16 @@ pub(crate) mod test_support {
             env!("CARGO_MANIFEST_DIR")
         ))
         .expect("googlebooks fixture file exists")
+    }
+
+    /// Read a fixture under `tests/fixtures/hardcover/` (hand-built from the
+    /// published GraphQL schema + Typesense search docs).
+    pub(crate) fn hardcover_fixture(name: &str) -> String {
+        std::fs::read_to_string(format!(
+            "{}/tests/fixtures/hardcover/{name}",
+            env!("CARGO_MANIFEST_DIR")
+        ))
+        .expect("hardcover fixture file exists")
     }
 
     /// Read a fixture under `tests/fixtures/novelupdates/` (hand-built from the
