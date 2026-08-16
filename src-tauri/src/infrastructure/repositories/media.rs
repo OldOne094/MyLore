@@ -226,7 +226,27 @@ pub async fn get(pool: &SqlitePool, id: &str) -> Result<Option<MediaRecord>, App
 /// Insert a full aggregate (media row + links) in one transaction.
 pub async fn create(pool: &SqlitePool, media: &MediaRecord) -> Result<(), AppError> {
     let mut tx = pool.begin().await?;
+    insert_in_tx(&mut tx, media).await?;
+    tx.commit().await?;
+    Ok(())
+}
 
+/// Insert a media aggregate inside a caller-managed transaction (MISSION-067).
+/// The import pipeline writes many rows in one transaction, with a savepoint
+/// per row so a single failing row rolls back only itself.
+pub async fn insert_in_tx<'e>(
+    tx: &mut sqlx::Transaction<'e, sqlx::Sqlite>,
+    media: &MediaRecord,
+) -> Result<(), AppError> {
+    insert_media_row(tx, media).await?;
+    insert_links(tx, media).await?;
+    Ok(())
+}
+
+async fn insert_media_row<'e>(
+    tx: &mut sqlx::Transaction<'e, sqlx::Sqlite>,
+    media: &MediaRecord,
+) -> Result<(), AppError> {
     sqlx::query(&format!(
         "INSERT INTO media ({MEDIA_COLUMNS}) VALUES \
          (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"
@@ -255,12 +275,8 @@ pub async fn create(pool: &SqlitePool, media: &MediaRecord) -> Result<(), AppErr
     .bind(&media.metadata_refreshed_at)
     .bind(&media.created_at)
     .bind(&media.updated_at)
-    .execute(&mut *tx)
+    .execute(&mut **tx)
     .await?;
-
-    insert_links(&mut tx, media).await?;
-
-    tx.commit().await?;
     Ok(())
 }
 
@@ -416,11 +432,23 @@ pub async fn identity_candidates(pool: &SqlitePool) -> Result<Vec<IdentityCandid
 
 /// Find-or-create a person by (name, role); resolves with its id (MISSION-060).
 pub async fn ensure_person(pool: &SqlitePool, name: &str, role: &str) -> Result<String, AppError> {
+    let mut tx = pool.begin().await?;
+    let id = ensure_person_in_tx(&mut tx, name, role).await?;
+    tx.commit().await?;
+    Ok(id)
+}
+
+/// Transaction variant of [`ensure_person`] (MISSION-067).
+pub async fn ensure_person_in_tx<'e>(
+    tx: &mut sqlx::Transaction<'e, sqlx::Sqlite>,
+    name: &str,
+    role: &str,
+) -> Result<String, AppError> {
     let existing: Option<(String,)> =
         sqlx::query_as("SELECT id FROM person WHERE name = ? COLLATE NOCASE AND role = ?")
             .bind(name)
             .bind(role)
-            .fetch_optional(pool)
+            .fetch_optional(&mut **tx)
             .await?;
     if let Some((id,)) = existing {
         return Ok(id);
@@ -430,7 +458,7 @@ pub async fn ensure_person(pool: &SqlitePool, name: &str, role: &str) -> Result<
         .bind(&id)
         .bind(name)
         .bind(role)
-        .execute(pool)
+        .execute(&mut **tx)
         .await?;
     Ok(id)
 }
@@ -439,10 +467,21 @@ pub async fn ensure_person(pool: &SqlitePool, name: &str, role: &str) -> Result<
 /// genres carry slug ids (`action`), so the lookup is by name and existing rows
 /// are reused rather than duplicated.
 pub async fn ensure_genre(pool: &SqlitePool, name: &str) -> Result<String, AppError> {
+    let mut tx = pool.begin().await?;
+    let id = ensure_genre_in_tx(&mut tx, name).await?;
+    tx.commit().await?;
+    Ok(id)
+}
+
+/// Transaction variant of [`ensure_genre`] (MISSION-067).
+pub async fn ensure_genre_in_tx<'e>(
+    tx: &mut sqlx::Transaction<'e, sqlx::Sqlite>,
+    name: &str,
+) -> Result<String, AppError> {
     let existing: Option<(String,)> =
         sqlx::query_as("SELECT id FROM genre WHERE name = ? COLLATE NOCASE")
             .bind(name)
-            .fetch_optional(pool)
+            .fetch_optional(&mut **tx)
             .await?;
     if let Some((id,)) = existing {
         return Ok(id);
@@ -451,7 +490,7 @@ pub async fn ensure_genre(pool: &SqlitePool, name: &str) -> Result<String, AppEr
     sqlx::query("INSERT INTO genre (id, name) VALUES (?, ?)")
         .bind(&id)
         .bind(name)
-        .execute(pool)
+        .execute(&mut **tx)
         .await?;
     Ok(id)
 }
@@ -460,10 +499,21 @@ pub async fn ensure_genre(pool: &SqlitePool, name: &str) -> Result<String, AppEr
 /// Domain tags are the curated community/detail conventions (scope `domain`);
 /// personal tags (scope `personal`) are user-owned and never created here.
 pub async fn ensure_domain_tag(pool: &SqlitePool, name: &str) -> Result<String, AppError> {
+    let mut tx = pool.begin().await?;
+    let id = ensure_domain_tag_in_tx(&mut tx, name).await?;
+    tx.commit().await?;
+    Ok(id)
+}
+
+/// Transaction variant of [`ensure_domain_tag`] (MISSION-067).
+pub async fn ensure_domain_tag_in_tx<'e>(
+    tx: &mut sqlx::Transaction<'e, sqlx::Sqlite>,
+    name: &str,
+) -> Result<String, AppError> {
     let existing: Option<(String,)> =
         sqlx::query_as("SELECT id FROM tag WHERE name = ? COLLATE NOCASE AND scope = 'domain'")
             .bind(name)
-            .fetch_optional(pool)
+            .fetch_optional(&mut **tx)
             .await?;
     if let Some((id,)) = existing {
         return Ok(id);
@@ -472,7 +522,7 @@ pub async fn ensure_domain_tag(pool: &SqlitePool, name: &str) -> Result<String, 
     sqlx::query("INSERT INTO tag (id, name, scope) VALUES (?, ?, 'domain')")
         .bind(&id)
         .bind(name)
-        .execute(pool)
+        .execute(&mut **tx)
         .await?;
     Ok(id)
 }
@@ -1422,6 +1472,49 @@ mod tests {
         assert_eq!(got.metadata_refreshed_at.as_deref(), Some("2026-02-01"));
         assert_eq!(got.updated_at, "2026-01-01", "updated_at untouched");
         assert_eq!(got.ch_count, Some(120), "provider fields untouched");
+
+        pool.close().await;
+        cleanup_files(&path);
+    }
+
+    #[tokio::test]
+    async fn ensure_helpers_and_insert_work_inside_a_transaction() {
+        let (pool, path) = migrated_pool("media_repo_ensure_tx.db").await;
+        let mut tx = pool.begin().await.expect("begin");
+
+        let p1 = ensure_person_in_tx(&mut tx, "Test Author", "author")
+            .await
+            .expect("person");
+        let p2 = ensure_person_in_tx(&mut tx, "Test Author", "author")
+            .await
+            .expect("person again");
+        assert_eq!(p1, p2, "same (name, role) resolves to one row");
+
+        let g1 = ensure_genre_in_tx(&mut tx, "Fantasy").await.expect("genre");
+        let g2 = ensure_genre_in_tx(&mut tx, "fantasy")
+            .await
+            .expect("genre again");
+        assert_eq!(g1, g2, "NOCASE lookup reuses the seed genre");
+
+        let t1 = ensure_domain_tag_in_tx(&mut tx, "isekai")
+            .await
+            .expect("tag");
+        let t2 = ensure_domain_tag_in_tx(&mut tx, "Isekai")
+            .await
+            .expect("tag again");
+        assert_eq!(t1, t2);
+
+        let mut media = sample_media("m-1", "Sword of the Dawn");
+        media.people.push(p1.clone());
+        media.genres.push(g1.clone());
+        media.tags.push(t1.clone());
+        insert_in_tx(&mut tx, &media).await.expect("insert");
+        tx.commit().await.expect("commit");
+
+        let got = get(&pool, "m-1").await.expect("get").expect("stored");
+        assert_eq!(got.people, vec![p1]);
+        assert_eq!(got.genres, vec![g1]);
+        assert_eq!(got.tags, vec![t1]);
 
         pool.close().await;
         cleanup_files(&path);

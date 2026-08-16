@@ -23,6 +23,17 @@ pub struct AssetRecord {
 
 /// Insert an asset.
 pub async fn insert(pool: &SqlitePool, a: &AssetRecord) -> Result<(), AppError> {
+    let mut tx = pool.begin().await?;
+    insert_in_tx(&mut tx, a).await?;
+    tx.commit().await?;
+    Ok(())
+}
+
+/// Insert an asset inside a caller-managed transaction (MISSION-067).
+pub async fn insert_in_tx<'e>(
+    tx: &mut sqlx::Transaction<'e, sqlx::Sqlite>,
+    a: &AssetRecord,
+) -> Result<(), AppError> {
     sqlx::query(
         "INSERT INTO asset
            (id, kind, remote_url, local_path, status, mime_type, width, height, etag,
@@ -40,7 +51,7 @@ pub async fn insert(pool: &SqlitePool, a: &AssetRecord) -> Result<(), AppError> 
     .bind(&a.etag)
     .bind(&a.last_fetched_at)
     .bind(&a.created_at)
-    .execute(pool)
+    .execute(&mut **tx)
     .await?;
     Ok(())
 }
@@ -115,7 +126,13 @@ pub async fn list_by_ids(pool: &SqlitePool, ids: &[String]) -> Result<Vec<AssetR
         separated.push_bind(id);
     }
     separated.push_unseparated(")");
-    Ok(qb.build().fetch_all(pool).await?.into_iter().map(row_to_asset).collect())
+    Ok(qb
+        .build()
+        .fetch_all(pool)
+        .await?
+        .into_iter()
+        .map(row_to_asset)
+        .collect())
 }
 
 /// Delete an asset; media cover/banner columns SET NULL via FK.
@@ -216,9 +233,12 @@ mod tests {
         assert_eq!(got.mime_type.as_deref(), Some("image/jpeg"));
         assert_eq!(got.etag.as_deref(), Some("\"etag-1\""));
 
-        let all = list_by_ids(&pool, &["a-2".to_string(), "a-1".to_string(), "a-1".to_string()])
-            .await
-            .expect("list by ids");
+        let all = list_by_ids(
+            &pool,
+            &["a-2".to_string(), "a-1".to_string(), "a-1".to_string()],
+        )
+        .await
+        .expect("list by ids");
         assert_eq!(all.len(), 2, "deduped");
 
         assert!(list_by_ids(&pool, &[]).await.expect("empty").is_empty());

@@ -13,6 +13,7 @@
 //!   - `status`       — status engine: transitions, custom statuses, auto-rules
 //!   - `normalize`    — title fold (case/unicode/diacritics, script-aware)
 //!   - `identity`     — exact + fuzzy identity matching, candidate ranking
+//!   - `import`       — import pipeline core: validate/normalize/dedup/preview
 //!   - `stats`        — dashboard statistics (counts, hours, completion, rating)
 //!   - `merge`        — merge plans: conflict report, re-parenting, before-image
 //!   - `value_objects`/`enums` — immutable values and `CHECK`-aligned enums
@@ -21,6 +22,7 @@ pub mod content_node;
 pub mod enums;
 pub mod error;
 pub mod identity;
+pub mod import;
 pub mod media;
 pub mod merge;
 pub mod normalize;
