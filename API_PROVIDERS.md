@@ -172,6 +172,26 @@
 - **Metadata:** anime/manga/games/books incl. **light novels & web novels**, Chinese-community
   tags and relations, covers; AniList already links Bangumi ids (cross-ids).
 - **Our use:** optional light-novel/web-novel/Chinese metadata source + cross-id resolution.
+- **Adapter notes (MISSION-066):** anonymous reads need no auth → registered as
+  `AuthKind::None` (no key row in the settings UI). Provider ids are numeric
+  subject ids (`bgm.tv/subject/{id}`). Search is a JSON **POST** to
+  `/v0/search/subjects` with the body `{keyword, sort: "match", filter:
+  {type: [1,2], nsfw: false}}` (the experimental API ignores unknown fields) and
+  `limit`/`offset` as query params; rows are the slim shape (`short_summary`,
+  `platform`), so book candidates already carry the manga/novel sub-type.
+  Details via `GET /v0/subjects/{id}`: `name`/`name_cn` (CN name preferred for
+  display), cover `images.large`, the `WikiV0` `infobox` keys `作者`→Author /
+  `插图`→Artist / `导演`→Director / `动画制作`→Studio; no genre taxonomy, so
+  `genres` are a best-effort top-tags subset with years/formats/countries/
+  adaptation markers filtered. **Chapter tree:** `GET /v0/episodes?subject_id=`
+  (the route is *not* nested under `/v0/subjects/{id}/` — that 404s); type 0
+  main + type 1 SP rows kept, OP/ED/PV dropped, `kind` follows the content type
+  (episode for anime, chapter for books). Relations via
+  `GET /v0/subjects/{id}/subjects` (`前传`→prequel, `续集`→sequel,
+  `原作`/`动画`/`漫画`/`小说`/`书籍`→adaptation). No cross-provider external
+  ids in the payload → `get_external_ids` stays `Unsupported` (AniList links
+  *to* Bangumi, not the reverse). Content types: 1 book · 2 anime · 3 music ·
+  4 game · 6 real.
 
 ## 14. NovelUpdates — web novels & light novels (HTML scrape)
 

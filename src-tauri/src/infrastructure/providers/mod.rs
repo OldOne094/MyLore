@@ -4,11 +4,13 @@
 //! (`domain::provider`) + typed `ProviderError`s, with all policy applied by
 //! `application::providers::coordinator`. AniList, TMDB, MangaDex, OpenLibrary,
 //! NovelUpdates, Jikan (anime fallback), Google Books (book fallback) and
-//! Hardcover (optional third book provider) land here. The coordinator fans out
-//! to *every* provider that serves a domain, so a primary that fails never
-//! fails the search — that's how fallbacks work (MISSION-058).
+//! Hardcover (optional third book provider) and Bangumi (CN ACGN) land here.
+//! The coordinator fans out to *every* provider that serves a domain, so a
+//! primary that fails never fails the search — that's how fallbacks work
+//! (MISSION-058).
 
 pub mod anilist;
+pub mod bangumi;
 pub mod googlebooks;
 pub mod hardcover;
 pub mod jikan;
@@ -18,6 +20,9 @@ pub mod openlibrary;
 pub mod tmdb;
 
 pub use anilist::{anilist_config, AniListClient, AniListProvider, PROVIDER_ID};
+pub use bangumi::{
+    bangumi_config, BangumiClient, BangumiProvider, PROVIDER_ID as BANGUMI_PROVIDER_ID,
+};
 pub use googlebooks::{
     googlebooks_config, GoogleBooksClient, GoogleBooksProvider,
     PROVIDER_ID as GOOGLEBOOKS_PROVIDER_ID,
@@ -52,6 +57,7 @@ use crate::domain::provider::Provider;
 pub fn build_adapter(id: &str, api_key: Option<&str>) -> Result<Arc<dyn Provider>, String> {
     match id {
         anilist::PROVIDER_ID => Ok(Arc::new(AniListProvider::new(AniListClient::new()))),
+        bangumi::PROVIDER_ID => Ok(Arc::new(BangumiProvider::new(BangumiClient::new()))),
         tmdb::PROVIDER_ID => {
             let mut client = TmdbClient::new();
             if let Some(key) = api_key {
@@ -110,6 +116,7 @@ impl EntryBuilder for StdEntryBuilder {
 pub fn default_provider_entries() -> Vec<ProviderEntry> {
     [
         anilist_config(),
+        bangumi_config(),
         tmdb_config(),
         mangadex_config(),
         openlibrary_config(),
@@ -132,6 +139,7 @@ pub fn default_provider_entries() -> Vec<ProviderEntry> {
 pub fn default_provider_configs() -> Vec<ProviderConfig> {
     vec![
         anilist_config(),
+        bangumi_config(),
         tmdb_config(),
         mangadex_config(),
         openlibrary_config(),
@@ -217,5 +225,15 @@ pub(crate) mod test_support {
             env!("CARGO_MANIFEST_DIR")
         ))
         .expect("novelupdates fixture file exists")
+    }
+
+    /// Read a fixture under `tests/fixtures/bangumi/` (hand-built from the
+    /// verified v0 API responses).
+    pub(crate) fn bangumi_fixture(name: &str) -> String {
+        std::fs::read_to_string(format!(
+            "{}/tests/fixtures/bangumi/{name}",
+            env!("CARGO_MANIFEST_DIR")
+        ))
+        .expect("bangumi fixture file exists")
     }
 }

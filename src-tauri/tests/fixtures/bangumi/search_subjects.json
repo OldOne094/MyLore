@@ -1,0 +1,57 @@
+{
+  "total": 2,
+  "limit": 20,
+  "offset": 0,
+  "data": [
+    {
+      "id": 1902,
+      "type": 1,
+      "name": "3月のライオン",
+      "name_cn": "三月的狮子",
+      "short_summary": "独自居住在东京旧市镇的17岁将棋棋士桐山零，幼时因为意外事故失去了家人。他遇见了明里、日向、桃三姐妹，少年桐山零因此发生了改变。",
+      "date": "2008-02-22",
+      "platform": "漫画",
+      "images": {
+        "small": "https://lain.bgm.tv/r/200/pic/cover/l/fc/4d/1902_yfG4q.jpg",
+        "grid": "https://lain.bgm.tv/r/100/pic/cover/l/fc/4d/1902_yfG4q.jpg",
+        "large": "https://lain.bgm.tv/pic/cover/l/fc/4d/1902_yfG4q.jpg",
+        "medium": "https://lain.bgm.tv/r/800/pic/cover/l/fc/4d/1902_yfG4q.jpg",
+        "common": "https://lain.bgm.tv/r/400/pic/cover/l/fc/4d/1902_yfG4q.jpg"
+      },
+      "eps": 0,
+      "volumes": 0,
+      "collection_total": 1720,
+      "score": 8.5,
+      "rank": 102,
+      "tags": [
+        { "name": "将棋", "count": 120, "total_count": 3582 },
+        { "name": "治愈", "count": 90, "total_count": 301253 }
+      ]
+    },
+    {
+      "id": 147068,
+      "type": 2,
+      "name": "3月のライオン",
+      "name_cn": "三月的狮子",
+      "short_summary": "主人公桐山零，幼时因为意外事故失去了家人，是一个背负着沉重的孤独的17岁将棋棋士。",
+      "date": "2016-10-08",
+      "platform": "TV",
+      "images": {
+        "small": "https://lain.bgm.tv/r/200/pic/cover/l/a7/86/147068_60GJJ.jpg",
+        "grid": "https://lain.bgm.tv/r/100/pic/cover/l/a7/86/147068_60GJJ.jpg",
+        "large": "https://lain.bgm.tv/pic/cover/l/a7/86/147068_60GJJ.jpg",
+        "medium": "https://lain.bgm.tv/r/800/pic/cover/l/a7/86/147068_60GJJ.jpg",
+        "common": "https://lain.bgm.tv/r/400/pic/cover/l/a7/86/147068_60GJJ.jpg"
+      },
+      "eps": 22,
+      "volumes": 0,
+      "collection_total": 12000,
+      "score": 8.2,
+      "rank": 250,
+      "tags": [
+        { "name": "治愈", "count": 900, "total_count": 301253 },
+        { "name": "将棋", "count": 300, "total_count": 3582 }
+      ]
+    }
+  ]
+}

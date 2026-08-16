@@ -1,0 +1,47 @@
+[
+  {
+    "id": 1902,
+    "type": 1,
+    "name": "3月のライオン",
+    "name_cn": "三月的狮子",
+    "images": {
+      "small": "https://lain.bgm.tv/r/200/pic/cover/l/fc/4d/1902_yfG4q.jpg",
+      "grid": "https://lain.bgm.tv/r/100/pic/cover/l/fc/4d/1902_yfG4q.jpg",
+      "large": "https://lain.bgm.tv/pic/cover/l/fc/4d/1902_yfG4q.jpg",
+      "medium": "https://lain.bgm.tv/r/800/pic/cover/l/fc/4d/1902_yfG4q.jpg",
+      "common": "https://lain.bgm.tv/r/400/pic/cover/l/fc/4d/1902_yfG4q.jpg"
+    },
+    "relation": "原作",
+    "eps": ""
+  },
+  {
+    "id": 147068,
+    "type": 2,
+    "name": "3月のライオン",
+    "name_cn": "三月的狮子",
+    "images": {
+      "small": "https://lain.bgm.tv/r/200/pic/cover/l/a7/86/147068_60GJJ.jpg",
+      "grid": "https://lain.bgm.tv/r/100/pic/cover/l/a7/86/147068_60GJJ.jpg",
+      "large": "https://lain.bgm.tv/pic/cover/l/a7/86/147068_60GJJ.jpg",
+      "medium": "https://lain.bgm.tv/r/800/pic/cover/l/a7/86/147068_60GJJ.jpg",
+      "common": "https://lain.bgm.tv/r/400/pic/cover/l/a7/86/147068_60GJJ.jpg"
+    },
+    "relation": "前传",
+    "eps": ""
+  },
+  {
+    "id": 223089,
+    "type": 3,
+    "name": "三月のライオン オリジナルサウンドトラック",
+    "name_cn": "",
+    "images": {
+      "small": "https://lain.bgm.tv/r/200/pic/cover/l/97/64/223089_2xQiz.jpg",
+      "grid": "https://lain.bgm.tv/r/100/pic/cover/l/97/64/223089_2xQiz.jpg",
+      "large": "https://lain.bgm.tv/pic/cover/l/97/64/223089_2xQiz.jpg",
+      "medium": "https://lain.bgm.tv/r/800/pic/cover/l/97/64/223089_2xQiz.jpg",
+      "common": "https://lain.bgm.tv/r/400/pic/cover/l/97/64/223089_2xQiz.jpg"
+    },
+    "relation": "音乐",
+    "eps": ""
+  }
+]
