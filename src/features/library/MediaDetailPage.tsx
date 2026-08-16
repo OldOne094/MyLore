@@ -13,13 +13,14 @@ import {
   TabsTrigger,
   useToast,
 } from "@/components/ui";
-import { useMediaDetailQuery, useEnrichMedia } from "./api";
+import { useMediaDetailQuery, useAssetViews, useEnrichMedia } from "./api";
 import type { EnrichView } from "@/api";
 import { NodeTree } from "./NodeTree";
 import { TrackingTab } from "./TrackingTab";
 import { EnrichDialog } from "./EnrichDialog";
 import { useDeleteMedia, useRestoreTrashItem } from "@/features/trash/api";
-import { STATUS_VARIANTS, TYPE_ICONS } from "./mediaMeta";
+import { STATUS_VARIANTS } from "./mediaMeta";
+import { CoverImage } from "./CoverImage";
 
 /* MISSION-042 — Media detail page. Hero (cover, title, meta badges, actions)
    above tabbed sections: Overview / Details / Tracking / Review. Overview and
@@ -77,6 +78,8 @@ export function MediaDetailPage() {
   const [tab, setTab] = useState<DetailTab>("overview");
   const [enrichView, setEnrichView] = useState<EnrichView | null>(null);
   const { data, isPending, isError, refetch } = useMediaDetailQuery(id ?? "");
+  const { data: coverViews } = useAssetViews(data?.cover_asset_id ? [data.cover_asset_id] : []);
+  const cover = coverViews?.[0] ?? null;
   const deleteMedia = useDeleteMedia();
   const restoreTrashItem = useRestoreTrashItem();
   const enrichMedia = useEnrichMedia();
@@ -146,7 +149,6 @@ export function MediaDetailPage() {
     );
   }
 
-  const Icon = TYPE_ICONS[data.content_type] ?? TYPE_ICONS.other;
   const title = data.title_main;
 
   return (
@@ -161,8 +163,15 @@ export function MediaDetailPage() {
         </Link>
 
         <div className="flex flex-col gap-6 md:flex-row">
-          <div className="flex aspect-[2/3] w-40 shrink-0 items-center justify-center overflow-hidden rounded-lg border border-border-subtle bg-bg-hover text-text-tertiary">
-            <Icon size={48} aria-hidden="true" />
+          <div className="relative aspect-[2/3] w-40 shrink-0 overflow-hidden rounded-lg border border-border-subtle bg-bg-hover text-text-tertiary">
+            <CoverImage
+              asset={cover}
+              contentType={data.content_type}
+              alt={title}
+              iconSize={48}
+              className="absolute inset-0"
+              imgClassName="absolute inset-0"
+            />
           </div>
 
           <div className="flex min-w-0 flex-1 flex-col gap-3">

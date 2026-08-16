@@ -57,6 +57,10 @@
     {
       "name": "EnrichView",
       "shape": "media_id: string; provider: string; refreshed_at: string; changed: boolean; changes: EnrichChange[]"
+    },
+    {
+      "name": "AssetView",
+      "shape": "id: string; kind: string; status: string; local_path: string | null; remote_url: string | null; mime_type: string | null"
     }
   ],
   "commands": [
@@ -154,6 +158,18 @@
       "args": { "limit": "number | null" },
       "returns": "DashboardSummary",
       "doc": "Resolve the dashboard widget lists (continue watching, recently completed, recently added). `limit` is optional and clamped per widget (1..=20). Resolves with the DashboardSummary or rejects with an AppError string."
+    },
+    {
+      "name": "asset_resolve",
+      "args": { "asset_id": "string" },
+      "returns": "AssetView",
+      "doc": "Resolve one cover/banner asset to a cached local file, downloading per the cache policy when needed. `status` is `cached` (local_path usable via `convertFileSrc`), `failed` (transient, retried after a cooldown) or `missing` (permanent broken URL). Resolves with the asset view or rejects with an AppError string."
+    },
+    {
+      "name": "assets_resolve",
+      "args": { "asset_ids": "string[]" },
+      "returns": "AssetView[]",
+      "doc": "Resolve many cover/banner assets in one call (deduped; unknown ids are skipped). The library grid calls this once per visible page so covers resolve as a batch. Resolves with the resolved asset views or rejects with an AppError string."
     },
     {
       "name": "media_nodes",

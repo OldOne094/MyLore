@@ -1,8 +1,11 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { useVirtualizer } from "@tanstack/react-virtual";
+import type { Virtualizer } from "@tanstack/react-virtual";
 import { cn } from "@/lib/cn";
+import type { AssetView } from "@/api";
 import type { MediaListItem } from "./api";
+import { useAssetViews } from "./api";
 import { MediaCard } from "./MediaCard";
 import { MediaRow } from "./MediaRow";
 import type { LibraryView } from "./LibraryViewSwitcher";
@@ -13,7 +16,9 @@ import { buildLibraryRows, type LibraryGroupBy, type LibraryRow } from "./groupi
    windows through @tanstack/react-virtual against the local scroll container,
    so 10,000+ entries render without jank (REQ-PERF library line). MISSION-041
    adds group-by: the flat row model interleaves group-header rows with item
-   rows, all virtualized together. */
+   rows, all virtualized together. MISSION-062 batch-resolves the covers of the
+   *currently visible* window through `useAssetViews` so scrolling fetches covers
+   lazily, one batch per visible page. */
 
 /* Matches the Tailwind grid breakpoints: <640 → 2, ≥640 → 3, ≥768 → 4, ≥1024 → 6. */
 const GRID_BREAKPOINTS: ReadonlyArray<{ minWidth: number; columns: number }> = [
@@ -87,12 +92,42 @@ export function VirtualizedLibrary({
   const rowsRef = useRef(rows);
   rowsRef.current = rows;
 
+  /* MISSION-062 — track the visible window so covers batch-resolve lazily.
+     `onChange` fires on every virtualizer range/scroll change; we read the
+     currently rendered rows and collect their cover asset ids into state, which
+     drives `useAssetViews` (deduped, one batch per visible page). */
+  const virtualizerRef = useRef<Virtualizer<HTMLDivElement, Element> | null>(null);
+  const [visibleAssetIds, setVisibleAssetIds] = useState<string[]>([]);
+  const updateVisibleAssets = useCallback(() => {
+    const ids = new Set<string>();
+    for (const virtual of virtualizerRef.current!.getVirtualItems()) {
+      const entry = rowsRef.current[virtual.index];
+      if (!entry || entry.kind === "header") continue;
+      for (const item of entry.items) {
+        if (item.cover_asset_id) ids.add(item.cover_asset_id);
+      }
+    }
+    setVisibleAssetIds((previous) => {
+      const same = previous.length === ids.size && previous.every((id) => ids.has(id));
+      return same ? previous : [...ids];
+    });
+  }, []);
+
   const virtualizer = useVirtualizer({
     count: rows.length,
     getScrollElement: () => scrollRef.current,
     estimateSize: (index) => (rowsRef.current[index]?.kind === "header" ? HEADER_SIZE : rowSize),
     overscan: view === "grid" ? 2 : 8,
+    onChange: updateVisibleAssets,
   });
+  virtualizerRef.current = virtualizer;
+
+  const { data: assetViews } = useAssetViews(visibleAssetIds);
+  const coverById = useMemo(() => {
+    const map = new Map<string, AssetView>();
+    for (const view of assetViews ?? []) map.set(view.id, view);
+    return map;
+  }, [assetViews]);
 
   return (
     <div
@@ -136,6 +171,7 @@ export function VirtualizedLibrary({
                   <MediaCard
                     key={item.id}
                     item={item}
+                    cover={item.cover_asset_id ? coverById.get(item.cover_asset_id) : null}
                     selectable={selectable}
                     selected={selected?.has(item.id) ?? false}
                     onToggle={onToggle}
@@ -157,6 +193,7 @@ export function VirtualizedLibrary({
             >
               <MediaRow
                 item={item}
+                cover={item.cover_asset_id ? coverById.get(item.cover_asset_id) : null}
                 dense={view === "compact"}
                 selectable={selectable}
                 selected={selected?.has(item.id) ?? false}

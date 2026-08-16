@@ -13,6 +13,7 @@ use std::sync::Arc;
 
 use tauri::Manager;
 
+use crate::application::image_service::ImageService;
 use crate::application::providers::coordinator::ProviderCoordinator;
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
@@ -27,13 +28,16 @@ pub fn run() {
             let db_path = data_dir.join("mylore.db");
             let pool = tauri::async_runtime::block_on(infrastructure::db::init(&db_path))?;
             tracing::info!(db = %db_path.display(), "database opened");
-            app.manage(pool);
+            app.manage(pool.clone());
 
             let coordinator = Arc::new(
                 ProviderCoordinator::new(infrastructure::providers::default_provider_entries())
                     .map_err(std::io::Error::other)?,
             );
             app.manage(coordinator);
+
+            let images_dir = data_dir.join("images");
+            app.manage(Arc::new(ImageService::new(pool, &images_dir)));
 
             Ok(())
         })
@@ -47,6 +51,8 @@ pub fn run() {
             commands::discover::search_external,
             commands::import::import_provider,
             commands::enrich::media_enrich,
+            commands::images::asset_resolve,
+            commands::images::assets_resolve,
             commands::dashboard::dashboard_summary,
             commands::node::media_nodes,
             commands::node::node_progress_set,

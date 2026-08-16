@@ -22,8 +22,12 @@
       }
     ],
     "security": {
-      "csp": "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https://s4.anilist.co https://image.tmdb.org https://uploads.mangadex.org https://covers.openlibrary.org https://cdn.novelupdates.com https://cdn.myanimelist.net https://books.google.com https://storage.googleapis.com; font-src 'self' data:; connect-src 'self' ipc: http://ipc.localhost; object-src 'none'; frame-src 'none'; base-uri 'self'",
-      "devCsp": "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https://s4.anilist.co https://image.tmdb.org https://uploads.mangadex.org https://covers.openlibrary.org https://cdn.novelupdates.com https://cdn.myanimelist.net https://books.google.com https://storage.googleapis.com; font-src 'self' data:; connect-src 'self' ipc: http://ipc.localhost ws://localhost:1420 ws://localhost:1421; object-src 'none'; frame-src 'none'; base-uri 'self'"
+      "assetProtocol": {
+        "enable": true,
+        "scope": ["$APPDATA/images/**"]
+      },
+      "csp": "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: http://asset.localhost asset: https://s4.anilist.co https://image.tmdb.org https://uploads.mangadex.org https://covers.openlibrary.org https://cdn.novelupdates.com https://cdn.myanimelist.net https://books.google.com https://storage.googleapis.com; font-src 'self' data:; connect-src 'self' ipc: http://ipc.localhost; object-src 'none'; frame-src 'none'; base-uri 'self'",
+      "devCsp": "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: http://asset.localhost asset: https://s4.anilist.co https://image.tmdb.org https://uploads.mangadex.org https://covers.openlibrary.org https://cdn.novelupdates.com https://cdn.myanimelist.net https://books.google.com https://storage.googleapis.com; font-src 'self' data:; connect-src 'self' ipc: http://ipc.localhost ws://localhost:1420 ws://localhost:1421; object-src 'none'; frame-src 'none'; base-uri 'self'"
     }
   },
   "bundle": {

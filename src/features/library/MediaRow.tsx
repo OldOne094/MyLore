@@ -3,12 +3,16 @@ import { Link } from "react-router";
 import { useTranslation } from "react-i18next";
 import { Badge } from "@/components/ui";
 import { cn } from "@/lib/cn";
+import type { AssetView } from "@/api";
 import type { MediaListItem } from "./api";
-import { STATUS_VARIANTS, TYPE_ICONS } from "./mediaMeta";
+import { STATUS_VARIANTS } from "./mediaMeta";
+import { CoverImage } from "./CoverImage";
 import { NextUnitButton } from "./NextUnitButton";
 
 /* MISSION-040 — Library list rows. `dense` is the Compact tier (DESIGN_SYSTEM
    §8): smaller paddings (8→4), 13px text, hidden meta badges, smaller thumb.
+   MISSION-062 renders real cover art in the thumb when the parent passes a
+   resolved `cover` view (broken/missing URLs keep the placeholder icon).
    MISSION-042 makes the row a link to the media detail page. MISSION-045 adds
    bulk-select mode: when `selectable` the row becomes a toggle button with a
    leading checkbox instead of a navigation link. MISSION-049 overlays the
@@ -16,6 +20,8 @@ import { NextUnitButton } from "./NextUnitButton";
 
 export interface MediaRowProps {
   item: MediaListItem;
+  /** Resolved cover asset view for the thumb (MISSION-062). */
+  cover?: AssetView | null;
   dense?: boolean;
   selectable?: boolean;
   selected?: boolean;
@@ -24,13 +30,13 @@ export interface MediaRowProps {
 
 export function MediaRow({
   item,
+  cover,
   dense = false,
   selectable = false,
   selected = false,
   onToggle,
 }: MediaRowProps) {
   const { t } = useTranslation();
-  const Icon = TYPE_ICONS[item.content_type] ?? TYPE_ICONS.other;
 
   const checkbox = selectable ? (
     <span
@@ -52,7 +58,12 @@ export function MediaRow({
           dense ? "size-7" : "size-10",
         )}
       >
-        <Icon size={dense ? 14 : 18} aria-hidden="true" />
+        <CoverImage
+          asset={cover}
+          contentType={item.content_type}
+          alt={item.title}
+          iconSize={dense ? 14 : 18}
+        />
       </div>
 
       <h3

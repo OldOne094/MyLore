@@ -3,8 +3,10 @@
    typed mutation that invalidates every library list on success. */
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useMemo } from "react";
 import { useTranslation } from "react-i18next";
 import {
+  assets_resolve,
   media_create,
   media_enrich,
   media_facets,
@@ -202,6 +204,21 @@ export function useMediaNodesQuery(id: string) {
   return useQuery({
     queryKey: queryKeys.media.nodes(id),
     queryFn: () => media_nodes({ id }),
+  });
+}
+
+/**
+ * MISSION-062 — batch-resolve cover/banner assets so the grid/list surfaces a
+ * cached `local_path` (for `convertFileSrc`) or a fallback status. The key
+ * serializes the sorted, de-duped id set, so re-renders with the same batch hit
+ * the cache; empty batches resolve to nothing (no IPC round-trip).
+ */
+export function useAssetViews(assetIds: string[]) {
+  const ids = useMemo(() => [...new Set(assetIds.filter((id) => id !== ""))].sort(), [assetIds]);
+  return useQuery({
+    queryKey: queryKeys.media.assets(ids.join("|")),
+    queryFn: () => assets_resolve({ asset_ids: ids }),
+    enabled: ids.length > 0,
   });
 }
 

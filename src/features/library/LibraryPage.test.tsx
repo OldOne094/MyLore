@@ -9,6 +9,7 @@ import i18n from "@/i18n";
 
 vi.mock("@tauri-apps/api/core", () => ({
   invoke: vi.fn(),
+  convertFileSrc: vi.fn((path: string) => `asset://${encodeURIComponent(path)}`),
 }));
 
 import { invoke } from "@tauri-apps/api/core";
@@ -241,5 +242,47 @@ describe("LibraryPage", () => {
 
     expect(await screen.findByText("No matching titles")).toBeInTheDocument();
     expect(screen.queryByText("Steins;Gate")).not.toBeInTheDocument();
+  });
+
+  it("batch-resolves covers for titles with cover assets (MISSION-062)", async () => {
+    const withCovers = TITLES.map((item, index) => ({
+      ...item,
+      cover_asset_id: `a-${index + 1}`,
+    }));
+    vi.mocked(invoke).mockImplementation((command: string) => {
+      if (command === "media_facets") return Promise.resolve(FACETS);
+      if (command === "media_list") return Promise.resolve(withCovers);
+      if (command === "assets_resolve") {
+        return Promise.resolve([
+          {
+            id: "a-1",
+            kind: "cover",
+            status: "cached",
+            local_path: "C:/appdata/images/a-1.jpg",
+            remote_url: null,
+            mime_type: "image/jpeg",
+          },
+        ]);
+      }
+      return Promise.resolve(null);
+    });
+    renderPage();
+    await screen.findByText("Steins;Gate");
+
+    await waitFor(() => {
+      expect(invoke).toHaveBeenCalledWith("assets_resolve", { asset_ids: ["a-1", "a-2"] });
+    });
+    expect(await screen.findByRole("img", { name: "Steins;Gate" })).toBeInTheDocument();
+    expect(screen.getByRole("img", { name: "Steins;Gate" })).toHaveAttribute(
+      "src",
+      "asset://C%3A%2Fappdata%2Fimages%2Fa-1.jpg",
+    );
+  });
+
+  it("does not call assets_resolve when no title has a cover asset", async () => {
+    mockLibrary(TITLES);
+    renderPage();
+    await screen.findByText("Steins;Gate");
+    expect(invoke).not.toHaveBeenCalledWith("assets_resolve", expect.objectContaining({}));
   });
 });

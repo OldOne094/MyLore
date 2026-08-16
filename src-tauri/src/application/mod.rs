@@ -8,6 +8,7 @@ pub mod activity_service;
 pub mod bulk_service;
 pub mod dashboard_service;
 pub mod enrich_service;
+pub mod image_service;
 pub mod import_service;
 pub mod media_service;
 pub mod node_service;

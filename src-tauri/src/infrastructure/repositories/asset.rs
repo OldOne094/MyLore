@@ -75,6 +75,49 @@ pub async fn update_status(
     Ok(())
 }
 
+/// Record a completed/failed fetch result (MISSION-062): status, local path,
+/// mime type and etag captured from the download.
+pub async fn update_fetch(
+    pool: &SqlitePool,
+    id: &str,
+    status: &str,
+    local_path: Option<&str>,
+    mime_type: Option<&str>,
+    etag: Option<&str>,
+    last_fetched_at: Option<&str>,
+) -> Result<(), AppError> {
+    sqlx::query(
+        "UPDATE asset SET status = ?, local_path = ?, mime_type = ?, etag = ?, \
+         last_fetched_at = ? WHERE id = ?",
+    )
+    .bind(status)
+    .bind(local_path)
+    .bind(mime_type)
+    .bind(etag)
+    .bind(last_fetched_at)
+    .bind(id)
+    .execute(pool)
+    .await?;
+    Ok(())
+}
+
+/// List assets by ids (in the given order, deduped) — the batch resolve path.
+pub async fn list_by_ids(pool: &SqlitePool, ids: &[String]) -> Result<Vec<AssetRecord>, AppError> {
+    if ids.is_empty() {
+        return Ok(Vec::new());
+    }
+    let mut qb = sqlx::QueryBuilder::new(
+        "SELECT id, kind, remote_url, local_path, status, mime_type, width, height, etag, \
+         last_fetched_at, created_at FROM asset WHERE id IN (",
+    );
+    let mut separated = qb.separated(", ");
+    for id in ids {
+        separated.push_bind(id);
+    }
+    separated.push_unseparated(")");
+    Ok(qb.build().fetch_all(pool).await?.into_iter().map(row_to_asset).collect())
+}
+
 /// Delete an asset; media cover/banner columns SET NULL via FK.
 pub async fn delete(pool: &SqlitePool, id: &str) -> Result<(), AppError> {
     sqlx::query("DELETE FROM asset WHERE id = ?")
@@ -147,6 +190,39 @@ mod tests {
         assert!(get(&pool, "nope").await.expect("get").is_none());
         delete(&pool, "a-1").await.expect("delete");
         assert!(get(&pool, "a-1").await.expect("get").is_none());
+        pool.close().await;
+        cleanup_files(&path);
+    }
+
+    #[tokio::test]
+    async fn update_fetch_and_list_by_ids() {
+        let (pool, path) = migrated_pool("asset_repo_fetch.db").await;
+        insert(&pool, &asset("a-1")).await.expect("insert 1");
+        insert(&pool, &asset("a-2")).await.expect("insert 2");
+
+        update_fetch(
+            &pool,
+            "a-1",
+            "cached",
+            Some("cache/a-1.jpg"),
+            Some("image/jpeg"),
+            Some("\"etag-1\""),
+            Some("2026-01-05"),
+        )
+        .await
+        .expect("update fetch");
+        let got = get(&pool, "a-1").await.expect("get").unwrap();
+        assert_eq!(got.status, "cached");
+        assert_eq!(got.mime_type.as_deref(), Some("image/jpeg"));
+        assert_eq!(got.etag.as_deref(), Some("\"etag-1\""));
+
+        let all = list_by_ids(&pool, &["a-2".to_string(), "a-1".to_string(), "a-1".to_string()])
+            .await
+            .expect("list by ids");
+        assert_eq!(all.len(), 2, "deduped");
+
+        assert!(list_by_ids(&pool, &[]).await.expect("empty").is_empty());
+
         pool.close().await;
         cleanup_files(&path);
     }

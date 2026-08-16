@@ -22,6 +22,8 @@ use crate::domain::provider::error::ProviderError;
 use crate::domain::provider::types::{ProviderMedia, ProviderNode};
 use crate::domain::value_objects::{ExternalId, MediaId, ProviderId, Title};
 use crate::error::AppError;
+use crate::infrastructure::repositories::asset as asset_repo;
+use crate::infrastructure::repositories::asset::AssetRecord;
 use crate::infrastructure::repositories::media as media_repo;
 use crate::infrastructure::repositories::media::{AltTitle, MediaRecord};
 use crate::infrastructure::repositories::node as node_repo;
@@ -156,6 +158,15 @@ impl ImportService {
             tags.push(media_repo::ensure_domain_tag(&self.pool, tag).await?);
         }
 
+        // Register provider cover/banner URLs as `remote` assets so the image
+        // pipeline (MISSION-062) can download/cache them lazily on resolve.
+        let cover_asset_id = self
+            .create_asset("cover", details.cover_url.as_deref(), &now)
+            .await?;
+        let banner_asset_id = self
+            .create_asset("banner", details.banner_url.as_deref(), &now)
+            .await?;
+
         let own_ext_ids = external_ids
             .iter()
             .map(|id| media_repo::ExternalId {
@@ -183,8 +194,8 @@ impl ImportService {
             duration_min: details.duration_min.map(Into::into),
             ep_count: details.ep_count.map(Into::into),
             ch_count: details.ch_count.map(Into::into),
-            cover_asset_id: None,
-            banner_asset_id: None,
+            cover_asset_id,
+            banner_asset_id,
             provider: Some(provider.to_string()),
             provider_url: details.url.clone(),
             metadata_refreshed_at: Some(now.clone()),
@@ -207,6 +218,38 @@ impl ImportService {
 
         media_repo::create(&self.pool, &record).await?;
         Ok(id)
+    }
+
+    /// Register a provider cover/banner URL as a `remote` asset row, resolving
+    /// with its id. `None` URLs register nothing (MISSION-062).
+    async fn create_asset(
+        &self,
+        kind: &str,
+        remote_url: Option<&str>,
+        now: &str,
+    ) -> Result<Option<String>, AppError> {
+        let Some(url) = remote_url else {
+            return Ok(None);
+        };
+        let id = format!("a-{}", Uuid::new_v4());
+        asset_repo::insert(
+            &self.pool,
+            &AssetRecord {
+                id: id.clone(),
+                kind: kind.to_string(),
+                remote_url: Some(url.to_string()),
+                local_path: None,
+                status: "remote".to_string(),
+                mime_type: None,
+                width: None,
+                height: None,
+                etag: None,
+                last_fetched_at: None,
+                created_at: now.to_string(),
+            },
+        )
+        .await?;
+        Ok(Some(id))
     }
 
     /// Import the provider's content-node tree (volumes→chapters, seasons→
@@ -561,6 +604,73 @@ mod tests {
             .await
             .expect_err("should fail");
         assert!(err.to_string().contains("not found on fake"));
+        pool.close().await;
+        cleanup_files(&path);
+    }
+
+    #[tokio::test]
+    async fn import_registers_cover_and_banner_assets() {
+        let (pool, path) = migrated_pool("import_service_assets.db").await;
+        let mut m = media("x1", "Sword of the Dawn");
+        m.cover_url = Some("https://cdn.example/cover.jpg".to_string());
+        m.banner_url = Some("https://cdn.example/banner.jpg".to_string());
+        let provider: Arc<dyn Provider> = Arc::new(FakeProvider {
+            id: "fake".into(),
+            behavior: Mutex::new(Behavior::Ok(m, nodes())),
+        });
+        let service = ImportService::new(pool.clone(), coord(provider));
+
+        let view = service
+            .import_from_provider("fake", "x1")
+            .await
+            .expect("import");
+        assert!(view.created);
+
+        let stored = media_repo::get(&pool, &view.media_id)
+            .await
+            .expect("get")
+            .expect("stored");
+        let cover = stored.cover_asset_id.expect("cover asset linked");
+        let banner = stored.banner_asset_id.expect("banner asset linked");
+        assert_ne!(cover, banner);
+
+        let cover_row = asset_repo::get(&pool, &cover).await.expect("get").unwrap();
+        assert_eq!(cover_row.kind, "cover");
+        assert_eq!(
+            cover_row.remote_url.as_deref(),
+            Some("https://cdn.example/cover.jpg")
+        );
+        assert_eq!(cover_row.status, "remote", "assets await lazy resolve");
+
+        let banner_row = asset_repo::get(&pool, &banner).await.expect("get").unwrap();
+        assert_eq!(banner_row.kind, "banner");
+        assert_eq!(
+            banner_row.remote_url.as_deref(),
+            Some("https://cdn.example/banner.jpg")
+        );
+
+        pool.close().await;
+        cleanup_files(&path);
+    }
+
+    #[tokio::test]
+    async fn import_without_urls_links_no_assets() {
+        let (pool, path) = migrated_pool("import_service_no_assets.db").await;
+        let provider: Arc<dyn Provider> = Arc::new(FakeProvider {
+            id: "fake".into(),
+            behavior: Mutex::new(Behavior::Ok(media("x1", "Plain Title"), nodes())),
+        });
+        let service = ImportService::new(pool.clone(), coord(provider));
+        let view = service
+            .import_from_provider("fake", "x1")
+            .await
+            .expect("import");
+        let stored = media_repo::get(&pool, &view.media_id)
+            .await
+            .expect("get")
+            .expect("stored");
+        assert!(stored.cover_asset_id.is_none());
+        assert!(stored.banner_asset_id.is_none());
         pool.close().await;
         cleanup_files(&path);
     }

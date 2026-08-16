@@ -103,6 +103,14 @@ export interface EnrichView {
   changed: boolean;
   changes: EnrichChange[];
 }
+export interface AssetView {
+  id: string;
+  kind: string;
+  status: string;
+  local_path: string | null;
+  remote_url: string | null;
+  mime_type: string | null;
+}
 
 /** Placeholder greeting command (create-tauri-app scaffold). Resolves with the greeting or rejects with an AppError string. */
 export function greet(args: { name: string }): Promise<string> {
@@ -257,6 +265,16 @@ export function media_enrich(args: { media_id: string }): Promise<EnrichView> {
 /** Resolve the dashboard widget lists (continue watching, recently completed, recently added). `limit` is optional and clamped per widget (1..=20). Resolves with the DashboardSummary or rejects with an AppError string. */
 export function dashboard_summary(args: { limit: number | null }): Promise<DashboardSummary> {
   return invoke<DashboardSummary>("dashboard_summary", args);
+}
+
+/** Resolve one cover/banner asset to a cached local file, downloading per the cache policy when needed. `status` is `cached` (local_path usable via `convertFileSrc`), `failed` (transient, retried after a cooldown) or `missing` (permanent broken URL). Resolves with the asset view or rejects with an AppError string. */
+export function asset_resolve(args: { asset_id: string }): Promise<AssetView> {
+  return invoke<AssetView>("asset_resolve", args);
+}
+
+/** Resolve many cover/banner assets in one call (deduped; unknown ids are skipped). The library grid calls this once per visible page so covers resolve as a batch. Resolves with the resolved asset views or rejects with an AppError string. */
+export function assets_resolve(args: { asset_ids: string[] }): Promise<AssetView[]> {
+  return invoke<AssetView[]>("assets_resolve", args);
 }
 
 /** Read the full content tree for one media (seasons→episodes, volumes→chapters) with per-node progress state. Resolves with the nested tree, roots ordered by position, or rejects with an AppError string. */

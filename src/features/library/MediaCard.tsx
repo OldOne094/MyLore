@@ -3,20 +3,26 @@ import { Link } from "react-router";
 import { useTranslation } from "react-i18next";
 import { Badge } from "@/components/ui";
 import { cn } from "@/lib/cn";
+import type { AssetView } from "@/api";
 import type { MediaListItem } from "./api";
-import { STATUS_VARIANTS, TYPE_ICONS } from "./mediaMeta";
+import { STATUS_VARIANTS } from "./mediaMeta";
+import { CoverImage } from "./CoverImage";
 import { NextUnitButton } from "./NextUnitButton";
 import { ProgressBar } from "./ProgressBar";
 
-/* MISSION-040 — Single library card in the grid. Poster placeholder until real
-   cover art arrives (cover_asset_id is unresolved for now). MISSION-042 makes
-   the card a link to the media detail page. MISSION-045 adds bulk-select mode:
-   when `selectable` the card becomes a toggle button (aria-pressed) with a
-   corner checkbox instead of a navigation link. MISSION-049 overlays the
-   next-unit pill and a thin progress bar at the poster's bottom edge. */
+/* MISSION-040 — Single library card in the grid. MISSION-062 renders real cover
+   art through the asset pipeline when the parent passes a resolved `cover` view
+   (cached → `convertFileSrc`; any other status → the placeholder icon, so broken
+   URLs never show a broken image). MISSION-042 makes the card a link to the
+   media detail page. MISSION-045 adds bulk-select mode: when `selectable` the
+   card becomes a toggle button (aria-pressed) with a corner checkbox instead of
+   a navigation link. MISSION-049 overlays the next-unit pill and a thin progress
+   bar at the poster's bottom edge. */
 
 export interface MediaCardProps {
   item: MediaListItem;
+  /** Resolved cover asset view for the poster (MISSION-062). */
+  cover?: AssetView | null;
   selectable?: boolean;
   selected?: boolean;
   onToggle?: (id: string) => void;
@@ -24,16 +30,16 @@ export interface MediaCardProps {
 
 export function MediaCard({
   item,
+  cover,
   selectable = false,
   selected = false,
   onToggle,
 }: MediaCardProps) {
   const { t } = useTranslation();
-  const Icon = TYPE_ICONS[item.content_type] ?? TYPE_ICONS.other;
 
   const poster = (
     <div className="relative flex aspect-[2/3] w-full items-center justify-center overflow-hidden rounded-sm bg-bg-hover text-text-tertiary">
-      <Icon size={28} aria-hidden="true" />
+      <CoverImage asset={cover} contentType={item.content_type} alt={item.title} iconSize={28} />
       <ProgressBar percent={item.progress.percent} className="absolute inset-x-0 bottom-0" />
     </div>
   );
