@@ -645,6 +645,15 @@ pub async fn list(pool: &SqlitePool, filter: &MediaFilter) -> Result<Vec<MediaSu
     Ok(rows.into_iter().map(row_to_summary).collect())
 }
 
+/// All media ids, title-ordered, for the streaming export (MISSION-071). The
+/// ids are small and bounded; full records are fetched per row while writing.
+pub async fn list_ids(pool: &SqlitePool) -> Result<Vec<String>, AppError> {
+    let rows = sqlx::query("SELECT id FROM media ORDER BY title_main COLLATE NOCASE, id")
+        .fetch_all(pool)
+        .await?;
+    Ok(rows.into_iter().map(|row| row.get(0)).collect())
+}
+
 /// Count rows matching a filter (for pagination).
 pub async fn count(pool: &SqlitePool, filter: &MediaFilter) -> Result<i64, AppError> {
     let mut qb = QueryBuilder::new("SELECT COUNT(DISTINCT m.id) FROM media m");
@@ -1309,6 +1318,29 @@ mod tests {
         .expect("page");
         assert_eq!(page.len(), 2);
         assert_eq!(page[0].id, "m-2", "offset skips the first row");
+        pool.close().await;
+        cleanup_files(&path);
+    }
+
+    #[tokio::test]
+    async fn list_ids_is_title_ordered() {
+        let (pool, path) = migrated_pool("media_repo_list_ids.db").await;
+        create(&pool, &sample_media("m-b", "Berserk"))
+            .await
+            .expect("create");
+        create(&pool, &sample_media("m-a", "arcadia"))
+            .await
+            .expect("create");
+        create(&pool, &sample_media("m-c", "Clockwork"))
+            .await
+            .expect("create");
+
+        let ids = list_ids(&pool).await.expect("ids");
+        assert_eq!(
+            ids,
+            vec!["m-a", "m-b", "m-c"],
+            "case-insensitive title order"
+        );
         pool.close().await;
         cleanup_files(&path);
     }

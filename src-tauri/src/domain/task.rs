@@ -15,12 +15,15 @@ use serde::Serialize;
 pub enum TaskKind {
     /// JSON/CSV file import (result: `ImportReport`).
     ImportFile,
+    /// JSON/CSV/Markdown library export (result: `ExportReport`).
+    ExportFile,
 }
 
 impl TaskKind {
     pub fn as_str(self) -> &'static str {
         match self {
             Self::ImportFile => "import_file",
+            Self::ExportFile => "export_file",
         }
     }
 }

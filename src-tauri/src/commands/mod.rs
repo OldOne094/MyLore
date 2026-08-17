@@ -10,6 +10,7 @@ pub mod bulk;
 pub mod dashboard;
 pub mod discover;
 pub mod enrich;
+pub mod export;
 pub mod images;
 pub mod import;
 pub mod media;

@@ -25,6 +25,7 @@ pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_store::Builder::new().build())
+        .plugin(tauri_plugin_dialog::init())
         .setup(|app| {
             let data_dir = app.path().app_data_dir()?;
             infrastructure::logging::init(&data_dir.join("logs"));
@@ -75,6 +76,7 @@ pub fn run() {
             commands::import::import_commit,
             commands::import::import_csv_headers,
             commands::enrich::media_enrich,
+            commands::export::export_media,
             commands::providers::providers_list,
             commands::providers::provider_set_enabled,
             commands::providers::provider_set_key,

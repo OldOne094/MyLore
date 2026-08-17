@@ -14,6 +14,7 @@
 //!   - `normalize`    — title fold (case/unicode/diacritics, script-aware)
 //!   - `identity`     — exact + fuzzy identity matching, candidate ranking
 //!   - `import`       — import pipeline core: validate/normalize/dedup/preview
+//!   - `export`       — export model + formatters (json/csv/markdown)
 //!   - `task`         — background task model: states, snapshot, task error
 //!   - `stats`        — dashboard statistics (counts, hours, completion, rating)
 //!   - `merge`        — merge plans: conflict report, re-parenting, before-image
@@ -22,6 +23,7 @@
 pub mod content_node;
 pub mod enums;
 pub mod error;
+pub mod export;
 pub mod identity;
 pub mod import;
 pub mod media;

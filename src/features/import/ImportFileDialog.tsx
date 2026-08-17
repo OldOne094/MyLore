@@ -18,9 +18,9 @@ import {
   useImportFile,
   useImportPreview,
   useImportTask,
-  useTaskCancel,
   type ImportFileKind,
 } from "./api";
+import { useTaskCancel } from "@/features/tasks/api";
 
 /* MISSION-068/069/070 — Import-from-file dialog. Flow: pick a JSON/CSV file in
    the webview (FileReader) → JSON imports directly, CSV opens the column-

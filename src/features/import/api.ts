@@ -5,21 +5,17 @@
    `task-changed` event streams progress until the typed `ImportReport` lands
    in the task's `result`. The running dialog can cancel. */
 
-import { useEffect } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import type { UnlistenFn } from "@tauri-apps/api/event";
 import {
   import_commit,
   import_csv_headers,
   import_file_preview,
-  listenTaskChanged,
-  task_cancel,
-  task_get,
   type CsvMapping,
   type ImportPlan,
   type TaskSnapshot,
 } from "@/api";
 import { queryKeys } from "@/api";
+import { useTask } from "@/features/tasks/api";
 
 export type ImportFileKind = "json" | "csv";
 
@@ -77,52 +73,13 @@ export function useImportFile() {
   });
 }
 
-/** Request cancellation of a background task (MISSION-070). */
-export function useTaskCancel() {
-  return useMutation({
-    mutationFn: (id: string) => task_cancel({ id }),
-  });
-}
-
-/** Subscribe to one task's `task-changed` stream and expose its live snapshot.
-    The dialog seeds the id from `import_commit`; `task_get` covers the case
-    where an event is missed, and a success terminal state invalidates the
-    library/dashboard queries. */
+/** Live snapshot of the import task; on success the library/dashboard queries
+    are invalidated. Delegates to the shared `useTask` hook. */
 export function useImportTask(taskId: string | null) {
   const queryClient = useQueryClient();
-
-  useEffect(() => {
-    if (!taskId) return;
-    let disposed = false;
-    let unlisten: UnlistenFn | undefined;
-
-    const sync = (snapshot: TaskSnapshot) => {
-      queryClient.setQueryData(queryKeys.task.detail(taskId), snapshot);
-      if (snapshot.state === "success") {
-        void invalidateAfterImport(queryClient);
-      }
-    };
-
-    void listenTaskChanged((snapshot) => {
-      if (snapshot.id !== taskId) return;
-      sync(snapshot);
-    }).then((fn) => {
-      if (disposed) {
-        fn();
-      } else {
-        unlisten = fn;
-      }
-    });
-
-    return () => {
-      disposed = true;
-      unlisten?.();
-    };
-  }, [taskId, queryClient]);
-
-  return useQuery({
-    queryKey: queryKeys.task.detail(taskId ?? ""),
-    queryFn: () => task_get({ id: taskId! }),
-    enabled: taskId !== null,
+  return useTask(taskId, {
+    onSuccess: () => {
+      void invalidateAfterImport(queryClient);
+    },
   });
 }

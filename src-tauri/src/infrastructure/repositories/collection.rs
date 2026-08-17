@@ -174,6 +174,26 @@ pub async fn members(
         .collect())
 }
 
+/// Map every media id to its collection names, for the streaming export
+/// (MISSION-071). One join query instead of a membership lookup per media.
+pub async fn media_collection_names(
+    pool: &SqlitePool,
+) -> Result<std::collections::HashMap<String, Vec<String>>, AppError> {
+    let rows = sqlx::query(
+        "SELECT cm.media_id, c.name
+         FROM collection_member cm
+         JOIN collection c ON c.id = cm.collection_id
+         ORDER BY c.sort_order, c.name, cm.media_id",
+    )
+    .fetch_all(pool)
+    .await?;
+    let mut map: std::collections::HashMap<String, Vec<String>> = std::collections::HashMap::new();
+    for row in rows {
+        map.entry(row.get(0)).or_default().push(row.get(1));
+    }
+    Ok(map)
+}
+
 fn row_to_collection(row: SqliteRow) -> CollectionRecord {
     let get = |idx: usize| -> Option<String> { row.get(idx) };
     CollectionRecord {
@@ -211,6 +231,35 @@ mod tests {
         .execute(pool)
         .await
         .expect("seed media");
+    }
+
+    #[tokio::test]
+    async fn media_collection_names_groups_by_media() {
+        let (pool, path) = migrated_pool("collection_repo_export.db").await;
+        create(&pool, &collection("c-1")).await.expect("create c1");
+        create(&pool, &collection("c-2")).await.expect("create c2");
+        for media in ["m-1", "m-2"] {
+            seed_media(&pool, media).await;
+        }
+        add_member(&pool, "c-1", "m-1", 0, "2026-01-01")
+            .await
+            .expect("m1 in c1");
+        add_member(&pool, "c-2", "m-1", 1, "2026-01-01")
+            .await
+            .expect("m1 in c2");
+        add_member(&pool, "c-2", "m-2", 0, "2026-01-01")
+            .await
+            .expect("m2 in c2");
+
+        let map = media_collection_names(&pool).await.expect("map");
+        assert_eq!(
+            map.get("m-1").unwrap(),
+            &vec!["List c-1".to_string(), "List c-2".to_string()]
+        );
+        assert_eq!(map.get("m-2").unwrap(), &vec!["List c-2".to_string()]);
+        assert!(!map.contains_key("missing"));
+        pool.close().await;
+        cleanup_files(&path);
     }
 
     #[tokio::test]

@@ -99,6 +99,10 @@
       "shape": "total: number; committed: number; skipped: number; failed: number; items: ReportItem[]"
     },
     {
+      "name": "ExportReport",
+      "shape": "format: string; total: number; path: string"
+    },
+    {
       "name": "TaskSnapshot",
       "shape": "id: string; kind: string; title: string; state: string; progress: number | null; message: string | null; error: string | null; result: unknown | null; created_at: string; updated_at: string"
     }
@@ -205,6 +209,15 @@
       },
       "returns": "TaskSnapshot",
       "doc": "Import a file's rows as a background task (MISSION-070): spawns the commit on the TaskManager and resolves with the initial (queued) snapshot; progress + terminal state stream as `task_changed` events and the task can be cancelled. The commit runs in one transaction, savepoint per row. `plan` selects which source rows to import; null imports every `New` row of the preview. Non-new / invalid / unselected rows are reported as skipped; a row that fails to insert rolls back its own savepoint and is reported as failed. On success the task's `result` is the per-item `ImportReport`."
+    },
+    {
+      "name": "export_media",
+      "args": {
+        "format": "string",
+        "path": "string"
+      },
+      "returns": "TaskSnapshot",
+      "doc": "Export the whole library as a background task (MISSION-071): streams rows to `path` as json / csv / markdown (`format`) and resolves with the initial (queued) snapshot; progress + terminal state stream as `task_changed` events and the task can be cancelled (a cancelled export drops its partial file). The file is written to a `*.partial` sibling and renamed into place on success. On success the task's `result` is the `ExportReport` (`{ format, total, path }`)."
     },
     {
       "name": "import_csv_headers",

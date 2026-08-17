@@ -194,6 +194,11 @@ export interface ImportReport {
   failed: number;
   items: ReportItem[];
 }
+export interface ExportReport {
+  format: string;
+  total: number;
+  path: string;
+}
 export interface TaskSnapshot {
   id: string;
   kind: string;
@@ -369,6 +374,11 @@ export function import_commit(args: {
   plan: ImportPlan | null;
 }): Promise<TaskSnapshot> {
   return invoke<TaskSnapshot>("import_commit", args);
+}
+
+/** Export the whole library as a background task (MISSION-071): streams rows to `path` as json / csv / markdown (`format`) and resolves with the initial (queued) snapshot; progress + terminal state stream as `task_changed` events and the task can be cancelled (a cancelled export drops its partial file). The file is written to a `*.partial` sibling and renamed into place on success. On success the task's `result` is the `ExportReport` (`{ format, total, path }`). */
+export function export_media(args: { format: string; path: string }): Promise<TaskSnapshot> {
+  return invoke<TaskSnapshot>("export_media", args);
 }
 
 /** Read the header row of a CSV file for the mapping UI's column pickers. Resolves with the trimmed column names or rejects with an AppError string. */

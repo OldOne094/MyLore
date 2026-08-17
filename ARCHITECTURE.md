@@ -211,6 +211,14 @@ has no type column. `delimiter` is the CSV field delimiter, `separator` splits m
 - **Background commit (MISSION-070):** confirm spawns the import on the `TaskManager` (ARCHITECTURE
   §8) — `import_commit` resolves with the queued `TaskSnapshot` and the dialog streams `task-changed`
   progress with a cancel button; the report (REQ-IMPORT-004) arrives in the task's typed `result`.
+- **Export (MISSION-071):** the Settings page's `ExportSection` picks a format (JSON / CSV / Markdown)
+  and a destination through the native save dialog (`tauri-plugin-dialog`), then `export_media`
+  spawns a `TaskKind::ExportFile` task. `ExportService::stream_to_path` streams rows (title-ordered
+  via `media::list_ids`), writing to `<final>.partial` and renaming into place on commit — the
+  `PartialExport` guard drops the partial on cancel/error. JSON uses the MISSION-068 import field
+  names so an export round-trips back through the importer; CSV uses a fixed 34-column header with
+  `|`-joined multi-values; Markdown renders per-title sections. The success `ExportReport
+  {format, total, path}` lands in the task's `result`.
 
 ## 7. Backup & Restore
 
@@ -226,7 +234,8 @@ download, backup, migration, provider search) is a cancelable task with states
 `TaskManager` is managed as `Arc<TaskManager>`; its emitter forwards every change as a `task-changed`
 event (payload `TaskSnapshot`). The import confirm command spawns a `TaskKind::ImportFile` task that
 runs `ImportPipeline::commit_with_progress` inside `tokio::select!` against a cooperative cancel
-flag. Cancellation propagates to Tokio tasks and HTTP requests (drop-based cancellation).
+flag; the export command spawns a `TaskKind::ExportFile` task that streams rows the same way.
+Cancellation propagates to Tokio tasks and HTTP requests (drop-based cancellation).
 
 - `domain::task::TaskSnapshot` — id, kind, title, state, `progress: Option<u32>`, message, error,
   `result: Option<Value>` (the typed outcome, e.g. the `ImportReport` on a successful import).
