@@ -69,6 +69,34 @@
     {
       "name": "ProviderTestView",
       "shape": "ok: boolean; message: string; results: number"
+    },
+    {
+      "name": "CsvMapping",
+      "shape": "title: string | null; title_original: string | null; alt_titles: string | null; content_type: string | null; default_content_type: string | null; format: string | null; pub_status: string | null; start_date: string | null; end_date: string | null; release_year: string | null; language: string | null; country: string | null; content_rating: string | null; pages: string | null; duration_min: string | null; ep_count: string | null; ch_count: string | null; synopsis: string | null; author: string | null; artist: string | null; studio: string | null; genres: string | null; tags: string | null; external_id: string | null; cover_url: string | null; banner_url: string | null; delimiter: string; separator: string"
+    },
+    {
+      "name": "Issue",
+      "shape": "severity: string; field: string; message: string"
+    },
+    {
+      "name": "PreviewItem",
+      "shape": "source_row: number; title: string | null; outcome: string; matched_media_id: string | null; match_kind: string | null; match_score: number | null; issues: Issue[]"
+    },
+    {
+      "name": "ImportPreview",
+      "shape": "total: number; valid: number; invalid: number; new: number; in_library: number; duplicates: number; items: PreviewItem[]"
+    },
+    {
+      "name": "ImportPlan",
+      "shape": "rows: number[]"
+    },
+    {
+      "name": "ReportItem",
+      "shape": "source_row: number; title: string; status: string; media_id: string | null; message: string | null"
+    },
+    {
+      "name": "ImportReport",
+      "shape": "total: number; committed: number; skipped: number; failed: number; items: ReportItem[]"
     }
   ],
   "commands": [
@@ -152,6 +180,36 @@
       },
       "returns": "ProviderImportView",
       "doc": "Import one provider title into the library (details → identity check → add). Resolves with the media that owns the title — newly created (created: true) or an existing library row the identity check matched (created: false), or rejects with an AppError string."
+    },
+    {
+      "name": "import_file_preview",
+      "args": {
+        "kind": "string",
+        "source": "string",
+        "mapping": "CsvMapping | null"
+      },
+      "returns": "ImportPreview",
+      "doc": "Parse + dedup a file (kind `json` = MyLore JSON format, `csv` = CSV with a column mapping) into the per-item preview. `mapping` is required for `csv` and ignored for `json`. Read-only. Resolves with the preview (per-row outcomes + issues) or rejects with an AppError string."
+    },
+    {
+      "name": "import_commit",
+      "args": {
+        "kind": "string",
+        "source": "string",
+        "mapping": "CsvMapping | null",
+        "plan": "ImportPlan | null"
+      },
+      "returns": "ImportReport",
+      "doc": "Import a file's rows in one transaction, savepoint per row. `plan` selects which source rows to import; null imports every `New` row of the preview. Non-new / invalid / unselected rows are reported as skipped; a row that fails to insert rolls back its own savepoint and is reported as failed. Resolves with the per-item report or rejects with an AppError string."
+    },
+    {
+      "name": "import_csv_headers",
+      "args": {
+        "source": "string",
+        "delimiter": "string"
+      },
+      "returns": "string[]",
+      "doc": "Read the header row of a CSV file for the mapping UI's column pickers. Resolves with the trimmed column names or rejects with an AppError string."
     },
     {
       "name": "media_enrich",

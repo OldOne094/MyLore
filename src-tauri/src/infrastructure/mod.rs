@@ -9,6 +9,7 @@ pub mod fts;
 pub mod images;
 pub mod keyring;
 pub mod logging;
+pub mod parsers;
 pub mod providers;
 pub mod repositories;
 

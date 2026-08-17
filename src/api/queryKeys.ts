@@ -63,6 +63,11 @@ export const queryKeys = {
     external: (query: string, content_type: string | null) =>
       ["search", "external", query, content_type] as const,
   },
+  import: {
+    all: () => ["import"] as const,
+    csvHeaders: (source: string, delimiter: string) =>
+      ["import", "csv", "headers", source, delimiter] as const,
+  },
   trash: {
     all: () => ["trash"] as const,
     lists: () => ["trash", "list"] as const,

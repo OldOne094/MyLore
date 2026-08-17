@@ -205,7 +205,7 @@ impl ImportPipeline {
     }
 }
 
-fn import_error_to_app(error: ImportError) -> AppError {
+pub(crate) fn import_error_to_app(error: ImportError) -> AppError {
     match error {
         ImportError::Parse(message) => AppError::validation(message),
         ImportError::Unsupported(message) => AppError::internal(message),

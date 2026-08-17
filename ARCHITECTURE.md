@@ -148,6 +148,59 @@ Import:  source(file | provider | manual | backup)
 - **Export:** JSON / CSV / Markdown (human-readable) via ExportService; SQLite backup is the
   BackupService path. Export streams to a user-chosen path (dialog) without blocking the UI.
 
+### File import (MISSION-067 → 068)
+
+The pipeline core (`domain::import`, `application::import_pipeline`) is format-agnostic; parsers
+(`infrastructure::parsers`) implement the `ImportParser` trait and plug in unchanged.
+
+**MyLore JSON format** (`JsonParser`): a top-level array of item objects. Every field is optional;
+counts and years accept numbers **or** strings. Structural problems (not an array, a non-object
+element) abort the file with a parse error; content problems are per-row validation issues.
+
+```json
+[
+  {
+    "title": "Sword of the Dawn",
+    "title_original": "夜明けの剣",
+    "alt_titles": ["Dawn's Sword"],
+    "content_type": "novel",
+    "format": "light_novel",
+    "pub_status": "ongoing",
+    "start_date": "2025-01-01",
+    "end_date": null,
+    "release_year": 2025,
+    "language": "ja",
+    "country": "JP",
+    "content_rating": null,
+    "pages": 320,
+    "duration_min": null,
+    "ep_count": null,
+    "ch_count": null,
+    "synopsis": "…",
+    "people": [{ "role": "author", "name": "Test Author" }],
+    "genres": ["Fantasy"],
+    "tags": ["isekai"],
+    "external_ids": [{ "provider": "anilist", "value": "42", "url": null }],
+    "cover_url": "https://…",
+    "banner_url": null
+  }
+]
+```
+
+**CSV import** (`CsvParser`) reads the file with a user-built `CsvMapping` (the MISSION-068 mapping
+UI): each field names a CSV column; fields without a column stay `None` (the validator/normalizer
+decide how to degrade the row). `default_content_type` applies one type to every row when the file
+has no type column. `delimiter` is the CSV field delimiter, `separator` splits multi-value cells
+(`alt_titles`, `genres`, `tags`, `external_id`). External-id cells must be `provider:value`
+(e.g. `anilist:42`). Files are parsed `flexible`, so a ragged trailing line never aborts the batch.
+
+- IPC: `import_file_preview` (parse + dedup → preview), `import_commit` (one transaction, savepoint
+  per row; `plan` selects rows, null = every `New` row), `import_csv_headers` (column list for the
+  mapping pickers). The webview picks the file (`<input type="file">` + `FileReader`) and passes the
+  text — no fs/dialog plugin needed.
+- `application::import_file_service` (`ImportFileService`) routes `json`/`csv` to the right parser,
+  detects format by first byte, and reuses `ImportPipeline` for preview + savepoint commit.
+
 ## 7. Backup & Restore
 
 `BackupService` in Rust: snapshot (VACUUM INTO) + assets manifest + meta.json → `.mylore` zip.

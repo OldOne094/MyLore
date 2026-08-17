@@ -193,7 +193,7 @@ pub struct ImportPreview {
 
 /// Which source rows to import on commit. Only rows whose preview outcome is
 /// `New` are honored; everything else is reported as skipped.
-#[derive(Debug, Clone, Default)]
+#[derive(Debug, Clone, Default, serde::Serialize, serde::Deserialize)]
 pub struct ImportPlan {
     pub rows: Vec<usize>,
 }

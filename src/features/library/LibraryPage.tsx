@@ -1,9 +1,10 @@
 import { useState } from "react";
-import { CheckSquare, Library, Plus, RefreshCcw, SlidersHorizontal, X } from "lucide-react";
+import { CheckSquare, Library, Plus, RefreshCcw, SlidersHorizontal, Upload, X } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { Button, EmptyState, Skeleton } from "@/components/ui";
 import { useMediaFacetsQuery, useMediaListQuery } from "./api";
 import { AddMediaDialog } from "./AddMediaDialog";
+import { ImportFileDialog } from "@/features/import/ImportFileDialog";
 import { LibraryViewSwitcher, type LibraryView } from "./LibraryViewSwitcher";
 import { VirtualizedLibrary } from "./VirtualizedLibrary";
 import { LibraryFilterBar } from "./LibraryFilterBar";
@@ -34,6 +35,20 @@ function AddTitleTrigger() {
         <Button>
           <Plus size={16} aria-hidden="true" />
           {t("library.add")}
+        </Button>
+      }
+    />
+  );
+}
+
+function ImportFileTrigger() {
+  const { t } = useTranslation();
+  return (
+    <ImportFileDialog
+      trigger={
+        <Button variant="secondary">
+          <Upload size={16} aria-hidden="true" />
+          {t("library.import")}
         </Button>
       }
     />
@@ -83,7 +98,12 @@ function EmptyLibrary() {
       icon={Library}
       title={t("library.emptyTitle")}
       hint={t("library.emptyHint")}
-      action={<AddTitleTrigger />}
+      action={
+        <div className="flex items-center justify-center gap-2">
+          <AddTitleTrigger />
+          <ImportFileTrigger />
+        </div>
+      }
     />
   );
 }
@@ -185,6 +205,7 @@ export function LibraryPage() {
                 <CheckSquare size={14} aria-hidden="true" />
                 {t("library.select")}
               </Button>
+              <ImportFileTrigger />
               <AddTitleTrigger />
               <LibraryViewSwitcher view={view} onChange={setView} />
             </>

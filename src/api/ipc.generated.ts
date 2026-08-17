@@ -123,6 +123,76 @@ export interface ProviderTestView {
   message: string;
   results: number;
 }
+export interface CsvMapping {
+  title: string | null;
+  title_original: string | null;
+  alt_titles: string | null;
+  content_type: string | null;
+  default_content_type: string | null;
+  format: string | null;
+  pub_status: string | null;
+  start_date: string | null;
+  end_date: string | null;
+  release_year: string | null;
+  language: string | null;
+  country: string | null;
+  content_rating: string | null;
+  pages: string | null;
+  duration_min: string | null;
+  ep_count: string | null;
+  ch_count: string | null;
+  synopsis: string | null;
+  author: string | null;
+  artist: string | null;
+  studio: string | null;
+  genres: string | null;
+  tags: string | null;
+  external_id: string | null;
+  cover_url: string | null;
+  banner_url: string | null;
+  delimiter: string;
+  separator: string;
+}
+export interface Issue {
+  severity: string;
+  field: string;
+  message: string;
+}
+export interface PreviewItem {
+  source_row: number;
+  title: string | null;
+  outcome: string;
+  matched_media_id: string | null;
+  match_kind: string | null;
+  match_score: number | null;
+  issues: Issue[];
+}
+export interface ImportPreview {
+  total: number;
+  valid: number;
+  invalid: number;
+  new: number;
+  in_library: number;
+  duplicates: number;
+  items: PreviewItem[];
+}
+export interface ImportPlan {
+  rows: number[];
+}
+export interface ReportItem {
+  source_row: number;
+  title: string;
+  status: string;
+  media_id: string | null;
+  message: string | null;
+}
+export interface ImportReport {
+  total: number;
+  committed: number;
+  skipped: number;
+  failed: number;
+  items: ReportItem[];
+}
 
 /** Placeholder greeting command (create-tauri-app scaffold). Resolves with the greeting or rejects with an AppError string. */
 export function greet(args: { name: string }): Promise<string> {
@@ -267,6 +337,30 @@ export function import_provider(args: {
   provider_id: string;
 }): Promise<ProviderImportView> {
   return invoke<ProviderImportView>("import_provider", args);
+}
+
+/** Parse + dedup a file (kind `json` = MyLore JSON format, `csv` = CSV with a column mapping) into the per-item preview. `mapping` is required for `csv` and ignored for `json`. Read-only. Resolves with the preview (per-row outcomes + issues) or rejects with an AppError string. */
+export function import_file_preview(args: {
+  kind: string;
+  source: string;
+  mapping: CsvMapping | null;
+}): Promise<ImportPreview> {
+  return invoke<ImportPreview>("import_file_preview", args);
+}
+
+/** Import a file's rows in one transaction, savepoint per row. `plan` selects which source rows to import; null imports every `New` row of the preview. Non-new / invalid / unselected rows are reported as skipped; a row that fails to insert rolls back its own savepoint and is reported as failed. Resolves with the per-item report or rejects with an AppError string. */
+export function import_commit(args: {
+  kind: string;
+  source: string;
+  mapping: CsvMapping | null;
+  plan: ImportPlan | null;
+}): Promise<ImportReport> {
+  return invoke<ImportReport>("import_commit", args);
+}
+
+/** Read the header row of a CSV file for the mapping UI's column pickers. Resolves with the trimmed column names or rejects with an AppError string. */
+export function import_csv_headers(args: { source: string; delimiter: string }): Promise<string[]> {
+  return invoke<string[]>("import_csv_headers", args);
 }
 
 /** Refresh a media's provider-owned metadata from its provider and report what changed (per-field before → after). Never touches user data (tracking, review, collections, personal tags, asset ids). Resolves with the diff view or rejects with an AppError string. */
