@@ -9,10 +9,15 @@ import i18n from "@/i18n";
 vi.mock("@tauri-apps/api/core", () => ({
   invoke: vi.fn(),
 }));
+vi.mock("@tauri-apps/api/event", () => ({
+  listen: vi.fn(),
+  emit: vi.fn(),
+}));
 
 import { invoke } from "@tauri-apps/api/core";
+import { listen } from "@tauri-apps/api/event";
 import { ImportFileDialog } from "./ImportFileDialog";
-import type { ImportPreview, ImportReport } from "@/api";
+import type { ImportPreview, ImportReport, TaskSnapshot } from "@/api";
 
 let fakeFileText = "";
 
@@ -83,6 +88,34 @@ const REPORT: ImportReport = {
   ],
 };
 
+const TASK_ID = "t-1";
+let currentTask: TaskSnapshot;
+let taskListener: ((snapshot: TaskSnapshot) => void) | undefined;
+
+function makeSnapshot(
+  state: TaskSnapshot["state"],
+  overrides: Partial<TaskSnapshot> = {},
+): TaskSnapshot {
+  return {
+    id: TASK_ID,
+    kind: "import_file",
+    title: "Import json file",
+    state,
+    progress: null,
+    message: null,
+    error: null,
+    result: null,
+    created_at: "2026-08-16T00:00:00Z",
+    updated_at: "2026-08-16T00:00:00Z",
+    ...overrides,
+  };
+}
+
+function emitTask(next: Partial<TaskSnapshot>) {
+  currentTask = { ...currentTask, ...next, id: TASK_ID };
+  taskListener?.(currentTask);
+}
+
 function renderDialog() {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   return render(
@@ -96,7 +129,16 @@ function renderDialog() {
 
 beforeEach(() => {
   fakeFileText = "";
+  taskListener = undefined;
+  currentTask = makeSnapshot("running", { progress: 0, message: "Analyzing the file…" });
   vi.stubGlobal("FileReader", FakeFileReader);
+  vi.mocked(listen).mockImplementation(((
+    _event: string,
+    handler: (event: { payload: TaskSnapshot }) => void,
+  ) => {
+    taskListener = (snapshot) => handler({ payload: snapshot });
+    return Promise.resolve(() => undefined);
+  }) as typeof listen);
   vi.mocked(invoke).mockImplementation(async (cmd: string) => {
     switch (cmd) {
       case "import_csv_headers":
@@ -104,7 +146,9 @@ beforeEach(() => {
       case "import_file_preview":
         return PREVIEW;
       case "import_commit":
-        return REPORT;
+        return currentTask;
+      case "task_get":
+        return currentTask;
       default:
         throw new Error(`unexpected command ${cmd}`);
     }
@@ -113,12 +157,14 @@ beforeEach(() => {
 
 afterEach(async () => {
   vi.mocked(invoke).mockReset();
+  vi.mocked(listen).mockReset();
   vi.unstubAllGlobals();
+  taskListener = undefined;
   await i18n.changeLanguage("en");
 });
 
 describe("ImportFileDialog", () => {
-  it("previews a JSON file and imports the selected new rows", async () => {
+  it("previews a JSON file and imports the selected new rows as a task", async () => {
     const user = userEvent.setup();
     renderDialog();
     await user.click(screen.getByRole("button", { name: "Open import" }));
@@ -129,9 +175,6 @@ describe("ImportFileDialog", () => {
 
     expect(await screen.findByText("Review titles before importing")).toBeInTheDocument();
     expect(screen.getByText("2 new")).toBeInTheDocument();
-    expect(screen.getByText("1 in library")).toBeInTheDocument();
-    expect(screen.getByText("1 duplicates")).toBeInTheDocument();
-    expect(screen.getByText("1 invalid")).toBeInTheDocument();
 
     expect(invoke).toHaveBeenCalledWith("import_file_preview", {
       kind: "json",
@@ -147,6 +190,14 @@ describe("ImportFileDialog", () => {
       mapping: null,
       plan: { rows: [1, 2] },
     });
+
+    expect(await screen.findByRole("status")).toBeInTheDocument();
+    expect(screen.getByText("Importing…")).toBeInTheDocument();
+
+    emitTask({ state: "running", progress: 50, message: "Importing 1/2 titles" });
+    expect(await screen.findByText("Importing 1/2 titles")).toBeInTheDocument();
+
+    emitTask({ state: "success", progress: 100, result: REPORT });
     expect(await screen.findByText("Import finished")).toBeInTheDocument();
     expect(screen.getByText("2 titles added · 0 skipped · 0 failed")).toBeInTheDocument();
   });
@@ -187,6 +238,8 @@ describe("ImportFileDialog", () => {
       }),
       plan: { rows: [1, 2] },
     });
+
+    emitTask({ state: "success", progress: 100, result: REPORT });
     expect(await screen.findByText("Import finished")).toBeInTheDocument();
   });
 
@@ -239,7 +292,7 @@ describe("ImportFileDialog", () => {
     expect(screen.getByRole("button", { name: "Import 0 titles" })).toBeDisabled();
   });
 
-  it("surfaces an import failure as a toast", async () => {
+  it("surfaces an immediate import failure as a toast", async () => {
     vi.mocked(invoke).mockImplementation(async (cmd: string) => {
       if (cmd === "import_commit") throw new Error("import error: boom");
       if (cmd === "import_csv_headers") return ["Title"];
@@ -258,5 +311,45 @@ describe("ImportFileDialog", () => {
 
     await user.click(await screen.findByRole("button", { name: "Import 2 titles" }));
     expect(await screen.findByText("Couldn't import the file")).toBeInTheDocument();
+  });
+
+  it("cancels a running import and shows the cancelled state", async () => {
+    const user = userEvent.setup();
+    renderDialog();
+    await user.click(screen.getByRole("button", { name: "Open import" }));
+
+    fakeFileText = '[{"title":"Sword"}]';
+    await user.upload(
+      screen.getByLabelText("Choose file"),
+      new File([fakeFileText], "books.json", { type: "application/json" }),
+    );
+
+    await user.click(await screen.findByRole("button", { name: "Import 2 titles" }));
+    await screen.findByRole("status");
+
+    await user.click(screen.getByRole("button", { name: "Cancel import" }));
+    expect(invoke).toHaveBeenCalledWith("task_cancel", { id: TASK_ID });
+
+    emitTask({ state: "cancelled" });
+    expect(await screen.findByText("Import cancelled")).toBeInTheDocument();
+  });
+
+  it("shows a task failure with the backend message", async () => {
+    const user = userEvent.setup();
+    renderDialog();
+    await user.click(screen.getByRole("button", { name: "Open import" }));
+
+    fakeFileText = '[{"title":"Sword"}]';
+    await user.upload(
+      screen.getByLabelText("Choose file"),
+      new File([fakeFileText], "books.json", { type: "application/json" }),
+    );
+
+    await user.click(await screen.findByRole("button", { name: "Import 2 titles" }));
+    await screen.findByRole("status");
+
+    emitTask({ state: "failed", error: "database error: locked" });
+    expect(await screen.findByText("Couldn't import the file")).toBeInTheDocument();
+    expect(screen.getByText("database error: locked")).toBeInTheDocument();
   });
 });

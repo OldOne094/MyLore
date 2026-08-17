@@ -14,6 +14,7 @@
 //!   - `normalize`    — title fold (case/unicode/diacritics, script-aware)
 //!   - `identity`     — exact + fuzzy identity matching, candidate ranking
 //!   - `import`       — import pipeline core: validate/normalize/dedup/preview
+//!   - `task`         — background task model: states, snapshot, task error
 //!   - `stats`        — dashboard statistics (counts, hours, completion, rating)
 //!   - `merge`        — merge plans: conflict report, re-parenting, before-image
 //!   - `value_objects`/`enums` — immutable values and `CHECK`-aligned enums
@@ -31,6 +32,7 @@ pub mod provider;
 pub mod review;
 pub mod stats;
 pub mod status;
+pub mod task;
 pub mod tracking;
 pub mod value_objects;
 

@@ -208,6 +208,9 @@ has no type column. `delimiter` is the CSV field delimiter, `separator` splits m
   `import_commit` on confirm. Cancel closes without writing. The effective CSV mapping sent to
   preview/commit always carries the chosen `delimiter`/`separator`, so a delimiter change
   re-analyzes the file via the `preview(kind, source, mapping)` query key.
+- **Background commit (MISSION-070):** confirm spawns the import on the `TaskManager` (ARCHITECTURE
+  §8) — `import_commit` resolves with the queued `TaskSnapshot` and the dialog streams `task-changed`
+  progress with a cancel button; the report (REQ-IMPORT-004) arrives in the task's typed `result`.
 
 ## 7. Backup & Restore
 
@@ -217,10 +220,22 @@ Restore validates, quarantines current data, swaps, verifies. Automatic scheduli
 
 ## 8. Background tasks
 
-Unified `TaskManager`: every long operation (import, export, metadata sync, image download,
-backup, migration, provider search) is a cancelable task with states
+Unified `TaskManager` (**implemented**): every long operation (import, export, metadata sync, image
+download, backup, migration, provider search) is a cancelable task with states
 `queued → running(p) → success|failed|cancelled`, progress events to the UI, and a typed result.
-Task cancellation propagates to Tokio tasks and HTTP requests (drop-based cancellation).
+`TaskManager` is managed as `Arc<TaskManager>`; its emitter forwards every change as a `task-changed`
+event (payload `TaskSnapshot`). The import confirm command spawns a `TaskKind::ImportFile` task that
+runs `ImportPipeline::commit_with_progress` inside `tokio::select!` against a cooperative cancel
+flag. Cancellation propagates to Tokio tasks and HTTP requests (drop-based cancellation).
+
+- `domain::task::TaskSnapshot` — id, kind, title, state, `progress: Option<u32>`, message, error,
+  `result: Option<Value>` (the typed outcome, e.g. the `ImportReport` on a successful import).
+- `application::task_service::{TaskManager, TaskReporter}` — spawn/get/list/cancel; the reporter's
+  watch channel backs `cancel` and progress.
+- `commands::tasks::{task_list, task_get, task_cancel}` (+ the `task-changed` event via codegen).
+- Frontend: `useImportTask(taskId)` subscribes to `task-changed` per task, falls back to `task_get`,
+  and invalidates library queries on success; `useTaskCancel` requests cancellation. `ImportFileDialog`
+  streams progress with a cancel button and shows the report from the task's `result`.
 
 ## 9. Error handling
 

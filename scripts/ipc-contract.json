@@ -97,6 +97,10 @@
     {
       "name": "ImportReport",
       "shape": "total: number; committed: number; skipped: number; failed: number; items: ReportItem[]"
+    },
+    {
+      "name": "TaskSnapshot",
+      "shape": "id: string; kind: string; title: string; state: string; progress: number | null; message: string | null; error: string | null; result: unknown | null; created_at: string; updated_at: string"
     }
   ],
   "commands": [
@@ -199,8 +203,8 @@
         "mapping": "CsvMapping | null",
         "plan": "ImportPlan | null"
       },
-      "returns": "ImportReport",
-      "doc": "Import a file's rows in one transaction, savepoint per row. `plan` selects which source rows to import; null imports every `New` row of the preview. Non-new / invalid / unselected rows are reported as skipped; a row that fails to insert rolls back its own savepoint and is reported as failed. Resolves with the per-item report or rejects with an AppError string."
+      "returns": "TaskSnapshot",
+      "doc": "Import a file's rows as a background task (MISSION-070): spawns the commit on the TaskManager and resolves with the initial (queued) snapshot; progress + terminal state stream as `task_changed` events and the task can be cancelled. The commit runs in one transaction, savepoint per row. `plan` selects which source rows to import; null imports every `New` row of the preview. Non-new / invalid / unselected rows are reported as skipped; a row that fails to insert rolls back its own savepoint and is reported as failed. On success the task's `result` is the per-item `ImportReport`."
     },
     {
       "name": "import_csv_headers",
@@ -387,7 +391,31 @@
       },
       "returns": "void",
       "doc": "Add many media to one collection. Resolves or rejects with an AppError string."
+    },
+    {
+      "name": "task_list",
+      "args": {},
+      "returns": "TaskSnapshot[]",
+      "doc": "Every background task snapshot, newest first. Resolves with the list or rejects with an AppError string."
+    },
+    {
+      "name": "task_get",
+      "args": { "id": "string" },
+      "returns": "TaskSnapshot",
+      "doc": "The current snapshot of one background task. Resolves with the snapshot or rejects with an AppError string when the id is unknown."
+    },
+    {
+      "name": "task_cancel",
+      "args": { "id": "string" },
+      "returns": "TaskSnapshot",
+      "doc": "Request cancellation of a background task. The runner observes the flag at its next checkpoint (dropping its in-flight transaction). Resolves with the current snapshot or rejects with an AppError string when the id is unknown."
     }
   ],
-  "events": []
+  "events": [
+    {
+      "name": "task-changed",
+      "payload": "TaskSnapshot",
+      "doc": "Emitted by the TaskManager whenever a background task changes state or reports progress."
+    }
+  ]
 }

@@ -11,10 +11,12 @@ pub mod infrastructure;
 
 use std::sync::Arc;
 
+use tauri::Emitter;
 use tauri::Manager;
 
 use crate::application::image_service::ImageService;
 use crate::application::providers::settings::ProviderSettingsService;
+use crate::application::task_service::TaskManager;
 use crate::infrastructure::keyring::OsKeyring;
 use crate::infrastructure::providers::StdEntryBuilder;
 
@@ -48,6 +50,16 @@ pub fn run() {
             let images_dir = data_dir.join("images");
             app.manage(Arc::new(ImageService::new(pool, &images_dir)));
 
+            // Background task manager (MISSION-070): every long operation runs
+            // as a cancelable task; changes stream to the UI as `task_changed`.
+            let task_manager = TaskManager::with_emitter({
+                let handle = app.handle().clone();
+                move |snapshot| {
+                    let _ = handle.emit("task-changed", snapshot);
+                }
+            });
+            app.manage(Arc::new(task_manager));
+
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
@@ -78,6 +90,9 @@ pub fn run() {
             commands::trash::trash_list,
             commands::trash::trash_restore,
             commands::trash::trash_purge,
+            commands::tasks::task_list,
+            commands::tasks::task_get,
+            commands::tasks::task_cancel,
             commands::bulk::tracking_bulk_set_status,
             commands::bulk::media_bulk_add_tag,
             commands::bulk::media_bulk_delete,

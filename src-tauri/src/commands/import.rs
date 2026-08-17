@@ -11,9 +11,12 @@ use std::sync::Arc;
 
 use crate::application::import_file_service::{ImportFileKind, ImportFileService};
 use crate::application::import_pipeline::import_error_to_app;
+use crate::application::import_pipeline::ImportPipeline;
 use crate::application::import_service::{ImportService, ProviderImportView};
 use crate::application::providers::settings::ProviderSettingsService;
-use crate::domain::import::{ImportPlan, ImportPreview, ImportReport};
+use crate::application::task_service::TaskManager;
+use crate::domain::import::{ImportPlan, ImportPreview};
+use crate::domain::task::{TaskError, TaskKind, TaskSnapshot};
 use crate::error::AppError;
 use crate::infrastructure::parsers::csv_headers;
 use crate::infrastructure::parsers::CsvMapping;
@@ -49,25 +52,68 @@ pub async fn import_file_preview(
     service.preview(kind, &source, mapping.as_ref()).await
 }
 
-/// Import a file's rows in one transaction, savepoint per row (MISSION-068).
-/// `plan` selects which source rows to import; null imports every `New` row of
-/// the preview. Non-new / invalid / unselected rows are reported as skipped; a
-/// row that fails to insert rolls back its own savepoint and is reported as
-/// failed.
+/// Import a file's rows as a background task (MISSION-070): the command spawns
+/// the commit on the TaskManager and resolves with the initial snapshot; the
+/// UI streams progress via `task_changed` events and can cancel. The commit
+/// runs in one transaction, savepoint per row. `plan` selects which source rows
+/// to import; null imports every `New` row of the preview. Non-new / invalid /
+/// unselected rows are reported as skipped; a row that fails to insert rolls
+/// back its own savepoint and is reported as failed. The `ImportReport` is the
+/// task's typed result on success.
 #[command]
 pub async fn import_commit(
+    tasks: State<'_, Arc<TaskManager>>,
     state: State<'_, SqlitePool>,
     kind: String,
     source: String,
     mapping: Option<CsvMapping>,
     plan: Option<ImportPlan>,
-) -> Result<ImportReport, AppError> {
+) -> Result<TaskSnapshot, AppError> {
     info!(kind, "import_commit invoked");
     let kind = kind.parse::<ImportFileKind>()?;
-    let service = ImportFileService::new(state.inner().clone());
-    service
-        .commit(kind, &source, mapping.as_ref(), plan.as_ref())
-        .await
+    let pool = state.inner().clone();
+    let title = format!("Import {} file", kind.as_str());
+
+    let id = tasks.spawn(TaskKind::ImportFile, title, move |reporter| async move {
+        let service = ImportFileService::new(pool.clone());
+        let pipeline = ImportPipeline::new(pool);
+
+        reporter.progress(0, Some("Analyzing the file…".to_string()));
+        let preview = service
+            .preview(kind, &source, mapping.as_ref())
+            .await
+            .map_err(|error| TaskError::failed(error.to_string()))?;
+        let plan = match plan {
+            Some(plan) => plan,
+            None => ImportPlan::all_new(&preview),
+        };
+
+        let commit = pipeline.commit_with_progress(&preview, &plan, |processed, total| {
+            let percent = processed
+                .checked_mul(100)
+                .and_then(|p| p.checked_div(total))
+                .unwrap_or(100) as u32;
+            reporter.progress(
+                percent,
+                Some(format!("Importing {processed}/{total} titles")),
+            );
+        });
+        tokio::pin!(commit);
+
+        tokio::select! {
+            report = &mut commit => {
+                let report = report.map_err(|error| TaskError::failed(error.to_string()))?;
+                reporter.progress(100, Some("Import finished".to_string()));
+                serde_json::to_value(&report)
+                    .map_err(|error| TaskError::failed(error.to_string()))
+            }
+            _ = reporter.cancelled() => Err(TaskError::Cancelled),
+        }
+    });
+
+    tasks
+        .get(&id)
+        .ok_or_else(|| AppError::internal("import task vanished"))
 }
 
 /// Read the header row of a CSV for the mapping UI's column pickers

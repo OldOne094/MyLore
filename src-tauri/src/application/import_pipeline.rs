@@ -63,6 +63,21 @@ impl ImportPipeline {
         preview: &ImportPreview,
         plan: &ImportPlan,
     ) -> Result<ImportReport, AppError> {
+        self.commit_with_progress(preview, plan, |_, _| {}).await
+    }
+
+    /// [`commit`] with a per-row progress callback. `on_progress(processed,
+    /// total)` runs after each row write — the MISSION-070 import task maps it
+    /// to task progress (and drops the future to cancel between rows).
+    pub async fn commit_with_progress<F>(
+        &self,
+        preview: &ImportPreview,
+        plan: &ImportPlan,
+        mut on_progress: F,
+    ) -> Result<ImportReport, AppError>
+    where
+        F: FnMut(usize, usize) + Send,
+    {
         let now = Utc::now().to_rfc3339();
         let plan_rows: HashSet<usize> = plan.rows.iter().copied().collect();
         let preview_rows: HashSet<usize> = preview.items.iter().map(|i| i.source_row).collect();
@@ -158,6 +173,7 @@ impl ImportPipeline {
                         });
                     }
                 }
+                on_progress(committed + failed, writes.len());
             }
             tx.commit().await?;
         }
@@ -501,6 +517,30 @@ mod tests {
         assert_eq!(report.failed, 0);
         assert_eq!(report.total, 3);
         assert_eq!(library_titles(&pool).await, vec!["Alpha", "Gamma"]);
+
+        pool.close().await;
+        cleanup_files(&path);
+    }
+
+    #[tokio::test]
+    async fn commit_with_progress_reports_each_written_row() {
+        let (pool, path) = migrated_pool("import_pipeline_commit_progress.db").await;
+        let service = ImportPipeline::new(pool.clone());
+        let parser = parser(vec![item(1, "Alpha"), item(2, "Beta"), item(3, "Gamma")]);
+
+        let preview = service.preview(&parser, "source").await.expect("preview");
+        let mut ticks: Vec<(usize, usize)> = Vec::new();
+        service
+            .commit_with_progress(
+                &preview,
+                &ImportPlan::all_new(&preview),
+                |processed, total| ticks.push((processed, total)),
+            )
+            .await
+            .expect("commit");
+
+        assert_eq!(ticks, vec![(1, 3), (2, 3), (3, 3)]);
+        assert_eq!(library_titles(&pool).await, vec!["Alpha", "Beta", "Gamma"]);
 
         pool.close().await;
         cleanup_files(&path);

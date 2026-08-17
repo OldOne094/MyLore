@@ -13,14 +13,22 @@ import {
   useToast,
 } from "@/components/ui";
 import { type CsvMapping, type ImportPlan, type ImportReport, type PreviewItem } from "@/api";
-import { useCsvHeaders, useImportFile, useImportPreview, type ImportFileKind } from "./api";
+import {
+  useCsvHeaders,
+  useImportFile,
+  useImportPreview,
+  useImportTask,
+  useTaskCancel,
+  type ImportFileKind,
+} from "./api";
 
-/* MISSION-068/069 — Import-from-file dialog. Flow: pick a JSON/CSV file in the
-   webview (FileReader) → JSON imports directly, CSV opens the column-mapping
-   table → the file is analyzed through `import_file_preview` and the per-item
-   outcomes are shown (MISSION-069): check the new rows you want, then confirm
-   (plan = selected rows) or cancel. Commit runs the MISSION-067 savepoint
-   transaction and shows the report (added / skipped / failed). */
+/* MISSION-068/069/070 — Import-from-file dialog. Flow: pick a JSON/CSV file in
+   the webview (FileReader) → JSON imports directly, CSV opens the column-
+   mapping table → the file is analyzed through `import_file_preview` and the
+   per-item outcomes are shown (MISSION-069): check the new rows you want, then
+   confirm or cancel. Confirm spawns a background task (MISSION-070): the dialog
+   streams `task-changed` progress, can cancel, and shows the MISSION-067
+   savepoint report once the task succeeds. */
 
 const SELECT_CLASSES =
   "h-[var(--control-height)] w-full rounded-sm border bg-bg-base px-3 text-base text-text-primary " +
@@ -142,6 +150,7 @@ export function ImportFileDialog({ trigger }: ImportFileDialogProps) {
   const { t } = useTranslation();
   const toast = useToast();
   const importFile = useImportFile();
+  const taskCancel = useTaskCancel();
   const fileInput = useRef<HTMLInputElement>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
   const selectAllRef = useRef<HTMLInputElement>(null);
@@ -153,8 +162,14 @@ export function ImportFileDialog({ trigger }: ImportFileDialogProps) {
   const [delimiter, setDelimiter] = useState(",");
   const [separator, setSeparator] = useState(",");
   const [mapping, setMapping] = useState<CsvMapping>(defaultMapping);
-  const [report, setReport] = useState<ImportReport | null>(null);
+  const [taskId, setTaskId] = useState<string | null>(null);
   const [selected, setSelected] = useState<Set<number>>(new Set());
+
+  const taskQuery = useImportTask(taskId);
+  const task = taskQuery.data;
+  const report = task?.state === "success" && task.result ? (task.result as ImportReport) : null;
+  const importing =
+    taskId !== null && !report && task?.state !== "failed" && task?.state !== "cancelled";
 
   const openDialog = (value: boolean) => {
     setOpen(value);
@@ -165,7 +180,7 @@ export function ImportFileDialog({ trigger }: ImportFileDialogProps) {
       setDelimiter(",");
       setSeparator(",");
       setMapping(defaultMapping());
-      setReport(null);
+      setTaskId(null);
       setSelected(new Set());
       if (fileInput.current) fileInput.current.value = "";
     }
@@ -181,7 +196,7 @@ export function ImportFileDialog({ trigger }: ImportFileDialogProps) {
       setFileName(file.name);
       setSource(text);
       setKind(isJson ? "json" : "csv");
-      setReport(null);
+      setTaskId(null);
     };
     reader.readAsText(file);
   };
@@ -268,10 +283,18 @@ export function ImportFileDialog({ trigger }: ImportFileDialogProps) {
     importFile.mutate(
       { kind, source, mapping: effectiveMapping, plan },
       {
-        onSuccess: setReport,
+        onSuccess: (snapshot) => setTaskId(snapshot.id),
         onError: () => toast.error({ title: t("import.errorTitle") }),
       },
     );
+  };
+
+  const cancelTask = () => {
+    if (taskId) {
+      taskCancel.mutate(taskId, {
+        onError: () => toast.error({ title: t("import.cancelFailed") }),
+      });
+    }
   };
 
   return (
@@ -520,10 +543,47 @@ export function ImportFileDialog({ trigger }: ImportFileDialogProps) {
                 {t("import.resultFailed", { count: report.failed })}
               </p>
             </div>
+          ) : importing ? (
+            <div
+              role="status"
+              aria-live="polite"
+              className="flex flex-col gap-2 rounded-sm border border-border-subtle p-3 text-sm"
+            >
+              <p className="font-medium text-text-primary">{t("import.importing")}</p>
+              {task?.message ? <p className="text-text-secondary">{task.message}</p> : null}
+              <div className="h-1.5 w-full overflow-hidden rounded-full bg-bg-hover">
+                <div
+                  className="h-full bg-accent transition-[width] duration-150 ease-out"
+                  style={{ width: `${task?.progress ?? 0}%` }}
+                />
+              </div>
+            </div>
+          ) : task?.state === "failed" ? (
+            <div className="rounded-sm border border-border-subtle p-3 text-sm">
+              <p className="font-medium text-text-primary">{t("import.errorTitle")}</p>
+              {task.error ? <p className="mt-1 text-text-secondary">{task.error}</p> : null}
+            </div>
+          ) : task?.state === "cancelled" ? (
+            <div className="rounded-sm border border-border-subtle p-3 text-sm">
+              <p className="font-medium text-text-primary">{t("import.importCancelled")}</p>
+            </div>
           ) : null}
 
           <div className="mt-2 flex justify-end gap-2">
             {report ? (
+              <DialogClose asChild>
+                <Button>{t("import.close")}</Button>
+              </DialogClose>
+            ) : importing ? (
+              <>
+                <DialogClose asChild>
+                  <Button variant="secondary">{t("import.close")}</Button>
+                </DialogClose>
+                <Button variant="secondary" onClick={cancelTask} disabled={taskCancel.isPending}>
+                  {t("import.cancelTask")}
+                </Button>
+              </>
+            ) : task?.state === "failed" || task?.state === "cancelled" ? (
               <DialogClose asChild>
                 <Button>{t("import.close")}</Button>
               </DialogClose>

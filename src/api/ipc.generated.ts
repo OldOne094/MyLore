@@ -2,6 +2,7 @@
 // Source of truth: scripts/ipc-contract.json
 
 import { invoke } from "@tauri-apps/api/core";
+import { emit, listen, type UnlistenFn } from "@tauri-apps/api/event";
 
 export interface ContentNode {
   id: string;
@@ -193,6 +194,18 @@ export interface ImportReport {
   failed: number;
   items: ReportItem[];
 }
+export interface TaskSnapshot {
+  id: string;
+  kind: string;
+  title: string;
+  state: string;
+  progress: number | null;
+  message: string | null;
+  error: string | null;
+  result: unknown | null;
+  created_at: string;
+  updated_at: string;
+}
 
 /** Placeholder greeting command (create-tauri-app scaffold). Resolves with the greeting or rejects with an AppError string. */
 export function greet(args: { name: string }): Promise<string> {
@@ -348,14 +361,14 @@ export function import_file_preview(args: {
   return invoke<ImportPreview>("import_file_preview", args);
 }
 
-/** Import a file's rows in one transaction, savepoint per row. `plan` selects which source rows to import; null imports every `New` row of the preview. Non-new / invalid / unselected rows are reported as skipped; a row that fails to insert rolls back its own savepoint and is reported as failed. Resolves with the per-item report or rejects with an AppError string. */
+/** Import a file's rows as a background task (MISSION-070): spawns the commit on the TaskManager and resolves with the initial (queued) snapshot; progress + terminal state stream as `task_changed` events and the task can be cancelled. The commit runs in one transaction, savepoint per row. `plan` selects which source rows to import; null imports every `New` row of the preview. Non-new / invalid / unselected rows are reported as skipped; a row that fails to insert rolls back its own savepoint and is reported as failed. On success the task's `result` is the per-item `ImportReport`. */
 export function import_commit(args: {
   kind: string;
   source: string;
   mapping: CsvMapping | null;
   plan: ImportPlan | null;
-}): Promise<ImportReport> {
-  return invoke<ImportReport>("import_commit", args);
+}): Promise<TaskSnapshot> {
+  return invoke<TaskSnapshot>("import_commit", args);
 }
 
 /** Read the header row of a CSV file for the mapping UI's column pickers. Resolves with the trimmed column names or rejects with an AppError string. */
@@ -508,4 +521,27 @@ export function collection_bulk_add(args: {
   media_ids: string[];
 }): Promise<void> {
   return invoke<void>("collection_bulk_add", args);
+}
+
+/** Every background task snapshot, newest first. Resolves with the list or rejects with an AppError string. */
+export function task_list(): Promise<TaskSnapshot[]> {
+  return invoke<TaskSnapshot[]>("task_list");
+}
+
+/** The current snapshot of one background task. Resolves with the snapshot or rejects with an AppError string when the id is unknown. */
+export function task_get(args: { id: string }): Promise<TaskSnapshot> {
+  return invoke<TaskSnapshot>("task_get", args);
+}
+
+/** Request cancellation of a background task. The runner observes the flag at its next checkpoint (dropping its in-flight transaction). Resolves with the current snapshot or rejects with an AppError string when the id is unknown. */
+export function task_cancel(args: { id: string }): Promise<TaskSnapshot> {
+  return invoke<TaskSnapshot>("task_cancel", args);
+}
+
+export function listenTaskChanged(handler: (payload: TaskSnapshot) => void): Promise<UnlistenFn> {
+  return listen<TaskSnapshot>("task-changed", (event) => handler(event.payload));
+}
+
+export function emitTaskChanged(payload: TaskSnapshot): Promise<void> {
+  return emit("task-changed", payload);
 }
