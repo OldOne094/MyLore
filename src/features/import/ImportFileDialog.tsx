@@ -1,6 +1,8 @@
-import { useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { useVirtualizer } from "@tanstack/react-virtual";
 import { useTranslation } from "react-i18next";
 import {
+  Badge,
   Button,
   Dialog,
   DialogClose,
@@ -10,14 +12,15 @@ import {
   DialogTrigger,
   useToast,
 } from "@/components/ui";
-import { type CsvMapping, type ImportReport } from "@/api";
-import { useCsvHeaders, useImportFile, type ImportFileKind } from "./api";
+import { type CsvMapping, type ImportPlan, type ImportReport, type PreviewItem } from "@/api";
+import { useCsvHeaders, useImportFile, useImportPreview, type ImportFileKind } from "./api";
 
-/* MISSION-068 — Import-from-file dialog. Flow: pick a JSON/CSV file in the
+/* MISSION-068/069 — Import-from-file dialog. Flow: pick a JSON/CSV file in the
    webview (FileReader) → JSON imports directly, CSV opens the column-mapping
-   table → Import runs the MISSION-067 pipeline and shows the report
-   (added / skipped / failed). The richer per-item preview + confirm screen is
-   MISSION-069. */
+   table → the file is analyzed through `import_file_preview` and the per-item
+   outcomes are shown (MISSION-069): check the new rows you want, then confirm
+   (plan = selected rows) or cancel. Commit runs the MISSION-067 savepoint
+   transaction and shows the report (added / skipped / failed). */
 
 const SELECT_CLASSES =
   "h-[var(--control-height)] w-full rounded-sm border bg-bg-base px-3 text-base text-text-primary " +
@@ -42,6 +45,8 @@ const CONTENT_TYPES = [
   "movie",
   "other",
 ];
+
+const PREVIEW_ROW_SIZE = 48;
 
 type ColumnField = Exclude<keyof CsvMapping, "delimiter" | "separator">;
 
@@ -112,6 +117,23 @@ function defaultMapping(): CsvMapping {
   };
 }
 
+const OUTCOME_LABEL_KEYS: Record<PreviewItem["outcome"], string> = {
+  new: "import.outcomeNew",
+  in_library: "import.outcomeInLibrary",
+  duplicate: "import.outcomeDuplicate",
+  invalid: "import.outcomeInvalid",
+};
+
+const OUTCOME_BADGE_VARIANTS: Record<
+  PreviewItem["outcome"],
+  "accent" | "completed" | "onhold" | "dropped"
+> = {
+  new: "accent",
+  in_library: "completed",
+  duplicate: "onhold",
+  invalid: "dropped",
+};
+
 export interface ImportFileDialogProps {
   trigger: React.ReactNode;
 }
@@ -121,6 +143,8 @@ export function ImportFileDialog({ trigger }: ImportFileDialogProps) {
   const toast = useToast();
   const importFile = useImportFile();
   const fileInput = useRef<HTMLInputElement>(null);
+  const scrollRef = useRef<HTMLDivElement>(null);
+  const selectAllRef = useRef<HTMLInputElement>(null);
 
   const [open, setOpen] = useState(false);
   const [fileName, setFileName] = useState<string | null>(null);
@@ -130,6 +154,7 @@ export function ImportFileDialog({ trigger }: ImportFileDialogProps) {
   const [separator, setSeparator] = useState(",");
   const [mapping, setMapping] = useState<CsvMapping>(defaultMapping);
   const [report, setReport] = useState<ImportReport | null>(null);
+  const [selected, setSelected] = useState<Set<number>>(new Set());
 
   const openDialog = (value: boolean) => {
     setOpen(value);
@@ -141,6 +166,7 @@ export function ImportFileDialog({ trigger }: ImportFileDialogProps) {
       setSeparator(",");
       setMapping(defaultMapping());
       setReport(null);
+      setSelected(new Set());
       if (fileInput.current) fileInput.current.value = "";
     }
   };
@@ -160,19 +186,87 @@ export function ImportFileDialog({ trigger }: ImportFileDialogProps) {
     reader.readAsText(file);
   };
 
+  const titleMapped = kind !== "csv" || mapping.title != null;
+  const effectiveMapping = useMemo<CsvMapping | null>(
+    () => (kind === "csv" ? { ...mapping, delimiter, separator } : null),
+    [kind, mapping, delimiter, separator],
+  );
+
   const headersQuery = useCsvHeaders(source ?? "", delimiter, kind === "csv" && source !== null);
   const columns = headersQuery.data ?? [];
+
+  const showPreview = kind !== null && source !== null && titleMapped;
+  const previewQuery = useImportPreview(
+    kind ?? "json",
+    source ?? "",
+    effectiveMapping,
+    showPreview,
+  );
+  const preview = previewQuery.data;
+
+  const items = preview?.items ?? [];
+  const rowVirtualizer = useVirtualizer({
+    count: items.length,
+    getScrollElement: () => scrollRef.current,
+    estimateSize: () => PREVIEW_ROW_SIZE,
+    overscan: 8,
+  });
+
+  const newRows = useMemo(
+    () =>
+      preview
+        ? preview.items.filter((item) => item.outcome === "new").map((item) => item.source_row)
+        : [],
+    [preview],
+  );
+  const allSelected = newRows.length > 0 && selected.size === newRows.length;
+  const someSelected = selected.size > 0 && !allSelected;
+
+  useEffect(() => {
+    if (!preview) return;
+    setSelected(new Set(newRows));
+  }, [preview, newRows]);
+
+  useEffect(() => {
+    if (selectAllRef.current) selectAllRef.current.indeterminate = someSelected;
+  }, [someSelected]);
+
+  const toggleRow = (row: number) => {
+    setSelected((previous) => {
+      const next = new Set(previous);
+      if (next.has(row)) {
+        next.delete(row);
+      } else {
+        next.add(row);
+      }
+      return next;
+    });
+  };
+
+  const toggleAll = () => {
+    setSelected(allSelected ? new Set() : new Set(newRows));
+  };
+
+  const plan = useMemo<ImportPlan | null>(
+    () => ({ rows: [...selected].sort((a, b) => a - b) }),
+    [selected],
+  );
 
   const setColumn = (field: ColumnField, value: string) => {
     setMapping((previous) => ({ ...previous, [field]: value || null }));
   };
 
-  const titleMapped = kind !== "csv" || mapping.title != null;
-  const canImport = source !== null && kind !== null && titleMapped && !importFile.isPending;
+  const canImport =
+    showPreview &&
+    preview !== undefined &&
+    !previewQuery.isError &&
+    selected.size > 0 &&
+    !importFile.isPending;
+
   const runImport = () => {
-    if (!source || !kind || !titleMapped) return;
+    if (!source || !kind || !canImport) return;
     importFile.mutate(
-      { kind, source, mapping: kind === "csv" ? mapping : null },
+      { kind, source, mapping: effectiveMapping, plan },
       {
         onSuccess: setReport,
         onError: () => toast.error({ title: t("import.errorTitle") }),
@@ -207,9 +301,7 @@ export function ImportFileDialog({ trigger }: ImportFileDialogProps) {
             )}
           </div>
 
-          {source === null || kind === null ? null : kind === "json" ? (
-            <p className="text-sm text-text-secondary">{t("import.jsonReady")}</p>
-          ) : (
+          {source === null || kind === null ? null : kind === "csv" ? (
             <div className="flex flex-col gap-3">
               <p className="text-sm font-medium text-text-primary">{t("import.csvStep")}</p>
               <div className="grid grid-cols-2 gap-3">
@@ -322,7 +414,102 @@ export function ImportFileDialog({ trigger }: ImportFileDialogProps) {
                 <p className="text-sm text-text-tertiary">{t("import.titleRequired")}</p>
               ) : null}
             </div>
-          )}
+          ) : null}
+
+          {showPreview ? (
+            previewQuery.isPending ? (
+              <p className="text-sm text-text-secondary">{t("import.analyzing")}</p>
+            ) : previewQuery.isError ? (
+              <div className="flex flex-col gap-2">
+                <p className="text-sm text-text-tertiary">{t("import.previewError")}</p>
+                <Button
+                  variant="secondary"
+                  onClick={() => void previewQuery.refetch()}
+                  className="w-fit"
+                >
+                  {t("import.retry")}
+                </Button>
+              </div>
+            ) : preview ? (
+              <div className="flex flex-col gap-3">
+                <p className="text-sm font-medium text-text-primary">{t("import.previewTitle")}</p>
+                <div className="flex flex-wrap items-center gap-2 text-sm text-text-secondary">
+                  <Badge variant="accent">{t("import.sumNew", { count: preview.new })}</Badge>
+                  <Badge>{t("import.sumInLibrary", { count: preview.in_library })}</Badge>
+                  <Badge variant="onhold">
+                    {t("import.sumDuplicates", { count: preview.duplicates })}
+                  </Badge>
+                  <Badge variant="dropped">
+                    {t("import.sumInvalid", { count: preview.invalid })}
+                  </Badge>
+                </div>
+
+                {newRows.length === 0 ? (
+                  <p className="text-sm text-text-tertiary">{t("import.nothingNew")}</p>
+                ) : (
+                  <>
+                    <label className="flex items-center gap-2 text-sm text-text-secondary">
+                      <input
+                        ref={selectAllRef}
+                        type="checkbox"
+                        checked={allSelected}
+                        onChange={toggleAll}
+                        aria-label={t("import.selectAllNew")}
+                      />
+                      {t("import.selectAllNew")}
+                    </label>
+                    <div
+                      ref={scrollRef}
+                      role="list"
+                      data-import-preview=""
+                      className="max-h-72 overflow-y-auto rounded-sm border border-border-subtle"
+                    >
+                      <div
+                        className="relative w-full"
+                        style={{ height: rowVirtualizer.getTotalSize() }}
+                      >
+                        {rowVirtualizer.getVirtualItems().map((virtualRow) => {
+                          const item = items[virtualRow.index];
+                          const selectable = item.outcome === "new";
+                          const issue = item.issues[0];
+                          return (
+                            <div
+                              key={item.source_row}
+                              className="absolute inset-x-0 top-0 flex items-center gap-3 border-b border-border-subtle px-3 last:border-b-0"
+                              style={{ top: virtualRow.start, height: virtualRow.size }}
+                            >
+                              <input
+                                type="checkbox"
+                                checked={selected.has(item.source_row)}
+                                disabled={!selectable}
+                                onChange={() => toggleRow(item.source_row)}
+                                aria-label={t("import.selectRowAria", { row: item.source_row })}
+                              />
+                              <span className="w-12 shrink-0 text-xs text-text-tertiary">
+                                {t("import.rowPrefix", { row: item.source_row })}
+                              </span>
+                              <span className="min-w-0 flex-1 truncate text-sm text-text-primary">
+                                {item.title ?? t("import.untitled")}
+                                {issue ? (
+                                  <span className="text-xs text-text-tertiary">
+                                    {" "}
+                                    — {issue.message}
+                                  </span>
+                                ) : null}
+                              </span>
+                              <Badge variant={OUTCOME_BADGE_VARIANTS[item.outcome]}>
+                                {t(OUTCOME_LABEL_KEYS[item.outcome])}
+                              </Badge>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  </>
+                )}
+              </div>
+            ) : null
+          ) : null}
 
           {report ? (
             <div className="rounded-sm border border-border-subtle p-3 text-sm">
@@ -346,7 +533,9 @@ export function ImportFileDialog({ trigger }: ImportFileDialogProps) {
                   <Button variant="secondary">{t("import.cancel")}</Button>
                 </DialogClose>
                 <Button onClick={runImport} disabled={!canImport}>
-                  {importFile.isPending ? t("import.importing") : t("import.import")}
+                  {importFile.isPending
+                    ? t("import.importing")
+                    : t("import.importSelected", { count: selected.size })}
                 </Button>
               </>
             )}

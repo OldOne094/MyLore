@@ -148,7 +148,7 @@ Import:  source(file | provider | manual | backup)
 - **Export:** JSON / CSV / Markdown (human-readable) via ExportService; SQLite backup is the
   BackupService path. Export streams to a user-chosen path (dialog) without blocking the UI.
 
-### File import (MISSION-067 → 068)
+### File import (MISSION-067 → 069)
 
 The pipeline core (`domain::import`, `application::import_pipeline`) is format-agnostic; parsers
 (`infrastructure::parsers`) implement the `ImportParser` trait and plug in unchanged.
@@ -200,6 +200,14 @@ has no type column. `delimiter` is the CSV field delimiter, `separator` splits m
   text — no fs/dialog plugin needed.
 - `application::import_file_service` (`ImportFileService`) routes `json`/`csv` to the right parser,
   detects format by first byte, and reuses `ImportPipeline` for preview + savepoint commit.
+- **Preview + confirm (MISSION-069):** as soon as a file is picked (JSON) or its Title column is
+  mapped (CSV), the dialog runs `import_file_preview` automatically and renders the per-item
+  outcome list (REQ-IMPORT-003) — a TanStack-Virtual list of `PreviewItem`s with `new` /
+  `in_library` / `duplicate` / `invalid` badges and the row's issues. Only `New` rows are
+  selectable (default: all); the chosen rows become the `ImportPlan` (`{rows}`) sent to
+  `import_commit` on confirm. Cancel closes without writing. The effective CSV mapping sent to
+  preview/commit always carries the chosen `delimiter`/`separator`, so a delimiter change
+  re-analyzes the file via the `preview(kind, source, mapping)` query key.
 
 ## 7. Backup & Restore
 

@@ -3,6 +3,8 @@
    invalidation with the `*s`/list/detail fan-out pattern. Domains mirror upcoming
    commands; consumers arrive with later missions. */
 
+import type { CsvMapping } from "@/api";
+
 export interface MediaListFilters {
   content_type?: string | null;
   format?: string | null;
@@ -67,6 +69,10 @@ export const queryKeys = {
     all: () => ["import"] as const,
     csvHeaders: (source: string, delimiter: string) =>
       ["import", "csv", "headers", source, delimiter] as const,
+    /** Per-file import preview (MISSION-069): keyed by kind + source + the
+        effective mapping so any mapping change re-analyzes the file. */
+    preview: (kind: string, source: string, mapping: CsvMapping | null) =>
+      ["import", "preview", kind, source, mapping] as const,
   },
   trash: {
     all: () => ["trash"] as const,

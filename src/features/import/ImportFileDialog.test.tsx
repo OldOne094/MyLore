@@ -12,7 +12,7 @@ vi.mock("@tauri-apps/api/core", () => ({
 
 import { invoke } from "@tauri-apps/api/core";
 import { ImportFileDialog } from "./ImportFileDialog";
-import type { ImportReport } from "@/api";
+import type { ImportPreview, ImportReport } from "@/api";
 
 let fakeFileText = "";
 
@@ -24,6 +24,53 @@ class FakeFileReader {
     this.onload?.();
   }
 }
+
+const PREVIEW: ImportPreview = {
+  total: 4,
+  valid: 2,
+  invalid: 1,
+  new: 2,
+  in_library: 1,
+  duplicates: 1,
+  items: [
+    {
+      source_row: 1,
+      title: "Sword",
+      outcome: "new",
+      matched_media_id: null,
+      match_kind: null,
+      match_score: null,
+      issues: [],
+    },
+    {
+      source_row: 2,
+      title: "Berserk",
+      outcome: "new",
+      matched_media_id: null,
+      match_kind: null,
+      match_score: null,
+      issues: [],
+    },
+    {
+      source_row: 3,
+      title: "Sword of the Dawn",
+      outcome: "duplicate",
+      matched_media_id: "m-1",
+      match_kind: "duplicate",
+      match_score: 0.95,
+      issues: [],
+    },
+    {
+      source_row: 4,
+      title: null,
+      outcome: "invalid",
+      matched_media_id: null,
+      match_kind: null,
+      match_score: null,
+      issues: [{ severity: "error", field: "title", message: "blank title" }],
+    },
+  ],
+};
 
 const REPORT: ImportReport = {
   total: 2,
@@ -54,6 +101,8 @@ beforeEach(() => {
     switch (cmd) {
       case "import_csv_headers":
         return ["Title", "Author", "Genres"];
+      case "import_file_preview":
+        return PREVIEW;
       case "import_commit":
         return REPORT;
       default:
@@ -69,31 +118,40 @@ afterEach(async () => {
 });
 
 describe("ImportFileDialog", () => {
-  it("imports a JSON file directly", async () => {
+  it("previews a JSON file and imports the selected new rows", async () => {
     const user = userEvent.setup();
     renderDialog();
     await user.click(screen.getByRole("button", { name: "Open import" }));
 
-    fakeFileText = '[{"title":"Sword","content_type":"novel"}]';
+    fakeFileText = '[{"title":"Sword","content_type":"novel"},{"title":"Berserk"}]';
     const input = screen.getByLabelText("Choose file");
     await user.upload(input, new File([fakeFileText], "books.json", { type: "application/json" }));
 
-    expect(
-      await screen.findByText("JSON file ready — importing will add every new title."),
-    ).toBeInTheDocument();
-    await user.click(screen.getByRole("button", { name: "Import" }));
+    expect(await screen.findByText("Review titles before importing")).toBeInTheDocument();
+    expect(screen.getByText("2 new")).toBeInTheDocument();
+    expect(screen.getByText("1 in library")).toBeInTheDocument();
+    expect(screen.getByText("1 duplicates")).toBeInTheDocument();
+    expect(screen.getByText("1 invalid")).toBeInTheDocument();
+
+    expect(invoke).toHaveBeenCalledWith("import_file_preview", {
+      kind: "json",
+      source: fakeFileText,
+      mapping: null,
+    });
+
+    await user.click(screen.getByRole("button", { name: "Import 2 titles" }));
 
     expect(invoke).toHaveBeenCalledWith("import_commit", {
       kind: "json",
-      source: '[{"title":"Sword","content_type":"novel"}]',
+      source: fakeFileText,
       mapping: null,
-      plan: null,
+      plan: { rows: [1, 2] },
     });
     expect(await screen.findByText("Import finished")).toBeInTheDocument();
     expect(screen.getByText("2 titles added · 0 skipped · 0 failed")).toBeInTheDocument();
   });
 
-  it("maps CSV columns before importing and sends the mapping", async () => {
+  it("maps CSV columns, previews, and sends the mapping + selected rows", async () => {
     const user = userEvent.setup();
     renderDialog();
     await user.click(screen.getByRole("button", { name: "Open import" }));
@@ -110,12 +168,14 @@ describe("ImportFileDialog", () => {
       delimiter: ",",
     });
 
-    expect(screen.getByRole("button", { name: "Import" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "Import 0 titles" })).toBeDisabled();
     await user.selectOptions(screen.getByLabelText("Title"), "Title");
     await user.selectOptions(screen.getByLabelText("Author"), "Author");
     await user.selectOptions(screen.getByLabelText("Genres"), "Genres");
 
-    await user.click(screen.getByRole("button", { name: "Import" }));
+    expect(await screen.findByText("Review titles before importing")).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "Import 2 titles" }));
+
     expect(invoke).toHaveBeenCalledWith("import_commit", {
       kind: "csv",
       source: fakeFileText,
@@ -125,33 +185,65 @@ describe("ImportFileDialog", () => {
         genres: "Genres",
         delimiter: ",",
       }),
-      plan: null,
+      plan: { rows: [1, 2] },
     });
     expect(await screen.findByText("Import finished")).toBeInTheDocument();
   });
 
-  it("keeps the import disabled until a CSV title column is mapped", async () => {
+  it("shows per-item outcomes, keeps invalid rows out of the plan, and lets the user deselect", async () => {
     const user = userEvent.setup();
     renderDialog();
     await user.click(screen.getByRole("button", { name: "Open import" }));
 
-    fakeFileText = "Title,Author\nSword,Jane";
+    fakeFileText = "Title\nSword\nBerserk\nSword of the Dawn\n\n";
     await user.upload(
       screen.getByLabelText("Choose file"),
       new File([fakeFileText], "books.csv", { type: "text/csv" }),
     );
 
-    expect(await screen.findByText("Map the Title column to import.")).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Import" })).toBeDisabled();
+    await user.selectOptions(await screen.findByLabelText("Title"), "Title");
+    await screen.findByText("Review titles before importing");
 
-    await user.selectOptions(screen.getByLabelText("Title"), "Title");
-    expect(screen.getByRole("button", { name: "Import" })).toBeEnabled();
+    expect(screen.getAllByText("New")).toHaveLength(2);
+    expect(screen.getAllByText("Duplicate")).toHaveLength(1);
+    expect(screen.getAllByText("Invalid")).toHaveLength(1);
+    expect(screen.getByText(/blank title/)).toBeInTheDocument();
+
+    const row4 = screen.getByLabelText("Select row 4");
+    expect(row4).toBeDisabled();
+
+    expect(screen.getByLabelText("Select all new titles")).toBeChecked();
+    await user.click(screen.getByLabelText("Select row 1"));
+    expect(screen.getByLabelText("Select all new titles")).not.toBeChecked();
+
+    await user.click(screen.getByRole("button", { name: "Import 1 title" }));
+    expect(invoke).toHaveBeenCalledWith(
+      "import_commit",
+      expect.objectContaining({ plan: { rows: [2] } }),
+    );
+  });
+
+  it("disables import when nothing new remains after deselecting every row", async () => {
+    const user = userEvent.setup();
+    renderDialog();
+    await user.click(screen.getByRole("button", { name: "Open import" }));
+
+    fakeFileText = '[{"title":"Sword"},{"title":"Berserk"}]';
+    await user.upload(
+      screen.getByLabelText("Choose file"),
+      new File([fakeFileText], "books.json", { type: "application/json" }),
+    );
+
+    await screen.findByText("Review titles before importing");
+    await user.click(screen.getByLabelText("Select all new titles"));
+    expect(screen.getByRole("button", { name: "Import 0 titles" })).toBeDisabled();
   });
 
   it("surfaces an import failure as a toast", async () => {
     vi.mocked(invoke).mockImplementation(async (cmd: string) => {
       if (cmd === "import_commit") throw new Error("import error: boom");
       if (cmd === "import_csv_headers") return ["Title"];
+      if (cmd === "import_file_preview") return PREVIEW;
       throw new Error(`unexpected command ${cmd}`);
     });
     const user = userEvent.setup();
@@ -164,7 +256,7 @@ describe("ImportFileDialog", () => {
       new File([fakeFileText], "books.json", { type: "application/json" }),
     );
 
-    await user.click(await screen.findByRole("button", { name: "Import" }));
+    await user.click(await screen.findByRole("button", { name: "Import 2 titles" }));
     expect(await screen.findByText("Couldn't import the file")).toBeInTheDocument();
   });
 });
