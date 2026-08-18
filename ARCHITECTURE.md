@@ -258,6 +258,10 @@ has no type column. `delimiter` is the CSV field delimiter, `separator` splits m
   commands (`media_tags`/`media_add_tag`/`media_remove_tag`) that resolve-or-create `tag-{uuid}`
   rows in the personal scope only (domain tags never surface). Frontend: `ReviewTab` + hooks in
   `features/library/review.ts`, i18n `review.*` EN/AR.
+- **Favorites flag (MISSION-075):** `MediaListItem` carries the `review.favorite` flag (the repo's
+  `media::list`/search/dashboard queries already selected `COALESCE(r.favorite, 0)`), and the grid /
+  list / compact views render the shared `FavoriteFlag` heart on favorited rows. The favorites filter
+  shipped earlier with the filter panel (MISSION-041) — it maps to the SQL `r.favorite = 1` predicate.
 
 ## 7. Backup & Restore
 

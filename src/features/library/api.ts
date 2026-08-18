@@ -46,6 +46,8 @@ export interface MediaListItem {
   release_year: number | null;
   cover_asset_id: string | null;
   updated_at: string;
+  /** User's favorite flag (MISSION-075), rendered as a heart in the views. */
+  favorite: boolean;
   /** Derived progress summary driving the in-grid quick controls (MISSION-049). */
   progress: ProgressSummary;
 }

@@ -64,6 +64,7 @@ export interface MediaListItem {
   release_year: number | null;
   cover_asset_id: string | null;
   updated_at: string;
+  favorite: boolean;
   progress: ProgressSummary;
 }
 export interface DashboardSummary {

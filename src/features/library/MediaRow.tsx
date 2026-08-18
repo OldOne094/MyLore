@@ -7,6 +7,7 @@ import type { AssetView } from "@/api";
 import type { MediaListItem } from "./api";
 import { STATUS_VARIANTS } from "./mediaMeta";
 import { CoverImage } from "./CoverImage";
+import { FavoriteFlag } from "./FavoriteFlag";
 import { NextUnitButton } from "./NextUnitButton";
 
 /* MISSION-040 — Library list rows. `dense` is the Compact tier (DESIGN_SYSTEM
@@ -74,6 +75,8 @@ export function MediaRow({
       >
         {item.title}
       </h3>
+
+      {item.favorite && <FavoriteFlag />}
 
       <Badge variant="accent" className={cn(dense && "hidden")}>
         {t(`contentType.${item.content_type}`)}

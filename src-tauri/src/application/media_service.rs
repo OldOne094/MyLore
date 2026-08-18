@@ -77,6 +77,8 @@ pub struct MediaListItem {
     pub release_year: Option<i64>,
     pub cover_asset_id: Option<String>,
     pub updated_at: String,
+    /// User's favorite flag (MISSION-075), sourced from the `review` row.
+    pub favorite: bool,
     /// Per-media progress summary driving the in-grid quick controls (MISSION-049).
     pub progress: ProgressSummary,
 }
@@ -283,6 +285,7 @@ fn media_list_item(row: MediaSummary, summary: Option<&ProgressSummary>) -> Medi
         release_year: row.release_year,
         cover_asset_id: row.cover_asset_id,
         updated_at: row.updated_at,
+        favorite: row.favorite,
         progress: summary.cloned().unwrap_or(ProgressSummary {
             percent: None,
             completed: 0,

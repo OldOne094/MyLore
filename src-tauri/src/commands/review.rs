@@ -24,8 +24,8 @@ pub async fn review_get(
 /// Save (create or update) a media's review. Resolves with the stored row (an
 /// entirely empty review clears the row and resolves with an empty view) or
 /// rejects with an AppError string.
-#[command]
 #[allow(clippy::too_many_arguments)]
+#[command]
 pub async fn review_save(
     state: State<'_, SqlitePool>,
     media_id: String,

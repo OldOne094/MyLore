@@ -29,6 +29,7 @@ const TITLES = [
     release_year: 2011,
     cover_asset_id: null,
     updated_at: "2026-01-01T00:00:00Z",
+    favorite: false,
     progress: NO_PROGRESS,
   },
   {
@@ -39,6 +40,7 @@ const TITLES = [
     release_year: 2026,
     cover_asset_id: null,
     updated_at: "2026-01-02T00:00:00Z",
+    favorite: false,
     progress: NO_PROGRESS,
   },
 ];

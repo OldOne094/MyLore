@@ -26,6 +26,7 @@ const TITLES = [
     release_year: 2011,
     cover_asset_id: null,
     updated_at: "2026-01-01T00:00:00Z",
+    favorite: true,
     progress: NO_PROGRESS,
   },
   {
@@ -36,6 +37,7 @@ const TITLES = [
     release_year: 2026,
     cover_asset_id: null,
     updated_at: "2026-01-02T00:00:00Z",
+    favorite: false,
     progress: NO_PROGRESS,
   },
 ];
@@ -164,6 +166,20 @@ describe("LibraryPage", () => {
     expect(screen.getByText("Steins;Gate")).toBeInTheDocument();
   });
 
+  it("flags favorites with a heart in the grid, list and compact views (MISSION-075)", async () => {
+    mockLibrary(TITLES);
+    renderPage();
+    await screen.findByText("Steins;Gate");
+
+    expect(screen.getAllByRole("img", { name: "Favorite" })).toHaveLength(1);
+
+    await userEvent.click(screen.getByRole("button", { name: "List view" }));
+    expect(screen.getAllByRole("img", { name: "Favorite" })).toHaveLength(1);
+
+    await userEvent.click(screen.getByRole("button", { name: "Compact list" }));
+    expect(screen.getAllByRole("img", { name: "Favorite" })).toHaveLength(1);
+  });
+
   it("windows large libraries instead of rendering every row", async () => {
     const many = Array.from({ length: 300 }, (_, index) => ({
       id: `m-${index}`,
@@ -173,6 +189,7 @@ describe("LibraryPage", () => {
       release_year: 2020,
       cover_asset_id: null,
       updated_at: "2026-01-01T00:00:00Z",
+      favorite: false,
       progress: NO_PROGRESS,
     }));
     mockLibrary(many);

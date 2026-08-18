@@ -22,6 +22,7 @@ export function listItem(overrides: Partial<MediaListItem>): MediaListItem {
     release_year: 2024,
     cover_asset_id: null,
     updated_at: "2026-01-01T00:00:00Z",
+    favorite: false,
     progress: NO_PROGRESS,
     ...overrides,
   };

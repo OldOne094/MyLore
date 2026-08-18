@@ -7,6 +7,7 @@ import type { AssetView } from "@/api";
 import type { MediaListItem } from "./api";
 import { STATUS_VARIANTS } from "./mediaMeta";
 import { CoverImage } from "./CoverImage";
+import { FavoriteFlag } from "./FavoriteFlag";
 import { NextUnitButton } from "./NextUnitButton";
 import { ProgressBar } from "./ProgressBar";
 
@@ -40,6 +41,12 @@ export function MediaCard({
   const poster = (
     <div className="relative flex aspect-[2/3] w-full items-center justify-center overflow-hidden rounded-sm bg-bg-hover text-text-tertiary">
       <CoverImage asset={cover} contentType={item.content_type} alt={item.title} iconSize={28} />
+      {item.favorite && (
+        <FavoriteFlag
+          size={13}
+          className="absolute start-2 top-2 size-6 rounded-full bg-bg-base/90"
+        />
+      )}
       <ProgressBar percent={item.progress.percent} className="absolute inset-x-0 bottom-0" />
     </div>
   );
