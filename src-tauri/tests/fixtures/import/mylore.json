@@ -1,0 +1,41 @@
+[
+  {
+    "title": "Sword of the Dawn",
+    "title_original": "夜明けの剣",
+    "alt_titles": ["Dawn's Sword"],
+    "content_type": "novel",
+    "format": "light_novel",
+    "pub_status": "ongoing",
+    "start_date": "2025-01-01",
+    "end_date": null,
+    "release_year": 2025,
+    "language": "ja",
+    "pages": 320,
+    "ch_count": 12,
+    "synopsis": "A swordsmith's daughter inherits a blade that drinks the dawn.",
+    "people": [{ "role": "author", "name": "Jane Doe" }],
+    "genres": ["Fantasy", "Adventure"],
+    "tags": ["isekai", "slow burn"],
+    "external_ids": [{ "provider": "anilist", "value": "100" }],
+    "my_status": "in_progress",
+    "my_rating": 8,
+    "my_review": "Lovely.",
+    "progress": 120,
+    "started_at": "2026-01-05"
+  },
+  {
+    "title": "Berserk",
+    "content_type": "manga",
+    "format": "manga",
+    "ch_count": 375,
+    "genres": ["Seinen", "Fantasy"],
+    "external_ids": [
+      { "provider": "anilist", "value": "101" },
+      { "provider": "mal", "value": "2" }
+    ],
+    "my_status": "completed",
+    "my_rating": 10,
+    "progress": 375,
+    "completed_at": "2026-08-17"
+  }
+]

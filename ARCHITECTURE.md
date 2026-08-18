@@ -236,14 +236,20 @@ has no type column. `delimiter` is the CSV field delimiter, `separator` splits m
 - **Background commit (MISSION-070):** confirm spawns the import on the `TaskManager` (ARCHITECTURE
   §8) — `import_commit` resolves with the queued `TaskSnapshot` and the dialog streams `task-changed`
   progress with a cancel button; the report (REQ-IMPORT-004) arrives in the task's typed `result`.
-- **Export (MISSION-071):** the Settings page's `ExportSection` picks a format (JSON / CSV / Markdown)
+- **Export (MISSION-071/073):** the Settings page's `ExportSection` picks a format (JSON / CSV / Markdown)
   and a destination through the native save dialog (`tauri-plugin-dialog`), then `export_media`
   spawns a `TaskKind::ExportFile` task. `ExportService::stream_to_path` streams rows (title-ordered
   via `media::list_ids`), writing to `<final>.partial` and renaming into place on commit — the
   `PartialExport` guard drops the partial on cancel/error. JSON uses the MISSION-068 import field
-  names so an export round-trips back through the importer; CSV uses a fixed 34-column header with
-  `|`-joined multi-values; Markdown renders per-title sections. The success `ExportReport
-  {format, total, path}` lands in the task's `result`.
+  names so an export round-trips back through the importer; **since MISSION-073 the row carries the
+  user's list state too** (`progress`, `started_at`, `completed_at` from tracking `finished_at`,
+  `repeat_count`), so a JSON export re-imports with status/rating/progress/dates intact. CSV uses a
+  fixed 38-column header with `|`-joined multi-values; Markdown renders per-title sections. The
+  success `ExportReport {format, total, path}` lands in the task's `result`.
+- **Integration tests (MISSION-073):** `tests/import_export.rs` exercises the real pipeline against
+  file-backed migrated DBs (`db::init`) using fixtures under `tests/fixtures/import/` (which also
+  serve as sample files for the Import dialog). `infrastructure::test_support` is `#[cfg(test)]`-gated,
+  so the integration tests define their own small helpers.
 
 ## 7. Backup & Restore
 

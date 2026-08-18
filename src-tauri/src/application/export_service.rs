@@ -220,9 +220,8 @@ impl ExportService {
             }
         }
 
-        let my_status = tracking::get_tracking(&self.pool, id)
-            .await?
-            .map(|row| row.core_status);
+        let tracking = tracking::get_tracking(&self.pool, id).await?;
+        let my_status = tracking.as_ref().map(|row| row.core_status.clone());
         let my_review = review::get(&self.pool, id).await?;
 
         Ok(ExportRow {
@@ -266,6 +265,10 @@ impl ExportService {
             my_review: my_review.as_ref().and_then(|r| r.review.clone()),
             my_short_review: my_review.as_ref().and_then(|r| r.short_review.clone()),
             my_notes: my_review.as_ref().and_then(|r| r.notes.clone()),
+            progress: tracking.as_ref().and_then(|t| t.current_position),
+            started_at: tracking.as_ref().and_then(|t| t.started_at.clone()),
+            completed_at: tracking.as_ref().and_then(|t| t.finished_at.clone()),
+            repeat_count: tracking.as_ref().map(|t| t.repeat_count).unwrap_or(0),
             favorite: my_review.as_ref().map(|r| r.favorite).unwrap_or(false),
             collections: collections.get(id).cloned().unwrap_or_default(),
             created_at: record.created_at,
@@ -456,7 +459,8 @@ mod tests {
         let first = rows.next().expect("row1").expect("record");
         assert_eq!(first.get(0), Some("Berserk"));
         assert_eq!(first.get(25), Some(""));
-        assert_eq!(first.get(30), Some("false"));
+        assert_eq!(first.get(33), Some("0"));
+        assert_eq!(first.get(34), Some("false"));
 
         let second = rows.next().expect("row2").expect("record");
         assert_eq!(second.get(0), Some("Sword of the Dawn"));
@@ -466,8 +470,9 @@ mod tests {
         assert_eq!(second.get(22), Some("anilist:42"));
         assert_eq!(second.get(25), Some("in_progress"));
         assert_eq!(second.get(26), Some("8"));
-        assert_eq!(second.get(30), Some("true"));
-        assert_eq!(second.get(31), Some("Favorites shelf"));
+        assert_eq!(second.get(31), Some("2026-01-01"));
+        assert_eq!(second.get(34), Some("true"));
+        assert_eq!(second.get(35), Some("Favorites shelf"));
         assert!(rows.next().is_none());
 
         fs::remove_file(&path).expect("cleanup");
@@ -482,7 +487,7 @@ mod tests {
         assert!(raw.starts_with("# MyLore library export\n\n"));
         assert!(raw.contains("# Sword of the Dawn (夜明けの剣)"));
         assert!(raw.contains("**Author:** Jane"));
-        assert!(raw.contains("**My data:** Status: in_progress · My rating: 8/10 · Favorite · Collections: Favorites shelf"));
+        assert!(raw.contains("**My data:** Status: in_progress · My rating: 8/10 · started 2026-01-01 · Favorite · Collections: Favorites shelf"));
         assert!(raw.contains("# Berserk"));
         assert!(raw.contains("\n---\n\n"));
 

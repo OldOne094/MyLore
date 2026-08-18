@@ -109,12 +109,17 @@ pub struct ExportRow {
     pub external_ids: Vec<ExportExternalId>,
     pub cover_url: Option<String>,
     pub banner_url: Option<String>,
-    // User data (extra keys beyond the import format).
+    // User data (extra keys beyond the import format; tracking state rides
+    // under the import-aligned names so a JSON export round-trips it too).
     pub my_status: Option<String>,
     pub my_rating: Option<i64>,
     pub my_review: Option<String>,
     pub my_short_review: Option<String>,
     pub my_notes: Option<String>,
+    pub progress: Option<i64>,
+    pub started_at: Option<String>,
+    pub completed_at: Option<String>,
+    pub repeat_count: i64,
     pub favorite: bool,
     pub collections: Vec<String>,
     pub created_at: String,
@@ -160,6 +165,10 @@ pub const CSV_HEADERS: &[&str] = &[
     "my_review",
     "my_short_review",
     "my_notes",
+    "progress",
+    "started_at",
+    "completed_at",
+    "repeat_count",
     "favorite",
     "collections",
     "created_at",
@@ -223,6 +232,10 @@ pub fn row_to_csv(row: &ExportRow) -> Vec<String> {
         row.my_review.clone().unwrap_or_default(),
         row.my_short_review.clone().unwrap_or_default(),
         row.my_notes.clone().unwrap_or_default(),
+        opt_str(row.progress),
+        row.started_at.clone().unwrap_or_default(),
+        row.completed_at.clone().unwrap_or_default(),
+        row.repeat_count.to_string(),
         if row.favorite { "true" } else { "false" }.to_string(),
         join(&row.collections),
         row.created_at.clone(),
@@ -329,6 +342,19 @@ pub fn render_markdown(row: &ExportRow) -> String {
     if let Some(rating) = row.my_rating {
         mine.push(format!("My rating: {rating}/10"));
     }
+    if let Some(progress) = row.progress {
+        mine.push(format!("Progress: {progress}"));
+    }
+    let mut when = Vec::new();
+    if let Some(started) = &row.started_at {
+        when.push(format!("started {started}"));
+    }
+    if let Some(finished) = &row.completed_at {
+        when.push(format!("finished {finished}"));
+    }
+    if !when.is_empty() {
+        mine.push(when.join(", "));
+    }
     if row.favorite {
         mine.push("Favorite".to_string());
     }
@@ -414,6 +440,10 @@ mod tests {
             my_review: Some("Lovely.".to_string()),
             my_short_review: None,
             my_notes: Some("read with tea".to_string()),
+            progress: Some(120),
+            started_at: Some("2026-01-05".to_string()),
+            completed_at: None,
+            repeat_count: 0,
             favorite: true,
             collections: vec!["Favorites shelf".to_string()],
             created_at: "2026-08-16T00:00:00Z".to_string(),
@@ -515,7 +545,7 @@ mod tests {
         assert!(md.contains("**Artist:** Mira"));
         assert!(md.contains("**Genres:** Fantasy, Adventure"));
         assert!(md.contains("**External IDs:** anilist (42)"));
-        assert!(md.contains("**My data:** Status: reading · My rating: 8/10 · Favorite · Collections: Favorites shelf"));
+        assert!(md.contains("**My data:** Status: reading · My rating: 8/10 · Progress: 120 · started 2026-01-05 · Favorite · Collections: Favorites shelf"));
         assert!(md.contains("\n**Review:**\nLovely.\n"));
         assert!(md.contains("\nA tale.\nSecond line.\n"));
     }
@@ -551,6 +581,10 @@ mod tests {
             my_review: None,
             my_short_review: None,
             my_notes: None,
+            progress: None,
+            started_at: None,
+            completed_at: None,
+            repeat_count: 0,
             favorite: false,
             collections: vec![],
             created_at: "2026-08-16T00:00:00Z".to_string(),
