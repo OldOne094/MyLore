@@ -103,7 +103,13 @@ pub fn run() {
             commands::bulk::collection_bulk_add,
             commands::tracking::tracking_get,
             commands::tracking::tracking_set_status,
-            commands::tracking::tracking_set_auto_track
+            commands::tracking::tracking_set_auto_track,
+            commands::review::review_get,
+            commands::review::review_save,
+            commands::review::review_delete,
+            commands::media::media_tags,
+            commands::media::media_add_tag,
+            commands::media::media_remove_tag
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

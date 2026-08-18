@@ -15,6 +15,14 @@
       "shape": "percent: number | null; completed: number; total: number; next_label: string | null; next_node_id: string | null"
     },
     {
+      "name": "ReviewView",
+      "shape": "media_id: string; rating: number | null; review: string | null; short_review: string | null; notes: string | null; favorite: boolean; is_spoiler: boolean; created_at: string; updated_at: string"
+    },
+    {
+      "name": "MediaTagView",
+      "shape": "id: string; name: string; scope: string"
+    },
+    {
       "name": "NodeProgressNextView",
       "shape": "media_id: string; summary: ProgressSummary"
     },
@@ -170,6 +178,56 @@
       "args": { "query": "string" },
       "returns": "MediaListItem[]",
       "doc": "Local full-text search over the library. Resolves with summary rows (each carrying its progress summary) or rejects with an AppError string."
+    },
+    {
+      "name": "media_tags",
+      "args": { "media_id": "string" },
+      "returns": "MediaTagView[]",
+      "doc": "The personal tags linked to one media. Resolves with tag rows (id + name + scope) or rejects with an AppError string."
+    },
+    {
+      "name": "media_add_tag",
+      "args": {
+        "media_id": "string",
+        "tag": "string"
+      },
+      "returns": "MediaTagView[]",
+      "doc": "Add a personal tag to one media (reused or created as needed). Resolves with the updated personal-tag list or rejects with an AppError string."
+    },
+    {
+      "name": "media_remove_tag",
+      "args": {
+        "media_id": "string",
+        "tag_id": "string"
+      },
+      "returns": "MediaTagView[]",
+      "doc": "Remove a personal tag from one media (the tag row is kept for other media). Resolves with the updated personal-tag list or rejects with an AppError string."
+    },
+    {
+      "name": "review_get",
+      "args": { "media_id": "string" },
+      "returns": "ReviewView | null",
+      "doc": "Read a media's review. Resolves with the row or null when the user hasn't reviewed it; rejects with an AppError string."
+    },
+    {
+      "name": "review_save",
+      "args": {
+        "media_id": "string",
+        "rating": "number | null",
+        "review": "string | null",
+        "short_review": "string | null",
+        "notes": "string | null",
+        "favorite": "boolean",
+        "is_spoiler": "boolean"
+      },
+      "returns": "ReviewView",
+      "doc": "Save (create or update) a media's review. Resolves with the stored row (an entirely empty review clears the row and resolves with an empty view) or rejects with an AppError string."
+    },
+    {
+      "name": "review_delete",
+      "args": { "media_id": "string" },
+      "returns": "void",
+      "doc": "Delete a media's review row. Resolves or rejects with an AppError string."
     },
     {
       "name": "search_external",

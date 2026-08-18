@@ -39,6 +39,14 @@ pub struct MediaRelation {
     pub relation: String,
 }
 
+/// A tag linked to a media (name + scope; `personal` tags are user-owned).
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+pub struct TagLink {
+    pub id: String,
+    pub name: String,
+    pub scope: String,
+}
+
 /// Full media aggregate: core columns plus every link set. Deserialize exists
 /// so a trash before-image can be restored (MISSION-044).
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
@@ -784,6 +792,40 @@ pub async fn personal_tag_ids(pool: &SqlitePool, media_id: &str) -> Result<Vec<S
     .fetch_all(pool)
     .await?;
     Ok(rows.into_iter().map(|(id,)| id).collect())
+}
+
+/// The personal tags linked to a media, name-ordered (MISSION-074). Domain tags
+/// are provider metadata owned by enrichment and never surfaced here.
+pub async fn media_tags(pool: &SqlitePool, media_id: &str) -> Result<Vec<TagLink>, AppError> {
+    let rows = sqlx::query_as::<_, (String, String, String)>(
+        "SELECT t.id, t.name, t.scope FROM tag t \
+         JOIN media_tag mt ON mt.tag_id = t.id \
+         WHERE mt.media_id = ? AND t.scope = 'personal' \
+         ORDER BY t.name COLLATE NOCASE",
+    )
+    .bind(media_id)
+    .fetch_all(pool)
+    .await?;
+    Ok(rows
+        .into_iter()
+        .map(|(id, name, scope)| TagLink { id, name, scope })
+        .collect())
+}
+
+/// Unlink one tag from a media (removing a personal tag never deletes the tag
+/// row — other media may still carry it). Resolves whether or not the pair
+/// existed.
+pub async fn remove_tag_from_media(
+    pool: &SqlitePool,
+    media_id: &str,
+    tag_id: &str,
+) -> Result<(), AppError> {
+    sqlx::query("DELETE FROM media_tag WHERE media_id = ? AND tag_id = ?")
+        .bind(media_id)
+        .bind(tag_id)
+        .execute(pool)
+        .await?;
+    Ok(())
 }
 
 /// Full-text search over both tokenizers, best matches first.

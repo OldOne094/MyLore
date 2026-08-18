@@ -19,9 +19,10 @@ use crate::domain::enums::{ContentType, MediaStatus};
 use crate::domain::media::{Media, MediaRuntime};
 use crate::domain::value_objects::{LanguageCode, MediaId};
 use crate::error::AppError;
+use crate::infrastructure::repositories::media as media_repo;
 use crate::infrastructure::repositories::media::{
     facets as media_facets, list as list_rows, AltTitle, ExternalId, MediaFacets, MediaFilter,
-    MediaRecord, MediaRelation, MediaSort, MediaSummary,
+    MediaRecord, MediaRelation, MediaSort, MediaSummary, TagLink,
 };
 use crate::infrastructure::repositories::tracking;
 
@@ -202,6 +203,42 @@ impl MediaService {
         self.to_list_items(rows).await
     }
 
+    /// The personal tags linked to one media (MISSION-074). Domain tags are
+    /// provider metadata owned by enrichment and never surfaced here.
+    pub async fn media_tags(&self, media_id: &str) -> Result<Vec<TagLink>, AppError> {
+        media_repo::get(&self.pool, media_id).await?;
+        media_repo::media_tags(&self.pool, media_id).await
+    }
+
+    /// Add a personal tag to one media (reused or created as needed) and
+    /// resolve the updated personal-tag list (MISSION-074).
+    pub async fn add_tag(&self, media_id: &str, tag: &str) -> Result<Vec<TagLink>, AppError> {
+        if media_repo::get(&self.pool, media_id).await?.is_none() {
+            return Err(AppError::validation(format!("media not found: {media_id}")));
+        }
+        let name = normalize_tag(tag)?;
+        let tag_id = match media_repo::resolve_personal_tag(&self.pool, &name).await? {
+            Some(id) => id,
+            None => {
+                let id = format!("tag-{}", Uuid::new_v4());
+                media_repo::create_personal_tag(&self.pool, &id, &name).await?;
+                id
+            }
+        };
+        media_repo::add_tag_to_many(&self.pool, &tag_id, &[media_id.to_string()]).await?;
+        media_repo::media_tags(&self.pool, media_id).await
+    }
+
+    /// Remove a personal tag from one media and resolve the updated personal-tag
+    /// list (MISSION-074). The tag row itself is kept for other media.
+    pub async fn remove_tag(&self, media_id: &str, tag_id: &str) -> Result<Vec<TagLink>, AppError> {
+        if media_repo::get(&self.pool, media_id).await?.is_none() {
+            return Err(AppError::validation(format!("media not found: {media_id}")));
+        }
+        media_repo::remove_tag_from_media(&self.pool, media_id, tag_id).await?;
+        media_repo::media_tags(&self.pool, media_id).await
+    }
+
     /// Map repo summary rows onto list items, attaching each media's progress
     /// summary in one batched pass (no per-row queries). Shared with the
     /// dashboard service (MISSION-050).
@@ -224,6 +261,16 @@ impl MediaService {
             })
             .collect())
     }
+}
+
+/// Trim and collapse internal whitespace on a tag name (display keeps casing).
+/// Shared with the bulk action bar (MISSION-045).
+pub(crate) fn normalize_tag(tag: &str) -> Result<String, AppError> {
+    let collapsed = tag.split_whitespace().collect::<Vec<_>>().join(" ");
+    if collapsed.is_empty() {
+        return Err(AppError::validation("tag must not be empty"));
+    }
+    Ok(collapsed)
 }
 
 /// Map a repository summary row onto the serializable DTO.
@@ -629,5 +676,117 @@ mod tests {
             .await
             .expect_err("unknown sort rejected");
         assert!(matches!(err, AppError::Validation(_)));
+    }
+
+    #[tokio::test]
+    async fn tags_add_list_and_remove_roundtrip() {
+        let (pool, _path) = migrated_pool("media_service_tags.db").await;
+        let service = MediaService::new(pool.clone());
+        let id = service.add_media(input()).await.expect("add media");
+        let id = id.as_str().to_string();
+
+        assert!(service
+            .media_tags(&id)
+            .await
+            .expect("empty list")
+            .is_empty());
+
+        let after = service.add_tag(&id, "cozy").await.expect("add cozy");
+        assert_eq!(after.len(), 1);
+        assert_eq!(after[0].name, "cozy");
+        assert_eq!(after[0].scope, "personal");
+
+        let after = service
+            .add_tag(&id, "  re-read  ")
+            .await
+            .expect("add re-read (whitespace collapsed)");
+        assert_eq!(after.len(), 2);
+        assert!(after.iter().any(|tag| tag.name == "cozy"));
+
+        let after = service.remove_tag(&id, &after[0].id).await.expect("remove");
+        assert_eq!(after.len(), 1);
+        assert_eq!(after[0].name, "re-read");
+
+        let fresh = service.media_tags(&id).await.expect("list");
+        assert_eq!(fresh.len(), 1);
+        assert_eq!(fresh[0].name, "re-read");
+    }
+
+    #[tokio::test]
+    async fn tags_reuse_existing_personal_tag_row() {
+        let (pool, _path) = migrated_pool("media_service_tags_reuse.db").await;
+        let service = MediaService::new(pool.clone());
+        let first = service.add_media(input()).await.expect("first");
+        let mut second = input();
+        second.title = "Another Title".into();
+        let second = service.add_media(second).await.expect("second");
+
+        let a = service
+            .add_tag(first.as_str(), "shelf")
+            .await
+            .expect("add to first");
+        let b = service
+            .add_tag(second.as_str(), "shelf")
+            .await
+            .expect("add to second");
+        assert_eq!(a[0].id, b[0].id, "one shared tag row");
+
+        let rows = media_repo::resolve_personal_tag(&pool, "shelf")
+            .await
+            .expect("resolve")
+            .expect("tag exists");
+        assert_eq!(rows, a[0].id);
+    }
+
+    #[tokio::test]
+    async fn tags_only_surface_personal_scope() {
+        let (pool, _path) = migrated_pool("media_service_tags_scope.db").await;
+        let service = MediaService::new(pool.clone());
+        let id = service.add_media(input()).await.expect("add media");
+
+        // A domain (provider-owned) tag linked directly to the media must not
+        // appear in the personal-tag list.
+        sqlx::query("INSERT INTO media_tag (media_id, tag_id) VALUES (?, 'isekai')")
+            .bind(id.as_str())
+            .execute(&pool)
+            .await
+            .expect("link domain tag");
+
+        let after = service
+            .add_tag(id.as_str(), "cozy")
+            .await
+            .expect("add personal tag");
+        assert_eq!(after.len(), 1);
+        assert_eq!(after[0].name, "cozy");
+        assert_eq!(after[0].scope, "personal");
+    }
+
+    #[tokio::test]
+    async fn tags_reject_blank_name_and_unknown_media() {
+        let (pool, _path) = migrated_pool("media_service_tags_invalid.db").await;
+        let service = MediaService::new(pool.clone());
+
+        let id = service.add_media(input()).await.expect("add media");
+        assert!(matches!(
+            service
+                .add_tag(id.as_str(), "   ")
+                .await
+                .expect_err("blank"),
+            AppError::Validation(_)
+        ));
+        assert!(matches!(
+            service
+                .add_tag("m-ghost", "cozy")
+                .await
+                .expect_err("unknown"),
+            AppError::Validation(_)
+        ));
+        assert!(matches!(
+            service
+                .remove_tag("m-ghost", "tag-x")
+                .await
+                .expect_err("unknown"),
+            AppError::Validation(_)
+        ));
     }
 }

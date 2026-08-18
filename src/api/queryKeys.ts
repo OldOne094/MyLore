@@ -33,6 +33,8 @@ export const queryKeys = {
     details: () => ["media", "detail"] as const,
     detail: (id: string) => ["media", "detail", id] as const,
     nodes: (id: string) => ["media", "nodes", id] as const,
+    /** Personal tags linked to one media (MISSION-074). */
+    tags: (id: string) => ["media", "tags", id] as const,
     /** Batch-resolved cover/banner assets (MISSION-062). `key` is the sorted,
         joined asset-id list so the same set dedupes to one cache entry. */
     assets: (key: string) => ["media", "assets", key] as const,
@@ -47,8 +49,7 @@ export const queryKeys = {
   },
   review: {
     all: () => ["review"] as const,
-    forMedia: (mediaId: number) => ["review", "media", mediaId] as const,
-    detail: (reviewId: number) => ["review", "detail", reviewId] as const,
+    forMedia: (mediaId: string) => ["review", "media", mediaId] as const,
   },
   collection: {
     all: () => ["collection"] as const,

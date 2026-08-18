@@ -142,6 +142,8 @@ describe("MediaDetailPage", () => {
     vi.mocked(invoke).mockImplementation((cmd: string) => {
       if (cmd === "media_get") return Promise.resolve(DETAIL);
       if (cmd === "tracking_get") return Promise.resolve(null);
+      if (cmd === "review_get") return Promise.resolve(null);
+      if (cmd === "media_tags") return Promise.resolve([]);
       return Promise.resolve(undefined);
     });
     renderPage();
@@ -154,7 +156,8 @@ describe("MediaDetailPage", () => {
     expect(screen.getByRole("button", { name: "Planned" })).toBeInTheDocument();
 
     await userEvent.click(screen.getByRole("tab", { name: "Review" }));
-    expect(screen.getByRole("tabpanel")).toHaveTextContent("Reviews land here");
+    expect(screen.getByRole("button", { name: "Save review" })).toBeInTheDocument();
+    expect(screen.getByText("No review yet — write one below.")).toBeInTheDocument();
   });
 
   it("renders the content tree in the Details tab", async () => {

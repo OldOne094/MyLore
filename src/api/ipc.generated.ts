@@ -36,6 +36,22 @@ export interface ProgressSummary {
   next_label: string | null;
   next_node_id: string | null;
 }
+export interface ReviewView {
+  media_id: string;
+  rating: number | null;
+  review: string | null;
+  short_review: string | null;
+  notes: string | null;
+  favorite: boolean;
+  is_spoiler: boolean;
+  created_at: string;
+  updated_at: string;
+}
+export interface MediaTagView {
+  id: string;
+  name: string;
+  scope: string;
+}
 export interface NodeProgressNextView {
   media_id: string;
   summary: ProgressSummary;
@@ -339,6 +355,47 @@ export function media_get(args: { id: string }): Promise<{
 /** Local full-text search over the library. Resolves with summary rows (each carrying its progress summary) or rejects with an AppError string. */
 export function media_search(args: { query: string }): Promise<MediaListItem[]> {
   return invoke<MediaListItem[]>("media_search", args);
+}
+
+/** The personal tags linked to one media. Resolves with tag rows (id + name + scope) or rejects with an AppError string. */
+export function media_tags(args: { media_id: string }): Promise<MediaTagView[]> {
+  return invoke<MediaTagView[]>("media_tags", args);
+}
+
+/** Add a personal tag to one media (reused or created as needed). Resolves with the updated personal-tag list or rejects with an AppError string. */
+export function media_add_tag(args: { media_id: string; tag: string }): Promise<MediaTagView[]> {
+  return invoke<MediaTagView[]>("media_add_tag", args);
+}
+
+/** Remove a personal tag from one media (the tag row is kept for other media). Resolves with the updated personal-tag list or rejects with an AppError string. */
+export function media_remove_tag(args: {
+  media_id: string;
+  tag_id: string;
+}): Promise<MediaTagView[]> {
+  return invoke<MediaTagView[]>("media_remove_tag", args);
+}
+
+/** Read a media's review. Resolves with the row or null when the user hasn't reviewed it; rejects with an AppError string. */
+export function review_get(args: { media_id: string }): Promise<ReviewView | null> {
+  return invoke<ReviewView | null>("review_get", args);
+}
+
+/** Save (create or update) a media's review. Resolves with the stored row (an entirely empty review clears the row and resolves with an empty view) or rejects with an AppError string. */
+export function review_save(args: {
+  media_id: string;
+  rating: number | null;
+  review: string | null;
+  short_review: string | null;
+  notes: string | null;
+  favorite: boolean;
+  is_spoiler: boolean;
+}): Promise<ReviewView> {
+  return invoke<ReviewView>("review_save", args);
+}
+
+/** Delete a media's review row. Resolves or rejects with an AppError string. */
+export function review_delete(args: { media_id: string }): Promise<void> {
+  return invoke<void>("review_delete", args);
 }
 
 /** External (provider) search grouped by provider, with identity flags. `content_type` narrows the fan-out when provided; null searches every enabled provider (domain-agnostic). Resolves with local hits + provider groups + per-provider failures, or rejects with an AppError string. */

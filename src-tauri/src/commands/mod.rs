@@ -16,6 +16,7 @@ pub mod import;
 pub mod media;
 pub mod node;
 pub mod providers;
+pub mod review;
 pub mod tasks;
 pub mod tracking;
 pub mod trash;

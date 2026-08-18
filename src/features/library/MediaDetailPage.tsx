@@ -17,6 +17,7 @@ import { useMediaDetailQuery, useAssetViews, useEnrichMedia } from "./api";
 import type { EnrichView } from "@/api";
 import { NodeTree } from "./NodeTree";
 import { TrackingTab } from "./TrackingTab";
+import { ReviewTab } from "./ReviewTab";
 import { EnrichDialog } from "./EnrichDialog";
 import { useDeleteMedia, useRestoreTrashItem } from "@/features/trash/api";
 import { STATUS_VARIANTS } from "./mediaMeta";
@@ -25,7 +26,7 @@ import { CoverImage } from "./CoverImage";
 /* MISSION-042 — Media detail page. Hero (cover, title, meta badges, actions)
    above tabbed sections: Overview / Details / Tracking / Review. Overview and
    Details render the aggregate fields; Tracking is the MISSION-048 status
-   picker; Review remains a shell wired to MISSION-074. */
+   picker; Review is the MISSION-074 rating/review/notes/tags editor. */
 
 type DetailTab = "overview" | "details" | "tracking" | "review";
 
@@ -294,7 +295,7 @@ export function MediaDetailPage() {
           </TabsContent>
 
           <TabsContent value="review" className="pt-6">
-            <p className="text-sm text-text-secondary">{t("detail.reviewPlaceholder")}</p>
+            <ReviewTab mediaId={data.id} />
           </TabsContent>
         </Tabs>
       </div>

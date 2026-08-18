@@ -250,6 +250,14 @@ has no type column. `delimiter` is the CSV field delimiter, `separator` splits m
   file-backed migrated DBs (`db::init`) using fixtures under `tests/fixtures/import/` (which also
   serve as sample files for the Import dialog). `infrastructure::test_support` is `#[cfg(test)]`-gated,
   so the integration tests define their own small helpers.
+- **Review & notes (MISSION-074):** the detail page's Review tab edits the same `review` row the import
+  writes. `commands/review.rs` exposes `review_get`/`review_save`/`review_delete` backed by
+  `ReviewService` — `save` validates the media exists and the domain invariants (1–10 rating, spoiler
+  flag requires text), preserves `created_at`, stamps `updated_at`, treats an entirely empty review as
+  a delete, and logs a `reviewed` activity row. `commands/media.rs` adds single-media personal-tag
+  commands (`media_tags`/`media_add_tag`/`media_remove_tag`) that resolve-or-create `tag-{uuid}`
+  rows in the personal scope only (domain tags never surface). Frontend: `ReviewTab` + hooks in
+  `features/library/review.ts`, i18n `review.*` EN/AR.
 
 ## 7. Backup & Restore
 

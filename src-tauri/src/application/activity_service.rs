@@ -57,3 +57,10 @@ pub async fn log_progress(pool: &SqlitePool, media_id: &str, node_id: &str, stat
     let meta = serde_json::json!({ "state": state });
     log_tracking(pool, media_id, Some(node_id), "progress", &meta).await;
 }
+
+/// Log a review save (`reviewed`, MISSION-074). Best-effort like every other
+/// activity write — a failed log never fails the review action.
+pub async fn log_reviewed(pool: &SqlitePool, media_id: &str, rating: Option<i64>) {
+    let meta = serde_json::json!({ "rating": rating });
+    log_tracking(pool, media_id, None, "reviewed", &meta).await;
+}

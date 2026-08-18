@@ -15,6 +15,7 @@ use sqlx::SqlitePool;
 use uuid::Uuid;
 
 use crate::application::activity_service::log_status_transition;
+use crate::application::media_service::normalize_tag;
 use crate::application::tracking_service::{domain_to_record, existing_to_domain};
 use crate::application::trash_service::TrashService;
 use crate::domain::enums::CoreStatus;
@@ -135,15 +136,6 @@ impl BulkService {
         }
         Ok(())
     }
-}
-
-/// Trim and collapse internal whitespace on a tag name (display keeps casing).
-fn normalize_tag(tag: &str) -> Result<String, AppError> {
-    let collapsed = tag.split_whitespace().collect::<Vec<_>>().join(" ");
-    if collapsed.is_empty() {
-        return Err(AppError::validation("tag must not be empty"));
-    }
-    Ok(collapsed)
 }
 
 #[cfg(test)]

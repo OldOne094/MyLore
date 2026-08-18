@@ -10,6 +10,7 @@ use crate::application::media_service::{
     AddMediaInput, MediaListInput, MediaListItem, MediaService,
 };
 use crate::error::AppError;
+use crate::infrastructure::repositories::media::TagLink;
 
 /// Create a media entry from manual input. Resolves with the new media id.
 ///
@@ -122,4 +123,42 @@ pub async fn media_search(
     info!(query, "media_search invoked");
     let service = MediaService::new(state.inner().clone());
     service.search_media(&query).await
+}
+
+/// The personal tags linked to one media (MISSION-074). Resolves with tag rows
+/// (id + name + scope) or rejects with an AppError string.
+#[command]
+pub async fn media_tags(
+    state: State<'_, SqlitePool>,
+    media_id: String,
+) -> Result<Vec<TagLink>, AppError> {
+    info!(media_id, "media_tags invoked");
+    let service = MediaService::new(state.inner().clone());
+    service.media_tags(&media_id).await
+}
+
+/// Add a personal tag to one media (MISSION-074). Resolves with the updated
+/// personal-tag list or rejects with an AppError string.
+#[command]
+pub async fn media_add_tag(
+    state: State<'_, SqlitePool>,
+    media_id: String,
+    tag: String,
+) -> Result<Vec<TagLink>, AppError> {
+    info!(media_id, tag, "media_add_tag invoked");
+    let service = MediaService::new(state.inner().clone());
+    service.add_tag(&media_id, &tag).await
+}
+
+/// Remove a personal tag from one media (MISSION-074). Resolves with the
+/// updated personal-tag list or rejects with an AppError string.
+#[command]
+pub async fn media_remove_tag(
+    state: State<'_, SqlitePool>,
+    media_id: String,
+    tag_id: String,
+) -> Result<Vec<TagLink>, AppError> {
+    info!(media_id, tag_id, "media_remove_tag invoked");
+    let service = MediaService::new(state.inner().clone());
+    service.remove_tag(&media_id, &tag_id).await
 }
