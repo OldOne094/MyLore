@@ -182,10 +182,21 @@ element) abort the file with a parse error; content problems are per-row validat
     "tags": ["isekai"],
     "external_ids": [{ "provider": "anilist", "value": "42", "url": null }],
     "cover_url": "https://…",
-    "banner_url": null
+    "banner_url": null,
+    "my_status": "in_progress",
+    "my_rating": 8,
+    "my_review": "Lovely.",
+    "progress": 12,
+    "started_at": "2026-01-05",
+    "completed_at": null,
+    "repeat_count": 0
   }
 ]
 ```
+
+`JsonParser` also reads the MISSION-072 user-state keys (`my_status`, `my_rating`, `my_review`,
+`progress`, `started_at`, `completed_at`, `repeat_count`), so an export round-trips the user's list
+state as well as the metadata.
 
 **CSV import** (`CsvParser`) reads the file with a user-built `CsvMapping` (the MISSION-068 mapping
 UI): each field names a CSV column; fields without a column stay `None` (the validator/normalizer
@@ -196,10 +207,24 @@ has no type column. `delimiter` is the CSV field delimiter, `separator` splits m
 
 - IPC: `import_file_preview` (parse + dedup → preview), `import_commit` (one transaction, savepoint
   per row; `plan` selects rows, null = every `New` row), `import_csv_headers` (column list for the
-  mapping pickers). The webview picks the file (`<input type="file">` + `FileReader`) and passes the
+  mapping pickers), `import_file_detect` (MISSION-072: sniff `json`/`csv`/`anilist`/`goodreads`/
+  `storygraph`). The webview picks the file (`<input type="file">` + `FileReader`) and passes the
   text — no fs/dialog plugin needed.
-- `application::import_file_service` (`ImportFileService`) routes `json`/`csv` to the right parser,
-  detects format by first byte, and reuses `ImportPipeline` for preview + savepoint commit.
+- `application::import_file_service` (`ImportFileService`) routes the five kinds to the right parser,
+  detects format from content (MyLore array vs AniList collection for JSON; Goodreads/StoryGraph
+  header sniff vs a mapped CSV), and reuses `ImportPipeline` for preview + savepoint commit.
+- **Profile exports (MISSION-072):** the **AniList user export** (`AniListParser`), the **Goodreads
+  library CSV** (`GoodreadsParser`), and the **StoryGraph CSV** (`StorygraphParser`) read their
+  files' built-in, well-known shapes with no mapping UI. Besides metadata they carry the user's list
+  state into `ParsedItem`'s `my_*` fields, which `ImportPipeline::insert_row` persists as a
+  `tracking` row (status, dates, progress, repeat — normalized in `domain::import`) and a `review`
+  row (rating, review) inside the same transaction. Ratings are normalized to the app's 0–10 integer
+  scale (AniList score ÷10; Goodreads/StoryGraph ×2); statuses map (AniList CURRENT→in_progress,
+  Goodreads `currently-reading`→in_progress, StoryGraph `Did Not Finish`→dropped, …); `repeat_count
+  > 0` forces `CoreStatus::Repeat` (tracking invariant). Identity: AniList/MAL ids, Goodreads
+  ISBN13 → provider `isbn` + Book Id → `goodreads`. The dialog detects the kind after reading the
+  file, shows a profile badge, and skips the mapping table. MAL-via-Jikan and Trakt user lists are
+  deliberately out of scope: Jikan has no user-list endpoint and Trakt needs OAuth (API_PROVIDERS.md).
 - **Preview + confirm (MISSION-069):** as soon as a file is picked (JSON) or its Title column is
   mapped (CSV), the dialog runs `import_file_preview` automatically and renders the per-item
   outcome list (REQ-IMPORT-003) — a TanStack-Virtual list of `PreviewItem`s with `new` /

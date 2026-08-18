@@ -48,6 +48,39 @@ pub async fn upsert(pool: &SqlitePool, r: &ReviewRecord) -> Result<(), AppError>
     Ok(())
 }
 
+/// [`upsert`] inside the caller's transaction (used by the import pipeline,
+/// MISSION-072).
+pub async fn upsert_in_tx<'e>(
+    tx: &mut sqlx::Transaction<'e, sqlx::Sqlite>,
+    r: &ReviewRecord,
+) -> Result<(), AppError> {
+    sqlx::query(
+        "INSERT INTO review
+           (media_id, rating, review, short_review, notes, favorite, is_spoiler, created_at, updated_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+         ON CONFLICT(media_id) DO UPDATE SET
+           rating = excluded.rating,
+           review = excluded.review,
+           short_review = excluded.short_review,
+           notes = excluded.notes,
+           favorite = excluded.favorite,
+           is_spoiler = excluded.is_spoiler,
+           updated_at = excluded.updated_at",
+    )
+    .bind(&r.media_id)
+    .bind(r.rating)
+    .bind(&r.review)
+    .bind(&r.short_review)
+    .bind(&r.notes)
+    .bind(r.favorite)
+    .bind(r.is_spoiler)
+    .bind(&r.created_at)
+    .bind(&r.updated_at)
+    .execute(&mut **tx)
+    .await?;
+    Ok(())
+}
+
 /// Fetch a media's review (or `None`).
 pub async fn get(pool: &SqlitePool, media_id: &str) -> Result<Option<ReviewRecord>, AppError> {
     let row = sqlx::query(

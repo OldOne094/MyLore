@@ -22,6 +22,7 @@ use chrono::Utc;
 use sqlx::SqlitePool;
 use uuid::Uuid;
 
+use crate::domain::enums::CoreStatus;
 use crate::domain::import::{
     self, ImportError, ImportParser, ImportPlan, ImportPreview, ImportReport, ImportRow,
     PreviewItem, ReportItem, RowOutcome, RowStatus,
@@ -31,6 +32,10 @@ use crate::infrastructure::repositories::asset as asset_repo;
 use crate::infrastructure::repositories::asset::AssetRecord;
 use crate::infrastructure::repositories::media as media_repo;
 use crate::infrastructure::repositories::media::{AltTitle, ExternalId, MediaRecord};
+use crate::infrastructure::repositories::review as review_repo;
+use crate::infrastructure::repositories::review::ReviewRecord;
+use crate::infrastructure::repositories::tracking as tracking_repo;
+use crate::infrastructure::repositories::tracking::TrackingRecord;
 
 /// Import pipeline use-cases.
 pub struct ImportPipeline {
@@ -303,7 +308,71 @@ async fn insert_row<'e>(
     };
 
     media_repo::insert_in_tx(tx, &record).await?;
+    write_user_state(tx, &id, row, now).await?;
     Ok(id)
+}
+
+/// Write the row's user list state (MISSION-072): a `tracking` row when a
+/// status/progress/date is present, a `review` row when a rating/review is.
+/// All invariants are already normalized in `domain::import` (repeat forces
+/// `Repeat`; a finish date implies a terminal status).
+async fn write_user_state<'e>(
+    tx: &mut sqlx::Transaction<'e, sqlx::Sqlite>,
+    media_id: &str,
+    row: &ImportRow,
+    now: &str,
+) -> Result<(), AppError> {
+    let status = match row.my_status {
+        Some(status) => Some(status),
+        None if row.completed_at.is_some() => Some(CoreStatus::Completed),
+        None if row.progress.unwrap_or(0) > 0 || row.started_at.is_some() => {
+            Some(CoreStatus::InProgress)
+        }
+        None => None,
+    };
+
+    if status.is_some()
+        || row.progress.is_some()
+        || row.started_at.is_some()
+        || row.completed_at.is_some()
+        || row.repeat_count.unwrap_or(0) > 0
+    {
+        tracking_repo::upsert_in_tx(
+            tx,
+            &TrackingRecord {
+                media_id: media_id.to_string(),
+                core_status: status.unwrap_or(CoreStatus::Planned).as_str().to_string(),
+                custom_status_id: None,
+                started_at: row.started_at.clone(),
+                finished_at: row.completed_at.clone(),
+                repeat_count: row.repeat_count.unwrap_or(0),
+                current_node_id: None,
+                current_position: row.progress,
+                auto_track: 1,
+                updated_at: now.to_string(),
+            },
+        )
+        .await?;
+    }
+
+    if row.my_rating.is_some() || row.my_review.is_some() {
+        review_repo::upsert_in_tx(
+            tx,
+            &ReviewRecord {
+                media_id: media_id.to_string(),
+                rating: row.my_rating,
+                review: row.my_review.clone(),
+                short_review: None,
+                notes: None,
+                favorite: false,
+                is_spoiler: false,
+                created_at: now.to_string(),
+                updated_at: now.to_string(),
+            },
+        )
+        .await?;
+    }
+    Ok(())
 }
 
 /// Register a cover/banner URL as a `remote` asset inside the transaction,
@@ -404,6 +473,13 @@ mod tests {
             external_ids: Vec::new(),
             cover_url: None,
             banner_url: None,
+            my_status: None,
+            my_rating: None,
+            my_review: None,
+            progress: None,
+            started_at: None,
+            completed_at: None,
+            repeat_count: None,
         }
     }
 
@@ -735,6 +811,83 @@ mod tests {
         assert_eq!(report.committed, 1);
         assert_eq!(report.skipped, 1);
         assert_eq!(library_titles(&pool).await, vec!["Alpha"]);
+
+        pool.close().await;
+        cleanup_files(&path);
+    }
+
+    #[tokio::test]
+    async fn commit_writes_tracking_and_review_for_user_state() {
+        let (pool, path) = migrated_pool("import_pipeline_user_state.db").await;
+        let service = ImportPipeline::new(pool.clone());
+
+        let mut listed = item(1, "Sword of the Dawn");
+        listed.my_status = Some("completed".to_string());
+        listed.my_rating = Some("8".to_string());
+        listed.my_review = Some("Lovely.".to_string());
+        listed.progress = Some("320".to_string());
+        listed.started_at = Some("2026-01-01".to_string());
+        listed.completed_at = Some("2026-02-01".to_string());
+        let parser = parser(vec![listed]);
+
+        let preview = service.preview(&parser, "source").await.expect("preview");
+        let report = service
+            .commit(&preview, &ImportPlan::all_new(&preview))
+            .await
+            .expect("commit");
+        assert_eq!(report.committed, 1);
+        let media_id = report.items[0].media_id.clone().unwrap();
+
+        let tracking = tracking_repo::get_tracking(&pool, &media_id)
+            .await
+            .expect("tracking")
+            .expect("tracking row");
+        assert_eq!(tracking.core_status, "completed");
+        assert_eq!(tracking.started_at.as_deref(), Some("2026-01-01"));
+        assert_eq!(tracking.finished_at.as_deref(), Some("2026-02-01"));
+        assert_eq!(tracking.current_position, Some(320));
+        assert_eq!(tracking.repeat_count, 0);
+
+        let review = review_repo::get(&pool, &media_id)
+            .await
+            .expect("review")
+            .unwrap();
+        assert_eq!(review.rating, Some(8));
+        assert_eq!(review.review.as_deref(), Some("Lovely."));
+        assert!(!review.favorite);
+
+        pool.close().await;
+        cleanup_files(&path);
+    }
+
+    #[tokio::test]
+    async fn commit_without_user_state_writes_no_tracking_or_review() {
+        let (pool, path) = migrated_pool("import_pipeline_no_user_state.db").await;
+        let service = ImportPipeline::new(pool.clone());
+        let parser = parser(vec![item(1, "Alpha")]);
+
+        let preview = service.preview(&parser, "source").await.expect("preview");
+        let report = service
+            .commit(&preview, &ImportPlan::all_new(&preview))
+            .await
+            .expect("commit");
+        assert_eq!(report.committed, 1);
+        let media_id = report.items[0].media_id.clone().unwrap();
+
+        assert!(
+            tracking_repo::get_tracking(&pool, &media_id)
+                .await
+                .expect("tracking")
+                .is_none(),
+            "no tracking row for a metadata-only import"
+        );
+        assert!(
+            review_repo::get(&pool, &media_id)
+                .await
+                .expect("review")
+                .is_none(),
+            "no review row for a metadata-only import"
+        );
 
         pool.close().await;
         cleanup_files(&path);

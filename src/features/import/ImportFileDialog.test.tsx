@@ -21,6 +21,18 @@ import type { ImportPreview, ImportReport, TaskSnapshot } from "@/api";
 
 let fakeFileText = "";
 
+/** Mirrors the backend `import_file_detect` sniffing for the test fixtures. */
+function detectKind(text: string): string {
+  const trimmed = text.trimStart().replace(/^\uFEFF/, "");
+  if (trimmed.startsWith("[")) return "json";
+  if (trimmed.startsWith("{")) {
+    return trimmed.includes("mediaListCollection") ? "anilist" : "json";
+  }
+  if (/"?Book Id"?/i.test(trimmed)) return "goodreads";
+  if (/Reading Status/i.test(trimmed)) return "storygraph";
+  return "csv";
+}
+
 class FakeFileReader {
   onload: (() => void) | null = null;
   result = "";
@@ -141,6 +153,8 @@ beforeEach(() => {
   }) as typeof listen);
   vi.mocked(invoke).mockImplementation(async (cmd: string) => {
     switch (cmd) {
+      case "import_file_detect":
+        return detectKind(fakeFileText);
       case "import_csv_headers":
         return ["Title", "Author", "Genres"];
       case "import_file_preview":
@@ -294,6 +308,7 @@ describe("ImportFileDialog", () => {
 
   it("surfaces an immediate import failure as a toast", async () => {
     vi.mocked(invoke).mockImplementation(async (cmd: string) => {
+      if (cmd === "import_file_detect") return detectKind(fakeFileText);
       if (cmd === "import_commit") throw new Error("import error: boom");
       if (cmd === "import_csv_headers") return ["Title"];
       if (cmd === "import_file_preview") return PREVIEW;
@@ -303,7 +318,7 @@ describe("ImportFileDialog", () => {
     renderDialog();
     await user.click(screen.getByRole("button", { name: "Open import" }));
 
-    fakeFileText = "Title\nSword";
+    fakeFileText = '[{"title":"Sword"}]';
     await user.upload(
       screen.getByLabelText("Choose file"),
       new File([fakeFileText], "books.json", { type: "application/json" }),
@@ -351,5 +366,56 @@ describe("ImportFileDialog", () => {
     emitTask({ state: "failed", error: "database error: locked" });
     expect(await screen.findByText("Couldn't import the file")).toBeInTheDocument();
     expect(screen.getByText("database error: locked")).toBeInTheDocument();
+  });
+
+  it("detects a Goodreads export, shows the profile badge, and skips the mapping table", async () => {
+    const user = userEvent.setup();
+    renderDialog();
+    await user.click(screen.getByRole("button", { name: "Open import" }));
+
+    fakeFileText = '"Book Id","Title","Author","My Rating","Exclusive Shelf"\n1,Sword,Jane,4,read';
+    const input = screen.getByLabelText("Choose file");
+    await user.upload(input, new File([fakeFileText], "library_export.csv", { type: "text/csv" }));
+
+    expect(await screen.findByText("Goodreads export")).toBeInTheDocument();
+    expect(
+      screen.getByText(
+        "Profile export — your status, rating, and progress will be imported automatically. No mapping needed.",
+      ),
+    ).toBeInTheDocument();
+    expect(screen.queryByLabelText("CSV delimiter")).not.toBeInTheDocument();
+
+    expect(await screen.findByText("Review titles before importing")).toBeInTheDocument();
+    expect(invoke).toHaveBeenCalledWith("import_file_preview", {
+      kind: "goodreads",
+      source: fakeFileText,
+      mapping: null,
+    });
+
+    await user.click(screen.getByRole("button", { name: "Import 2 titles" }));
+    expect(invoke).toHaveBeenCalledWith(
+      "import_commit",
+      expect.objectContaining({ kind: "goodreads", mapping: null }),
+    );
+  });
+
+  it("detects an AniList export as a profile import", async () => {
+    const user = userEvent.setup();
+    renderDialog();
+    await user.click(screen.getByRole("button", { name: "Open import" }));
+
+    fakeFileText = '{"mediaListCollection":{"lists":[{"entries":[{"media":{"id":1}}]}]}}';
+    await user.upload(
+      screen.getByLabelText("Choose file"),
+      new File([fakeFileText], "anilist.json", { type: "application/json" }),
+    );
+
+    expect(await screen.findByText("AniList export")).toBeInTheDocument();
+    expect(await screen.findByText("Review titles before importing")).toBeInTheDocument();
+    expect(invoke).toHaveBeenCalledWith("import_file_preview", {
+      kind: "anilist",
+      source: fakeFileText,
+      mapping: null,
+    });
   });
 });

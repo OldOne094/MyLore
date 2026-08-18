@@ -148,6 +148,13 @@ impl CsvParser {
             external_ids: self.external_ids(record, columns),
             cover_url: self.cell(record, columns, &self.mapping.cover_url),
             banner_url: self.cell(record, columns, &self.mapping.banner_url),
+            my_status: None,
+            my_rating: None,
+            my_review: None,
+            progress: None,
+            started_at: None,
+            completed_at: None,
+            repeat_count: None,
         }
     }
 

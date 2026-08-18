@@ -23,7 +23,7 @@
 use std::collections::HashSet;
 use std::str::FromStr;
 
-use crate::domain::enums::{ContentType, MediaStatus, PersonRole};
+use crate::domain::enums::{ContentType, CoreStatus, MediaStatus, PersonRole};
 use crate::domain::identity::{self, IdentityCandidate, IdentityKind};
 use crate::domain::value_objects::{
     DateOnly, ExternalId, LanguageCode, MediaId, ProviderId, Title,
@@ -94,6 +94,15 @@ pub struct ParsedItem {
     pub external_ids: Vec<(String, String, Option<String>)>,
     pub cover_url: Option<String>,
     pub banner_url: Option<String>,
+    /// User list state (MISSION-072 provider imports). Optional on purpose —
+    /// generic CSV/JSON imports carry no user data and these stay `None`.
+    pub my_status: Option<String>,
+    pub my_rating: Option<String>,
+    pub my_review: Option<String>,
+    pub progress: Option<String>,
+    pub started_at: Option<String>,
+    pub completed_at: Option<String>,
+    pub repeat_count: Option<String>,
 }
 
 /// The validated canonical row: everything dedup and the transaction consume.
@@ -122,6 +131,17 @@ pub struct ImportRow {
     pub external_ids: Vec<ExternalId>,
     pub cover_url: Option<String>,
     pub banner_url: Option<String>,
+    /// User list state (MISSION-072) — validated/normalized from the parsed
+    /// row. `my_status` is a `CoreStatus`; a non-zero `repeat_count` forces the
+    /// status to `Repeat` (the domain invariant, MISSION-022). Ratings are
+    /// normalized to a 0–10 integer scale.
+    pub my_status: Option<CoreStatus>,
+    pub my_rating: Option<i64>,
+    pub my_review: Option<String>,
+    pub progress: Option<i64>,
+    pub started_at: Option<String>,
+    pub completed_at: Option<String>,
+    pub repeat_count: Option<i64>,
 }
 
 /// The result of the validator+normalizer pair for one row.
@@ -415,6 +435,13 @@ struct RawFields {
     external_ids: Vec<ExternalId>,
     cover_url: Option<String>,
     banner_url: Option<String>,
+    my_status: Option<CoreStatus>,
+    my_rating: Option<i64>,
+    my_review: Option<String>,
+    progress: Option<i64>,
+    started_at: Option<String>,
+    completed_at: Option<String>,
+    repeat_count: Option<i64>,
 }
 
 fn parse_raw(item: &ParsedItem) -> (RawFields, Vec<Issue>) {
@@ -485,6 +512,50 @@ fn parse_raw(item: &ParsedItem) -> (RawFields, Vec<Issue>) {
     let tags = clean_labels(&item.tags);
     let external_ids = parse_external_ids(&item.external_ids, &mut issues);
 
+    let my_status = parse_core_status(item.my_status.as_deref(), &mut issues);
+    let my_rating = parse_rating(item.my_rating.as_deref(), &mut issues);
+    let progress = parse_opt_count("progress", item.progress.as_deref(), &mut issues);
+    let repeat_count = parse_opt_count("repeat_count", item.repeat_count.as_deref(), &mut issues);
+    let my_status = match (my_status, repeat_count) {
+        // A non-zero repeat forces the `Repeat` status (tracking invariant).
+        (Some(CoreStatus::Repeat), _) => my_status,
+        (_, Some(n)) if n > 0 => {
+            if my_status.is_some() {
+                issues.push(warn(
+                    "my_status",
+                    "repeat count implies a re-read/re-watch; status set to \"repeat\"",
+                ));
+            }
+            Some(CoreStatus::Repeat)
+        }
+        _ => my_status,
+    };
+    let started_at = parse_date("started_at", item.started_at.as_deref(), &mut issues);
+    let completed_at = parse_date("completed_at", item.completed_at.as_deref(), &mut issues);
+    let completed_at = match (&started_at, &completed_at) {
+        (Some(start), Some(finish)) if finish < start => {
+            issues.push(warn(
+                "completed_at",
+                "completed date is before started date; completed date dropped",
+            ));
+            None
+        }
+        _ => completed_at,
+    };
+    let completed_at = match (&my_status, &completed_at) {
+        // A finish date implies a terminal bucket (tracking invariant).
+        (Some(status), Some(_))
+            if !matches!(status, CoreStatus::Completed | CoreStatus::Dropped) =>
+        {
+            issues.push(warn(
+                "completed_at",
+                "completed date dropped for a non-terminal status",
+            ));
+            None
+        }
+        _ => completed_at,
+    };
+
     let fields = RawFields {
         title,
         content_type,
@@ -507,6 +578,13 @@ fn parse_raw(item: &ParsedItem) -> (RawFields, Vec<Issue>) {
         external_ids,
         cover_url: clean_opt(item.cover_url.as_deref()),
         banner_url: clean_opt(item.banner_url.as_deref()),
+        my_status,
+        my_rating,
+        my_review: clean_opt(item.my_review.as_deref()),
+        progress,
+        started_at,
+        completed_at,
+        repeat_count,
     };
     (fields, issues)
 }
@@ -534,6 +612,13 @@ fn build_row(raw: RawFields) -> ImportRow {
         external_ids: raw.external_ids,
         cover_url: raw.cover_url,
         banner_url: raw.banner_url,
+        my_status: raw.my_status,
+        my_rating: raw.my_rating,
+        my_review: raw.my_review,
+        progress: raw.progress,
+        started_at: raw.started_at,
+        completed_at: raw.completed_at,
+        repeat_count: raw.repeat_count,
     }
 }
 
@@ -616,6 +701,60 @@ fn parse_count(field: &str, value: Option<&str>, issues: &mut Vec<Issue>) -> Opt
                 issues.push(err(
                     field,
                     format!("{field} must be a non-negative integer, got {value:?}"),
+                ));
+                None
+            }
+        },
+    }
+}
+
+/// Like [`parse_count`] but degrades to a warning: user-list state is optional
+/// and a stray cell should never invalidate an otherwise-importable row.
+fn parse_opt_count(field: &str, value: Option<&str>, issues: &mut Vec<Issue>) -> Option<i64> {
+    match clean_opt(value) {
+        None => None,
+        Some(value) => match value.parse::<i64>().ok().filter(|n| *n >= 0) {
+            Some(count) => Some(count),
+            None => {
+                issues.push(warn(
+                    field,
+                    format!("{field} must be a non-negative integer; dropped"),
+                ));
+                None
+            }
+        },
+    }
+}
+
+/// A user status (`CoreStatus::as_str` values). Unknown values degrade to a
+/// warning and `None` — a provider's odd status label never blocks the row.
+fn parse_core_status(value: Option<&str>, issues: &mut Vec<Issue>) -> Option<CoreStatus> {
+    match clean_opt(value) {
+        None => None,
+        Some(value) => match CoreStatus::from_str(&value) {
+            Ok(status) => Some(status),
+            Err(_) => {
+                issues.push(warn(
+                    "my_status",
+                    format!("unrecognized user status {value:?} dropped"),
+                ));
+                None
+            }
+        },
+    }
+}
+
+/// A user rating normalized to the 0–10 integer scale. Non-integers and
+/// out-of-range values degrade to a warning and `None`.
+fn parse_rating(value: Option<&str>, issues: &mut Vec<Issue>) -> Option<i64> {
+    match clean_opt(value) {
+        None => None,
+        Some(value) => match value.parse::<i64>().ok().filter(|n| (0..=10).contains(n)) {
+            Some(rating) => Some(rating),
+            None => {
+                issues.push(warn(
+                    "my_rating",
+                    format!("rating {value:?} is not a 0–10 integer; dropped"),
                 ));
                 None
             }
@@ -749,6 +888,13 @@ mod tests {
             external_ids: Vec::new(),
             cover_url: None,
             banner_url: None,
+            my_status: None,
+            my_rating: None,
+            my_review: None,
+            progress: None,
+            started_at: None,
+            completed_at: None,
+            repeat_count: None,
         }
     }
 
@@ -972,5 +1118,82 @@ mod tests {
         let plan = ImportPlan::all_new(&preview);
         assert_eq!(plan.rows, vec![1]);
         assert!(ImportPlan::none().rows.is_empty());
+    }
+
+    #[test]
+    fn user_state_normalizes_status_rating_progress_and_dates() {
+        let mut list = item("Sword of the Dawn");
+        list.my_status = Some("in_progress".to_string());
+        list.my_rating = Some("8".to_string());
+        list.my_review = Some("Lovely.".to_string());
+        list.progress = Some("12".to_string());
+        list.started_at = Some("2026-01-01".to_string());
+        list.completed_at = None;
+        list.repeat_count = Some("0".to_string());
+
+        let (row, warnings) = normalize(&list).expect("valid");
+        assert!(warnings.is_empty());
+        assert_eq!(row.my_status, Some(CoreStatus::InProgress));
+        assert_eq!(row.my_rating, Some(8));
+        assert_eq!(row.my_review.as_deref(), Some("Lovely."));
+        assert_eq!(row.progress, Some(12));
+        assert_eq!(row.started_at.as_deref(), Some("2026-01-01"));
+        assert_eq!(row.completed_at, None);
+        assert_eq!(row.repeat_count, Some(0));
+    }
+
+    #[test]
+    fn user_state_degrades_bad_cells_with_warnings() {
+        let mut list = item("Sword");
+        list.my_status = Some("reading".to_string());
+        list.my_rating = Some("7.5".to_string());
+        list.progress = Some("n/a".to_string());
+        list.repeat_count = Some("-1".to_string());
+
+        let (row, warnings) = normalize(&list).expect("valid");
+        assert_eq!(row.my_status, None);
+        assert_eq!(row.my_rating, None);
+        assert_eq!(row.progress, None);
+        assert_eq!(row.repeat_count, None);
+        for field in ["my_status", "my_rating", "progress", "repeat_count"] {
+            assert!(
+                warnings.iter().any(|i| i.field == field),
+                "expected a warning for {field}"
+            );
+        }
+    }
+
+    #[test]
+    fn non_zero_repeat_forces_repeat_status() {
+        let mut list = item("Sword");
+        list.my_status = Some("completed".to_string());
+        list.repeat_count = Some("2".to_string());
+        let (row, warnings) = normalize(&list).expect("valid");
+        assert_eq!(row.my_status, Some(CoreStatus::Repeat));
+        assert_eq!(row.repeat_count, Some(2));
+        assert!(warnings.iter().any(|i| i.field == "my_status"));
+
+        let mut alone = item("Sword");
+        alone.repeat_count = Some("1".to_string());
+        let (row, _) = normalize(&alone).expect("valid");
+        assert_eq!(row.my_status, Some(CoreStatus::Repeat));
+    }
+
+    #[test]
+    fn completed_date_is_dropped_for_non_terminal_status() {
+        let mut list = item("Sword");
+        list.my_status = Some("in_progress".to_string());
+        list.completed_at = Some("2026-06-01".to_string());
+        let (row, warnings) = normalize(&list).expect("valid");
+        assert_eq!(row.completed_at, None);
+        assert!(warnings.iter().any(|i| i.field == "completed_at"));
+
+        let mut finished = item("Sword");
+        finished.my_status = Some("completed".to_string());
+        finished.started_at = Some("2026-06-01".to_string());
+        finished.completed_at = Some("2026-05-01".to_string());
+        let (row, warnings) = normalize(&finished).expect("valid");
+        assert_eq!(row.completed_at, None, "finish before start dropped");
+        assert!(warnings.iter().any(|i| i.field == "completed_at"));
     }
 }

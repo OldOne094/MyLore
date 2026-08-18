@@ -357,7 +357,12 @@ export function import_provider(args: {
   return invoke<ProviderImportView>("import_provider", args);
 }
 
-/** Parse + dedup a file (kind `json` = MyLore JSON format, `csv` = CSV with a column mapping) into the per-item preview. `mapping` is required for `csv` and ignored for `json`. Read-only. Resolves with the preview (per-row outcomes + issues) or rejects with an AppError string. */
+/** Sniff a file's import format from its content (MISSION-072): `json` vs `anilist` for JSON files, `csv` vs `goodreads` vs `storygraph` for CSV files. The frontend calls this after reading a file to pick the parser and, for the profile kinds (anilist/goodreads/storygraph), to skip the column-mapping step. Resolves with the kind string or rejects with an AppError string. */
+export function import_file_detect(args: { source: string }): Promise<string> {
+  return invoke<string>("import_file_detect", args);
+}
+
+/** Parse + dedup a file (kind `json` = MyLore JSON format, `csv` = CSV with a column mapping, `anilist` = AniList export, `goodreads` = Goodreads CSV, `storygraph` = StoryGraph CSV) into the per-item preview. `mapping` is required for `csv` and ignored for the other kinds. Read-only. Resolves with the preview (per-row outcomes + issues) or rejects with an AppError string. */
 export function import_file_preview(args: {
   kind: string;
   source: string;

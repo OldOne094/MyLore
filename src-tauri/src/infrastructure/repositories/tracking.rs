@@ -73,6 +73,43 @@ pub async fn upsert_tracking(pool: &SqlitePool, t: &TrackingRecord) -> Result<()
     Ok(())
 }
 
+/// [`upsert_tracking`] inside the caller's transaction (used by the import
+/// pipeline, MISSION-072).
+pub async fn upsert_in_tx<'e>(
+    tx: &mut sqlx::Transaction<'e, sqlx::Sqlite>,
+    t: &TrackingRecord,
+) -> Result<(), AppError> {
+    sqlx::query(
+        "INSERT INTO tracking
+           (media_id, core_status, custom_status_id, started_at, finished_at,
+            repeat_count, current_node_id, current_position, auto_track, updated_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+         ON CONFLICT(media_id) DO UPDATE SET
+           core_status = excluded.core_status,
+           custom_status_id = excluded.custom_status_id,
+           started_at = excluded.started_at,
+           finished_at = excluded.finished_at,
+           repeat_count = excluded.repeat_count,
+           current_node_id = excluded.current_node_id,
+           current_position = excluded.current_position,
+           auto_track = excluded.auto_track,
+           updated_at = excluded.updated_at",
+    )
+    .bind(&t.media_id)
+    .bind(&t.core_status)
+    .bind(&t.custom_status_id)
+    .bind(&t.started_at)
+    .bind(&t.finished_at)
+    .bind(t.repeat_count)
+    .bind(&t.current_node_id)
+    .bind(t.current_position)
+    .bind(t.auto_track)
+    .bind(&t.updated_at)
+    .execute(&mut **tx)
+    .await?;
+    Ok(())
+}
+
 /// Fetch the tracking row for a media (or `None`).
 pub async fn get_tracking(
     pool: &SqlitePool,

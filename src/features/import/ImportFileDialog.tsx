@@ -14,7 +14,9 @@ import {
 } from "@/components/ui";
 import { type CsvMapping, type ImportPlan, type ImportReport, type PreviewItem } from "@/api";
 import {
+  PROFILE_KINDS,
   useCsvHeaders,
+  useImportDetect,
   useImportFile,
   useImportPreview,
   useImportTask,
@@ -22,13 +24,16 @@ import {
 } from "./api";
 import { useTaskCancel } from "@/features/tasks/api";
 
-/* MISSION-068/069/070 — Import-from-file dialog. Flow: pick a JSON/CSV file in
-   the webview (FileReader) → JSON imports directly, CSV opens the column-
-   mapping table → the file is analyzed through `import_file_preview` and the
-   per-item outcomes are shown (MISSION-069): check the new rows you want, then
-   confirm or cancel. Confirm spawns a background task (MISSION-070): the dialog
-   streams `task-changed` progress, can cancel, and shows the MISSION-067
-   savepoint report once the task succeeds. */
+/* MISSION-068/069/070/072 — Import-from-file dialog. Flow: pick a JSON/CSV file
+   in the webview (FileReader) → the file is sniffed through `import_file_detect`
+   (MISSION-072): profile exports (AniList/Goodreads/StoryGraph) show a badge
+   and go straight to the preview with their built-in user state, while plain
+   CSV opens the column-mapping table and JSON imports directly → the file is
+   analyzed through `import_file_preview` and the per-item outcomes are shown
+   (MISSION-069): check the new rows you want, then confirm or cancel. Confirm
+   spawns a background task (MISSION-070): the dialog streams `task-changed`
+   progress, can cancel, and shows the MISSION-067 savepoint report once the
+   task succeeds. */
 
 const SELECT_CLASSES =
   "h-[var(--control-height)] w-full rounded-sm border bg-bg-base px-3 text-base text-text-primary " +
@@ -142,6 +147,12 @@ const OUTCOME_BADGE_VARIANTS: Record<
   invalid: "dropped",
 };
 
+const PROFILE_LABEL_KEYS: Record<string, string> = {
+  anilist: "import.profileAniList",
+  goodreads: "import.profileGoodreads",
+  storygraph: "import.profileStorygraph",
+};
+
 export interface ImportFileDialogProps {
   trigger: React.ReactNode;
 }
@@ -164,6 +175,11 @@ export function ImportFileDialog({ trigger }: ImportFileDialogProps) {
   const [mapping, setMapping] = useState<CsvMapping>(defaultMapping);
   const [taskId, setTaskId] = useState<string | null>(null);
   const [selected, setSelected] = useState<Set<number>>(new Set());
+
+  const detectQuery = useImportDetect(source ?? "", source !== null);
+  useEffect(() => {
+    if (detectQuery.data) setKind(detectQuery.data as ImportFileKind);
+  }, [detectQuery.data]);
 
   const taskQuery = useImportTask(taskId);
   const task = taskQuery.data;
@@ -192,10 +208,9 @@ export function ImportFileDialog({ trigger }: ImportFileDialogProps) {
     const reader = new FileReader();
     reader.onload = () => {
       const text = typeof reader.result === "string" ? reader.result : "";
-      const isJson = file.name.toLowerCase().endsWith(".json");
       setFileName(file.name);
       setSource(text);
-      setKind(isJson ? "json" : "csv");
+      setKind(null);
       setTaskId(null);
     };
     reader.readAsText(file);
@@ -324,7 +339,18 @@ export function ImportFileDialog({ trigger }: ImportFileDialogProps) {
             )}
           </div>
 
-          {source === null || kind === null ? null : kind === "csv" ? (
+          {source === null ? (
+            <p className="text-sm text-text-tertiary">{t("import.fileHint")}</p>
+          ) : detectQuery.isPending ? (
+            <p className="text-sm text-text-secondary">{t("import.detecting")}</p>
+          ) : kind === null ? null : PROFILE_KINDS.has(kind) ? (
+            <div className="flex flex-col gap-1.5">
+              <Badge variant="accent" className="w-fit">
+                {t(PROFILE_LABEL_KEYS[kind])}
+              </Badge>
+              <p className="text-sm text-text-tertiary">{t("import.profileHint")}</p>
+            </div>
+          ) : kind === "csv" ? (
             <div className="flex flex-col gap-3">
               <p className="text-sm font-medium text-text-primary">{t("import.csvStep")}</p>
               <div className="grid grid-cols-2 gap-3">

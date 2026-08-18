@@ -186,9 +186,16 @@ const en = {
   },
   import: {
     dialogTitle: "Import from file",
-    dialogHint: "Pick a MyLore JSON export or a CSV with columns to map.",
+    dialogHint:
+      "Pick a MyLore JSON export, a CSV to map, or an AniList / Goodreads / StoryGraph export.",
     chooseFile: "Choose file",
     fileHint: "JSON (.json) or CSV (.csv)",
+    detecting: "Detecting the file format…",
+    profileAniList: "AniList export",
+    profileGoodreads: "Goodreads export",
+    profileStorygraph: "StoryGraph export",
+    profileHint:
+      "Profile export — your status, rating, and progress will be imported automatically. No mapping needed.",
     csvStep: "Map CSV columns to import fields",
     readingHeaders: "Reading columns…",
     noColumns: "Couldn't read any columns from this file.",
@@ -745,9 +752,16 @@ const ar = {
   },
   import: {
     dialogTitle: "استيراد من ملف",
-    dialogHint: "اختر ملف تصدير MyLore بصيغة JSON أو ملف CSV لربط أعمدته.",
+    dialogHint:
+      "اختر ملف تصدير MyLore بصيغة JSON أو ملف CSV لربط أعمدته، أو تصدير AniList / Goodreads / StoryGraph.",
     chooseFile: "اختيار ملف",
     fileHint: "JSON (.json) أو CSV (.csv)",
+    detecting: "تحديد صيغة الملف…",
+    profileAniList: "تصدير AniList",
+    profileGoodreads: "تصدير Goodreads",
+    profileStorygraph: "تصدير StoryGraph",
+    profileHint:
+      "تصدير ملف شخصي — سيتم استيراد الحالة والتقييم والتقدّم تلقائياً. لا حاجة لربط الأعمدة.",
     csvStep: "اربط أعمدة CSV بحقول الاستيراد",
     readingHeaders: "قراءة الأعمدة…",
     noColumns: "تعذّرت قراءة أي أعمدة من هذا الملف.",

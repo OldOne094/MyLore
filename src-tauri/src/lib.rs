@@ -73,6 +73,7 @@ pub fn run() {
             commands::discover::search_external,
             commands::import::import_provider,
             commands::import::import_file_preview,
+            commands::import::import_file_detect,
             commands::import::import_commit,
             commands::import::import_csv_headers,
             commands::enrich::media_enrich,

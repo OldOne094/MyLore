@@ -1,6 +1,7 @@
-//! Import commands (MISSION-060 provider import, MISSION-068 file import).
-//! Thin handlers — the flows live in `application::import_service` (provider)
-//! and `application::import_file_service` (JSON/CSV files).
+//! Import commands (MISSION-060 provider import, MISSION-068 file import,
+//! MISSION-072 profile exports). Thin handlers — the flows live in
+//! `application::import_service` (provider), `application::import_file_service`
+//! (JSON/CSV files), and the shared `application::import_pipeline`.
 
 use sqlx::SqlitePool;
 use tauri::command;
@@ -50,6 +51,16 @@ pub async fn import_file_preview(
     let kind = kind.parse::<ImportFileKind>()?;
     let service = ImportFileService::new(state.inner().clone());
     service.preview(kind, &source, mapping.as_ref()).await
+}
+
+/// Sniff a file's import format from its content (MISSION-072): `json` vs
+/// `anilist` for JSON files, `csv` vs `goodreads` vs `storygraph` for CSV
+/// files. The frontend calls this after reading a file to pick the parser and,
+/// for the profile kinds, to skip the column-mapping step.
+#[command]
+pub fn import_file_detect(source: String) -> Result<String, AppError> {
+    info!("import_file_detect invoked");
+    ImportFileKind::detect(&source).map(|kind| kind.as_str().to_string())
 }
 
 /// Import a file's rows as a background task (MISSION-070): the command spawns

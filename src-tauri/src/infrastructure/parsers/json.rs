@@ -86,6 +86,13 @@ fn to_item(row: usize, object: &Map<String, Value>) -> ParsedItem {
         external_ids: external_ids(object.get("external_ids")),
         cover_url: opt_string(object, "cover_url"),
         banner_url: opt_string(object, "banner_url"),
+        my_status: opt_string(object, "my_status"),
+        my_rating: opt_string(object, "my_rating"),
+        my_review: opt_string(object, "my_review"),
+        progress: opt_string(object, "progress"),
+        started_at: opt_string(object, "started_at"),
+        completed_at: opt_string(object, "completed_at"),
+        repeat_count: opt_string(object, "repeat_count"),
     }
 }
 

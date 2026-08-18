@@ -69,6 +69,9 @@ export const queryKeys = {
     all: () => ["import"] as const,
     csvHeaders: (source: string, delimiter: string) =>
       ["import", "csv", "headers", source, delimiter] as const,
+    /** Sniffed file kind (MISSION-072): `json`/`csv`/`anilist`/`goodreads`/
+        `storygraph`, keyed by source so re-picking a file re-detects. */
+    detect: (source: string) => ["import", "detect", source] as const,
     /** Per-file import preview (MISSION-069): keyed by kind + source + the
         effective mapping so any mapping change re-analyzes the file. */
     preview: (kind: string, source: string, mapping: CsvMapping | null) =>
