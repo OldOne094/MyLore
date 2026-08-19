@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { render, screen, waitFor } from "@testing-library/react";
+import { render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { MemoryRouter } from "react-router";
@@ -50,9 +50,20 @@ const FACETS: MediaFacets = {
 };
 
 function mockLibrary(items: unknown, facets: MediaFacets = FACETS) {
-  vi.mocked(invoke).mockImplementation((command: string) => {
+  vi.mocked(invoke).mockImplementation((command: string, args?: unknown) => {
     if (command === "media_facets") return Promise.resolve(facets);
     if (command === "media_list") return Promise.resolve(items);
+    if (command === "collection_create_smart") {
+      const { name, filter } = (args ?? {}) as { name?: string; filter?: unknown };
+      return Promise.resolve({
+        id: "c-smart",
+        name,
+        is_smart: true,
+        filter,
+        member_count: 1,
+        created_at: "2026-01-03",
+      });
+    }
     return Promise.resolve(null);
   });
 }
@@ -301,5 +312,43 @@ describe("LibraryPage", () => {
     renderPage();
     await screen.findByText("Steins;Gate");
     expect(invoke).not.toHaveBeenCalledWith("assets_resolve", expect.objectContaining({}));
+  });
+
+  it("saves the active filters as a smart collection (MISSION-077)", async () => {
+    mockLibrary(TITLES);
+    renderPage();
+    await screen.findByText("Steins;Gate");
+
+    await userEvent.click(screen.getByRole("button", { name: "Filter" }));
+    await userEvent.click(await screen.findByRole("button", { name: "Anime" }));
+
+    await userEvent.click(screen.getByRole("button", { name: "Save as collection" }));
+    const dialog = screen.getByRole("dialog");
+    await userEvent.type(within(dialog).getByLabelText("Name"), "Anime shelf");
+    await userEvent.click(within(dialog).getByRole("button", { name: "Save collection" }));
+
+    expect(invoke).toHaveBeenCalledWith("collection_create_smart", {
+      name: "Anime shelf",
+      filter: {
+        content_type: "anime",
+        format: null,
+        pub_status: null,
+        genre: null,
+        tag: null,
+        year: null,
+        favorite: null,
+        sort: "title",
+        ascending: true,
+      },
+    });
+    expect(await screen.findByText("Created smart collection “Anime shelf”")).toBeInTheDocument();
+  });
+
+  it("hides the save-as-collection button until a filter is active", async () => {
+    mockLibrary(TITLES);
+    renderPage();
+    await screen.findByText("Steins;Gate");
+
+    expect(screen.queryByRole("button", { name: "Save as collection" })).not.toBeInTheDocument();
   });
 });

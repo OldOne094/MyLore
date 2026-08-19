@@ -275,6 +275,19 @@ has no type column. `delimiter` is the CSV field delimiter, `separator` splits m
   buttons, with optimistic cache writes that roll back on error. Bulk add to a collection from the
   library action bar now routes through `collection_bulk_add` (the MISSION-045 `BulkService`
   collection path was retired).
+- **Smart collections (MISSION-077):** a collection is *computed* instead of manual when
+  `collection.is_smart = 1` — `collection.filter_def` holds a JSON `SmartFilter`
+  (content_type/format/pub_status/genre/tag/year/favorite + sort/ascending, all nullable, mirroring
+  `LibraryFilters` + `LibrarySort`). `CollectionService::create_smart`/`update_smart_filter`
+  (smart-only) persist the filter; `members()` **routes server-side** — a smart collection re-runs
+  `media_repo::list` (sort/ascending resolved exactly like `media_service`) and batches through
+  `MediaService::to_list_items`, so the frontend uses the same members query key with no conditional
+  hooks; `list()`/`view()` compute the smart `member_count` via `media_repo::count`. Manual membership
+  ops (`add_members`/`remove_member`/`reorder`) reject smart collections. Frontend: `SmartFilterForm`
+  is the query builder (facet selects fed by `media_facets`), the library toolbar's **"Save as
+  collection"** snapshots the active filter + sort into `collection_create_smart`, the Collections
+  page shows a Smart badge + create-smart dialog, and the detail page renders computed members
+  read-only with an "Edit filter" dialog.
 
 ## 7. Backup & Restore
 

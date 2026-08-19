@@ -101,6 +101,8 @@ pub fn run() {
             commands::bulk::media_bulk_delete,
             commands::collection::collection_list,
             commands::collection::collection_create,
+            commands::collection::collection_create_smart,
+            commands::collection::collection_update_smart,
             commands::collection::collection_rename,
             commands::collection::collection_delete,
             commands::collection::collection_members,

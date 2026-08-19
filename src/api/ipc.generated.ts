@@ -70,8 +70,21 @@ export interface MediaListItem {
 export interface CollectionView {
   id: string;
   name: string;
+  is_smart: boolean;
+  filter: SmartFilter | null;
   member_count: number;
   created_at: string;
+}
+export interface SmartFilter {
+  content_type: string | null;
+  format: string | null;
+  pub_status: string | null;
+  genre: string | null;
+  tag: string | null;
+  year: number | null;
+  favorite: boolean | null;
+  sort: string | null;
+  ascending: boolean | null;
 }
 export interface CollectionMemberView {
   position: number;
@@ -601,6 +614,22 @@ export function collection_list(): Promise<CollectionView[]> {
 /** Create a manual collection; resolves with its view or rejects with an AppError string. */
 export function collection_create(args: { name: string }): Promise<CollectionView> {
   return invoke<CollectionView>("collection_create", args);
+}
+
+/** Create a smart collection from a saved filter; membership is computed live. Resolves with its view or rejects with an AppError string. */
+export function collection_create_smart(args: {
+  name: string;
+  filter: SmartFilter;
+}): Promise<CollectionView> {
+  return invoke<CollectionView>("collection_create_smart", args);
+}
+
+/** Replace a smart collection's filter. Resolves with the updated view or rejects with an AppError string. */
+export function collection_update_smart(args: {
+  collection_id: string;
+  filter: SmartFilter;
+}): Promise<CollectionView> {
+  return invoke<CollectionView>("collection_update_smart", args);
 }
 
 /** Rename a collection; resolves with the updated view or rejects with an AppError string. */

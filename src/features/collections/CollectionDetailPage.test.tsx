@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { fireEvent, render, screen } from "@testing-library/react";
+import { fireEvent, render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { MemoryRouter, Route, Routes } from "react-router";
@@ -16,10 +16,12 @@ import { CollectionDetailPage } from "./CollectionDetailPage";
 import { NO_PROGRESS } from "@/features/library/testFixtures";
 import type { MediaListItem } from "@/features/library/api";
 
-/* MISSION-076 — Collection detail. Ordered members over `collection_members`:
+/* MISSION-076/077 — Collection detail. Ordered members over `collection_members`:
    reorder via native HTML5 drag-and-drop (jsdom fireEvent) or the Up/Down
    buttons, remove via `collection_remove_member`, all wired to
-   `collection_reorder` with the full ordered id list. */
+   `collection_reorder` with the full ordered id list. MISSION-077 adds the
+   smart branch: computed members render read-only with an "Edit filter" dialog
+   that writes `collection_update_smart`. */
 
 const TITLE_A: MediaListItem = {
   id: "m-1",
@@ -71,6 +73,37 @@ function mockDetail(members: typeof MEMBERS = MEMBERS) {
       const ids = a.media_ids as string[];
       members = [...members].sort((a, b) => ids.indexOf(a.media.id) - ids.indexOf(b.media.id));
       return Promise.resolve(undefined);
+    }
+    return Promise.resolve(null);
+  });
+}
+
+const SMART_COLLECTION = {
+  id: "c-smart",
+  name: "Anime shelf",
+  is_smart: true,
+  filter: {
+    content_type: "anime",
+    format: null,
+    pub_status: null,
+    genre: null,
+    tag: null,
+    year: null,
+    favorite: null,
+    sort: "title",
+    ascending: true,
+  },
+  member_count: 2,
+  created_at: "2026-01-01",
+};
+
+function mockSmartDetail(members: typeof MEMBERS = MEMBERS) {
+  vi.mocked(invoke).mockImplementation((command: string, args?: InvokeArgs) => {
+    const a = (args ?? {}) as { filter?: unknown };
+    if (command === "collection_list") return Promise.resolve([SMART_COLLECTION]);
+    if (command === "collection_members") return Promise.resolve(members);
+    if (command === "collection_update_smart") {
+      return Promise.resolve({ ...SMART_COLLECTION, filter: a.filter });
     }
     return Promise.resolve(null);
   });
@@ -193,5 +226,46 @@ describe("CollectionDetailPage", () => {
     renderPage("c-nope");
 
     expect(await screen.findByText("Collection not found")).toBeInTheDocument();
+  });
+
+  it("renders a smart collection read-only with the computed note", async () => {
+    mockSmartDetail();
+    renderPage("c-smart");
+
+    expect(await screen.findByRole("heading", { name: "Anime shelf" })).toBeInTheDocument();
+    expect(screen.getByText("Computed from filters")).toBeInTheDocument();
+    expect(screen.getAllByLabelText("Smart collection")).toHaveLength(1);
+    expect(memberTitles()).toEqual(["Dune", "Berserk"]);
+    expect(screen.queryByRole("button", { name: "Move up" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Move down" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Remove" })).not.toBeInTheDocument();
+  });
+
+  it("edits a smart collection's filter", async () => {
+    mockSmartDetail();
+    renderPage("c-smart");
+    await screen.findByRole("heading", { name: "Anime shelf" });
+
+    await userEvent.click(screen.getByRole("button", { name: "Edit filter" }));
+    const dialog = screen.getByRole("dialog");
+    await userEvent.selectOptions(within(dialog).getByLabelText("Status"), "completed");
+    await userEvent.click(within(dialog).getByRole("button", { name: "Save collection" }));
+
+    expect(invoke).toHaveBeenCalledWith(
+      "collection_update_smart",
+      expect.objectContaining({
+        collection_id: "c-smart",
+        filter: expect.objectContaining({ pub_status: "completed" }),
+      }),
+    );
+    expect(await screen.findByText("Filter updated")).toBeInTheDocument();
+  });
+
+  it("shows the smart empty state when nothing matches", async () => {
+    mockSmartDetail([]);
+    renderPage("c-smart");
+
+    expect(await screen.findByText("Nothing matches these filters")).toBeInTheDocument();
+    expect(screen.getByText("Adjust the filter to change what appears here.")).toBeInTheDocument();
   });
 });

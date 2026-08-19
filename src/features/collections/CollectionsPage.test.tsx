@@ -17,19 +17,55 @@ import { CollectionsPage } from "./CollectionsPage";
 /* MISSION-076 — Collections page. Card grid over `collection_list` with
    create/rename/delete dialogs wired to their IPC commands. */
 
-const VIEWS = [
+interface CollectionViewFixture {
+  id: string;
+  name: string;
+  is_smart?: boolean;
+  filter?: unknown;
+  member_count: number;
+  created_at: string;
+}
+
+const VIEWS: CollectionViewFixture[] = [
   { id: "c-1", name: "Reading Now", member_count: 2, created_at: "2026-01-01" },
   { id: "c-2", name: "Watchlist", member_count: 0, created_at: "2026-01-02" },
 ];
 
-function mockCollections(initial: typeof VIEWS = VIEWS) {
+function mockCollections(initial: CollectionViewFixture[] = VIEWS) {
   let list = [...initial];
   vi.mocked(invoke).mockImplementation((command: string, args?: InvokeArgs) => {
-    const a = (args ?? {}) as { name?: string; collection_id?: string };
+    const a = (args ?? {}) as {
+      name?: string;
+      collection_id?: string;
+      filter?: unknown;
+    };
     if (command === "collection_list") return Promise.resolve(list);
+    if (command === "media_facets") {
+      return Promise.resolve({ formats: [], genres: [], tags: [], years: [] });
+    }
     if (command === "collection_create") {
       const name = a.name ?? "";
-      const view = { id: "c-new", name, member_count: 0, created_at: "2026-01-03" };
+      const view = {
+        id: "c-new",
+        name,
+        is_smart: false,
+        filter: null,
+        member_count: 0,
+        created_at: "2026-01-03",
+      };
+      list = [...list, view];
+      return Promise.resolve(view);
+    }
+    if (command === "collection_create_smart") {
+      const name = a.name ?? "";
+      const view = {
+        id: "c-smart",
+        name,
+        is_smart: true,
+        filter: a.filter ?? null,
+        member_count: 1,
+        created_at: "2026-01-03",
+      };
       list = [...list, view];
       return Promise.resolve(view);
     }
@@ -145,5 +181,71 @@ describe("CollectionsPage", () => {
 
     expect(await screen.findByText("Couldn't load your collections")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Retry" })).toBeInTheDocument();
+  });
+
+  it("shows a smart badge on smart collections", async () => {
+    mockCollections([
+      {
+        id: "c-1",
+        name: "Anime shelf",
+        is_smart: true,
+        filter: {
+          content_type: "anime",
+          format: null,
+          pub_status: null,
+          genre: null,
+          tag: null,
+          year: null,
+          favorite: null,
+          sort: null,
+          ascending: null,
+        },
+        member_count: 2,
+        created_at: "2026-01-01",
+      },
+      {
+        id: "c-2",
+        name: "Watchlist",
+        is_smart: false,
+        filter: null,
+        member_count: 0,
+        created_at: "2026-01-02",
+      },
+    ]);
+    renderPage();
+
+    expect(await screen.findByText("Smart")).toBeInTheDocument();
+    expect(screen.getAllByLabelText("Smart collection")).toHaveLength(1);
+    expect(screen.getByRole("heading", { name: "Anime shelf" })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Watchlist" })).toBeInTheDocument();
+  });
+
+  it("creates a smart collection from the query builder", async () => {
+    mockCollections();
+    renderPage();
+    await screen.findAllByRole("link", { name: "Open collection" });
+
+    await userEvent.click(screen.getByRole("button", { name: "New smart collection" }));
+    const dialog = screen.getByRole("dialog");
+    await userEvent.type(within(dialog).getByLabelText("Name"), "Anime shelf");
+    await userEvent.selectOptions(within(dialog).getByLabelText("Type"), "anime");
+    await userEvent.selectOptions(within(dialog).getByLabelText("Sort"), "release_year");
+    await userEvent.click(within(dialog).getByRole("button", { name: "Create" }));
+
+    expect(invoke).toHaveBeenCalledWith("collection_create_smart", {
+      name: "Anime shelf",
+      filter: {
+        content_type: "anime",
+        format: null,
+        pub_status: null,
+        genre: null,
+        tag: null,
+        year: null,
+        favorite: null,
+        sort: "release_year",
+        ascending: true,
+      },
+    });
+    expect(await screen.findByText("Created smart collection “Anime shelf”")).toBeInTheDocument();
   });
 });

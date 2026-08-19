@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Folder, FolderPlus, Pencil, Plus, Trash2 } from "lucide-react";
+import { Folder, FolderPlus, Pencil, Plus, Sparkles, Trash2, Wand2 } from "lucide-react";
 import { Link } from "react-router";
 import { useTranslation } from "react-i18next";
 import {
@@ -15,15 +15,24 @@ import {
   Skeleton,
 } from "@/components/ui";
 import { useToast } from "@/components/ui";
+import { useMediaFacetsQuery } from "@/features/library/api";
+import type { MediaFacets } from "@/features/library/api";
+import type { SmartFilter } from "@/api";
 import {
   useCollectionsQuery,
   useCreateCollection,
+  useCreateSmartCollection,
   useDeleteCollection,
   useRenameCollection,
 } from "./api";
+import { SmartFilterForm } from "./SmartFilterForm";
+import { EMPTY_SMART_FILTER } from "./smartFilter";
 
-/* MISSION-076 — Collections page. Manual collections in a card grid: create,
-   rename and delete from here; open a collection to manage its members. */
+/* MISSION-076/077 — Collections page. Manual collections in a card grid:
+   create, rename and delete from here; open a collection to manage its
+   members. MISSION-077 adds smart collections built from a saved filter —
+   created through the same dialog, they show a smart badge and compute their
+   membership live. */
 
 function CollectionsSkeleton() {
   return (
@@ -45,12 +54,17 @@ export function CollectionsPage() {
   const { t } = useTranslation();
   const toast = useToast();
   const { data, isLoading, isError, refetch } = useCollectionsQuery();
+  const { data: facets } = useMediaFacetsQuery();
   const create = useCreateCollection();
+  const createSmart = useCreateSmartCollection();
   const rename = useRenameCollection();
   const remove = useDeleteCollection();
 
   const [createOpen, setCreateOpen] = useState(false);
   const [name, setName] = useState("");
+  const [smartOpen, setSmartOpen] = useState(false);
+  const [smartName, setSmartName] = useState("");
+  const [smartFilter, setSmartFilter] = useState<SmartFilter>(EMPTY_SMART_FILTER);
   const [renaming, setRenaming] = useState<{ id: string; name: string } | null>(null);
   const [renameValue, setRenameValue] = useState("");
   const [deleting, setDeleting] = useState<string | null>(null);
@@ -80,29 +94,63 @@ export function CollectionsPage() {
         title={t("collections.emptyTitle")}
         hint={t("collections.emptyHint")}
         action={
-          <Dialog open={createOpen} onOpenChange={setCreateOpen}>
-            <DialogTrigger asChild>
-              <Button>
-                <Plus size={16} aria-hidden="true" />
-                {t("collections.create")}
-              </Button>
-            </DialogTrigger>
-            <CreateDialog
-              value={name}
-              onChange={setName}
-              pending={create.isPending}
-              onSubmit={(value) => {
-                create.mutate(value, {
-                  onSuccess: (view) => {
-                    setCreateOpen(false);
-                    setName("");
-                    toast.success({ title: t("collections.createdToast", { name: view.name }) });
-                  },
-                  onError: () => toast.error({ title: t("collections.createError") }),
-                });
-              }}
-            />
-          </Dialog>
+          <div className="flex flex-wrap items-center justify-center gap-2">
+            <Dialog open={createOpen} onOpenChange={setCreateOpen}>
+              <DialogTrigger asChild>
+                <Button>
+                  <Plus size={16} aria-hidden="true" />
+                  {t("collections.create")}
+                </Button>
+              </DialogTrigger>
+              <CreateDialog
+                value={name}
+                onChange={setName}
+                pending={create.isPending}
+                onSubmit={(value) => {
+                  create.mutate(value, {
+                    onSuccess: (view) => {
+                      setCreateOpen(false);
+                      setName("");
+                      toast.success({ title: t("collections.createdToast", { name: view.name }) });
+                    },
+                    onError: () => toast.error({ title: t("collections.createError") }),
+                  });
+                }}
+              />
+            </Dialog>
+            <Dialog open={smartOpen} onOpenChange={setSmartOpen}>
+              <DialogTrigger asChild>
+                <Button variant="secondary">
+                  <Wand2 size={16} aria-hidden="true" />
+                  {t("collections.createSmart")}
+                </Button>
+              </DialogTrigger>
+              <SmartCreateDialog
+                name={smartName}
+                filter={smartFilter}
+                facets={facets}
+                onNameChange={setSmartName}
+                onFilterChange={setSmartFilter}
+                pending={createSmart.isPending}
+                onSubmit={(value, filter) => {
+                  createSmart.mutate(
+                    { name: value, filter },
+                    {
+                      onSuccess: (view) => {
+                        setSmartOpen(false);
+                        setSmartName("");
+                        setSmartFilter(EMPTY_SMART_FILTER);
+                        toast.success({
+                          title: t("collections.smartCreatedToast", { name: view.name }),
+                        });
+                      },
+                      onError: () => toast.error({ title: t("collections.createSmartError") }),
+                    },
+                  );
+                }}
+              />
+            </Dialog>
+          </div>
         }
       />
     );
@@ -142,6 +190,38 @@ export function CollectionsPage() {
             }}
           />
         </Dialog>
+        <Dialog open={smartOpen} onOpenChange={setSmartOpen}>
+          <DialogTrigger asChild>
+            <Button variant="secondary" size="sm">
+              <Wand2 size={14} aria-hidden="true" />
+              {t("collections.createSmart")}
+            </Button>
+          </DialogTrigger>
+          <SmartCreateDialog
+            name={smartName}
+            filter={smartFilter}
+            facets={facets}
+            onNameChange={setSmartName}
+            onFilterChange={setSmartFilter}
+            pending={createSmart.isPending}
+            onSubmit={(value, filter) => {
+              createSmart.mutate(
+                { name: value, filter },
+                {
+                  onSuccess: (view) => {
+                    setSmartOpen(false);
+                    setSmartName("");
+                    setSmartFilter(EMPTY_SMART_FILTER);
+                    toast.success({
+                      title: t("collections.smartCreatedToast", { name: view.name }),
+                    });
+                  },
+                  onError: () => toast.error({ title: t("collections.createSmartError") }),
+                },
+              );
+            }}
+          />
+        </Dialog>
       </div>
 
       <div className="flex-1 overflow-y-auto px-6 py-5">
@@ -156,8 +236,19 @@ export function CollectionsPage() {
                 aria-label={t("collections.open")}
                 className="flex min-w-0 flex-1 flex-col"
               >
-                <span className="mb-3 flex size-8 items-center justify-center rounded-md bg-bg-hover text-text-secondary">
-                  <FolderPlus size={16} aria-hidden="true" />
+                <span className="mb-3 flex items-center justify-between">
+                  <span className="flex size-8 items-center justify-center rounded-md bg-bg-hover text-text-secondary">
+                    <FolderPlus size={16} aria-hidden="true" />
+                  </span>
+                  {collection.is_smart && (
+                    <span
+                      className="inline-flex items-center gap-1 rounded-full border border-accent/30 bg-accent/10 px-2 py-0.5 text-[11px] font-medium text-accent"
+                      aria-label={t("collections.smartBadge")}
+                    >
+                      <Sparkles size={11} aria-hidden="true" />
+                      {t("collections.smart")}
+                    </span>
+                  )}
                 </span>
                 <h2 className="min-w-0 truncate text-sm font-medium text-text-primary">
                   {collection.name}
@@ -301,6 +392,60 @@ function CreateDialog({ value, onChange, pending, onSubmit }: CreateDialogProps)
             </Button>
           </DialogClose>
           <Button type="submit" size="sm" disabled={!value.trim() || pending}>
+            {t("collections.createSubmit")}
+          </Button>
+        </div>
+      </form>
+    </DialogContent>
+  );
+}
+
+interface SmartCreateDialogProps {
+  name: string;
+  filter: SmartFilter;
+  facets?: MediaFacets;
+  onNameChange: (name: string) => void;
+  onFilterChange: (filter: SmartFilter) => void;
+  pending: boolean;
+  onSubmit: (name: string, filter: SmartFilter) => void;
+}
+
+function SmartCreateDialog({
+  name,
+  filter,
+  facets,
+  onNameChange,
+  onFilterChange,
+  pending,
+  onSubmit,
+}: SmartCreateDialogProps) {
+  const { t } = useTranslation();
+  return (
+    <DialogContent closeLabel={t("a11y.close")} className="w-auto">
+      <DialogTitle>{t("collections.createSmartDialogTitle")}</DialogTitle>
+      <DialogDescription>{t("collections.createSmartDialogHint")}</DialogDescription>
+      <form
+        onSubmit={(event) => {
+          event.preventDefault();
+          const trimmed = name.trim();
+          if (trimmed) onSubmit(trimmed, filter);
+        }}
+        className="mt-4 flex flex-col gap-4"
+      >
+        <InputField
+          label={t("collections.fieldName")}
+          placeholder={t("collections.namePlaceholder")}
+          value={name}
+          onChange={(event) => onNameChange(event.target.value)}
+        />
+        <SmartFilterForm value={filter} onChange={onFilterChange} facets={facets} />
+        <div className="flex justify-end gap-2">
+          <DialogClose asChild>
+            <Button variant="ghost" size="sm" onClick={() => onNameChange("")}>
+              {t("collections.cancel")}
+            </Button>
+          </DialogClose>
+          <Button type="submit" size="sm" disabled={!name.trim() || pending}>
             {t("collections.createSubmit")}
           </Button>
         </div>

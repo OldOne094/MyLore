@@ -1,9 +1,25 @@
-import { ArrowDownUp, Check, Group, SlidersHorizontal, X } from "lucide-react";
+import { useState } from "react";
+import { ArrowDownUp, BookmarkPlus, Check, Group, SlidersHorizontal, X } from "lucide-react";
 import { useTranslation } from "react-i18next";
-import { Button, Popover, PopoverContent, PopoverTrigger } from "@/components/ui";
+import {
+  Button,
+  Dialog,
+  DialogClose,
+  DialogContent,
+  DialogDescription,
+  DialogTitle,
+  DialogTrigger,
+  InputField,
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui";
 import { cn } from "@/lib/cn";
 import { CONTENT_TYPE_ORDER, LIBRARY_GROUP_BY, type LibraryGroupBy } from "./grouping";
 import type { MediaFacets } from "./api";
+import { useCreateSmartCollection } from "@/features/collections/api";
+import { toSmartFilter } from "@/features/collections/smartFilter";
+import { useToast } from "@/components/ui";
 import {
   activeFilterCount,
   DEFAULT_SORT,
@@ -17,7 +33,9 @@ import type { MediaListItem } from "./api";
 /* MISSION-041 — Library toolbar: filter panel (type, format, status, genre,
    tag, year, favorite), sort menu (title / added / updated / release year,
    asc/desc) and group-by (status / type / year). Facet options come from the
-   `media_facets` endpoint so the panel only offers values that exist. */
+   `media_facets` endpoint so the panel only offers values that exist.
+   MISSION-077 — "Save as collection" snapshots the active filters + sort into
+   a smart collection. */
 
 interface LibraryFilterBarProps {
   filters: LibraryFilters;
@@ -276,7 +294,11 @@ export function LibraryFilterBar({
   onGroupByChange,
 }: LibraryFilterBarProps) {
   const { t } = useTranslation();
+  const toast = useToast();
+  const createSmart = useCreateSmartCollection();
   const filterCount = activeFilterCount(filters);
+  const [saveOpen, setSaveOpen] = useState(false);
+  const [saveName, setSaveName] = useState("");
 
   return (
     <div className="flex shrink-0 flex-wrap items-center gap-2 border-b border-border-subtle px-5 py-2">
@@ -341,6 +363,68 @@ export function LibraryFilterBar({
           <GroupMenu groupBy={groupBy} onChange={onGroupByChange} />
         </PopoverContent>
       </Popover>
+
+      {filterCount > 0 && (
+        <Dialog open={saveOpen} onOpenChange={setSaveOpen}>
+          <DialogTrigger asChild>
+            <Button
+              variant="secondary"
+              size="sm"
+              aria-label={t("collections.saveAsCollection")}
+              className="h-[var(--control-height-compact)] px-3 text-sm"
+            >
+              <BookmarkPlus size={14} aria-hidden="true" />
+              {t("collections.saveAsCollection")}
+            </Button>
+          </DialogTrigger>
+          <DialogContent closeLabel={t("a11y.close")}>
+            <DialogTitle>{t("collections.saveAsCollectionDialogTitle")}</DialogTitle>
+            <DialogDescription>{t("collections.saveAsCollectionDialogHint")}</DialogDescription>
+            <form
+              onSubmit={(event) => {
+                event.preventDefault();
+                const trimmed = saveName.trim();
+                if (!trimmed) return;
+                createSmart.mutate(
+                  { name: trimmed, filter: toSmartFilter(filters, sort) },
+                  {
+                    onSuccess: (view) => {
+                      setSaveOpen(false);
+                      setSaveName("");
+                      toast.success({
+                        title: t("collections.smartCreatedToast", { name: view.name }),
+                      });
+                    },
+                    onError: () => toast.error({ title: t("collections.createSmartError") }),
+                  },
+                );
+              }}
+              className="mt-4 flex flex-col gap-4"
+            >
+              <InputField
+                label={t("collections.fieldName")}
+                placeholder={t("collections.namePlaceholder")}
+                value={saveName}
+                onChange={(event) => setSaveName(event.target.value)}
+              />
+              <div className="flex justify-end gap-2">
+                <DialogClose asChild>
+                  <Button variant="ghost" size="sm" onClick={() => setSaveName("")}>
+                    {t("collections.cancel")}
+                  </Button>
+                </DialogClose>
+                <Button
+                  type="submit"
+                  size="sm"
+                  disabled={!saveName.trim() || createSmart.isPending}
+                >
+                  {t("collections.saveAsCollectionSubmit")}
+                </Button>
+              </div>
+            </form>
+          </DialogContent>
+        </Dialog>
+      )}
     </div>
   );
 }

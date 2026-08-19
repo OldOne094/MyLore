@@ -292,13 +292,13 @@ mod tests {
             TaskKind::ImportFile,
             "cancel me".to_string(),
             |reporter| async move {
-                for _ in 0..1_000 {
-                    if reporter.is_cancelled() {
-                        return Err(TaskError::Cancelled);
-                    }
-                    tokio::task::yield_now().await;
+                // select! observes the cancel flag deterministically — a plain
+                // spin loop could finish before `cancel()` lands and flake the
+                // assertion (the runner would resolve Success instead).
+                tokio::select! {
+                    _ = reporter.cancelled() => Err(TaskError::Cancelled),
+                    () = std::future::pending() => Ok(json!({ "finished": true })),
                 }
-                Ok(json!({ "finished": true }))
             },
         );
 

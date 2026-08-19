@@ -32,7 +32,11 @@
     },
     {
       "name": "CollectionView",
-      "shape": "id: string; name: string; member_count: number; created_at: string"
+      "shape": "id: string; name: string; is_smart: boolean; filter: SmartFilter | null; member_count: number; created_at: string"
+    },
+    {
+      "name": "SmartFilter",
+      "shape": "content_type: string | null; format: string | null; pub_status: string | null; genre: string | null; tag: string | null; year: number | null; favorite: boolean | null; sort: string | null; ascending: boolean | null"
     },
     {
       "name": "CollectionMemberView",
@@ -475,6 +479,18 @@
       "args": { "name": "string" },
       "returns": "CollectionView",
       "doc": "Create a manual collection; resolves with its view or rejects with an AppError string."
+    },
+    {
+      "name": "collection_create_smart",
+      "args": { "name": "string", "filter": "SmartFilter" },
+      "returns": "CollectionView",
+      "doc": "Create a smart collection from a saved filter; membership is computed live. Resolves with its view or rejects with an AppError string."
+    },
+    {
+      "name": "collection_update_smart",
+      "args": { "collection_id": "string", "filter": "SmartFilter" },
+      "returns": "CollectionView",
+      "doc": "Replace a smart collection's filter. Resolves with the updated view or rejects with an AppError string."
     },
     {
       "name": "collection_rename",

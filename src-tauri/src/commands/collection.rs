@@ -1,6 +1,7 @@
-//! Collection commands (MISSION-076). Thin handlers over
+//! Collection commands (MISSION-076, MISSION-077). Thin handlers over
 //! `application::collection_service` — CRUD over the user's collections plus
-//! ordered membership (bulk add, single remove, drag/drop reorder).
+//! ordered membership (bulk add, single remove, drag/drop reorder) and, since
+//! MISSION-077, smart collections built from a saved library filter.
 
 use sqlx::SqlitePool;
 use tauri::command;
@@ -8,7 +9,7 @@ use tauri::State;
 use tracing::info;
 
 use crate::application::collection_service::{
-    CollectionMemberView, CollectionService, CollectionView,
+    CollectionMemberView, CollectionService, CollectionView, SmartFilter,
 };
 use crate::error::AppError;
 
@@ -44,6 +45,30 @@ pub async fn collection_rename(
     info!(collection_id, name, "collection_rename invoked");
     let service = CollectionService::new(state.inner().clone());
     service.rename(&collection_id, &name).await
+}
+
+/// Create a smart collection from a saved filter; membership is computed live.
+#[command]
+pub async fn collection_create_smart(
+    state: State<'_, SqlitePool>,
+    name: String,
+    filter: SmartFilter,
+) -> Result<CollectionView, AppError> {
+    info!(name, "collection_create_smart invoked");
+    let service = CollectionService::new(state.inner().clone());
+    service.create_smart(&name, &filter).await
+}
+
+/// Replace a smart collection's filter; resolves with the updated view.
+#[command]
+pub async fn collection_update_smart(
+    state: State<'_, SqlitePool>,
+    collection_id: String,
+    filter: SmartFilter,
+) -> Result<CollectionView, AppError> {
+    info!(collection_id, "collection_update_smart invoked");
+    let service = CollectionService::new(state.inner().clone());
+    service.update_smart_filter(&collection_id, &filter).await
 }
 
 /// Delete a collection; members cascade. Resolves with the removed name.
