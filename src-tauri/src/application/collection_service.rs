@@ -18,6 +18,7 @@ use sqlx::SqlitePool;
 use tracing::info;
 use uuid::Uuid;
 
+use crate::application::bulk_service::{BulkFailure, BulkResult};
 use crate::application::media_service::{MediaListItem, MediaService};
 use crate::error::AppError;
 use crate::infrastructure::repositories::collection;
@@ -228,17 +229,39 @@ impl CollectionService {
     }
 
     /// Append many media to a collection (idempotent — existing members keep
-    /// their row, new ones land after the current tail). MISSION-045 bulk add.
-    pub async fn add_members(&self, id: &str, media_ids: &[String]) -> Result<(), AppError> {
+    /// their row, new ones land after the current tail). Media that cannot be
+    /// added (e.g. an unknown id) land in the summary's failures instead of
+    /// aborting the batch. MISSION-045 bulk add, MISSION-078 change summary.
+    pub async fn add_members(
+        &self,
+        id: &str,
+        media_ids: &[String],
+    ) -> Result<BulkResult, AppError> {
         let record = self.require(id).await?;
         ensure_manual(&record)?;
         let base = collection::members(&self.pool, id).await?.len() as i64;
         let added_at = Utc::now().to_rfc3339();
+        let mut result = BulkResult {
+            total: media_ids.len(),
+            succeeded: 0,
+            failed: 0,
+            failures: Vec::new(),
+        };
         for (index, media_id) in media_ids.iter().enumerate() {
-            collection::add_member(&self.pool, id, media_id, base + index as i64, &added_at)
-                .await?;
+            match collection::add_member(&self.pool, id, media_id, base + index as i64, &added_at)
+                .await
+            {
+                Ok(()) => result.succeeded += 1,
+                Err(err) => {
+                    result.failed += 1;
+                    result.failures.push(BulkFailure {
+                        media_id: media_id.clone(),
+                        reason: err.to_string(),
+                    });
+                }
+            }
         }
-        Ok(())
+        Ok(result)
     }
 
     /// Remove one media from a collection, renumbering the tail so positions
@@ -582,6 +605,28 @@ mod tests {
         assert_eq!(members[0].media.title, "Steins;Gate");
         assert!(members[0].media.favorite, "favorite rides through");
         assert_eq!(members[0].media.progress.completed, 0, "progress default");
+        pool.close().await;
+        cleanup_files(&path);
+    }
+
+    #[tokio::test]
+    async fn add_members_summarizes_unknown_media_failures() {
+        let (pool, path) = migrated_pool("collection_service_bulk_partial.db").await;
+        seed_media(&pool, &["m-1"]).await;
+        let service = CollectionService::new(pool.clone());
+        let id = service.create("Shelf").await.expect("create").id;
+
+        let result = service
+            .add_members(&id, &["m-1".into(), "m-nope".into()])
+            .await
+            .expect("partial batch resolves");
+        assert_eq!(result.total, 2);
+        assert_eq!(result.succeeded, 1);
+        assert_eq!(result.failed, 1);
+        assert_eq!(result.failures[0].media_id, "m-nope");
+
+        let members = service.members(&id).await.expect("members");
+        assert_eq!(members.len(), 1, "only the valid media is a member");
         pool.close().await;
         cleanup_files(&path);
     }

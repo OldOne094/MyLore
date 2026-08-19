@@ -43,6 +43,22 @@
       "shape": "position: number; media: MediaListItem"
     },
     {
+      "name": "BulkFilter",
+      "shape": "content_type: string | null; format: string | null; pub_status: string | null; genre: string | null; tag: string | null; year: number | null; favorite: boolean | null"
+    },
+    {
+      "name": "BulkFailure",
+      "shape": "media_id: string; reason: string"
+    },
+    {
+      "name": "BulkResult",
+      "shape": "total: number; succeeded: number; failed: number; failures: BulkFailure[]"
+    },
+    {
+      "name": "BulkDeleteResult",
+      "shape": "summary: BulkResult; trash_ids: string[]"
+    },
+    {
       "name": "DashboardSummary",
       "shape": "continue_watching: MediaListItem[]; recently_completed: MediaListItem[]; recently_added: MediaListItem[]"
     },
@@ -448,25 +464,30 @@
       "name": "tracking_bulk_set_status",
       "args": {
         "ids": "string[]",
-        "core_status": "string"
+        "core_status": "string",
+        "filter": "BulkFilter | null"
       },
-      "returns": "void",
-      "doc": "Set the tracking status for many media at once (status engine applies). Resolves or rejects with an AppError string."
+      "returns": "BulkResult",
+      "doc": "Set the tracking status for many media at once (status engine applies). An optional filter resolves the media set server-side (apply to the whole filtered selection). Resolves with a per-item summary — media that can't reach the target are in `failures`, not an error — or rejects with an AppError string."
     },
     {
       "name": "media_bulk_add_tag",
       "args": {
         "ids": "string[]",
-        "tag": "string"
+        "tag": "string",
+        "filter": "BulkFilter | null"
       },
-      "returns": "void",
-      "doc": "Add a personal tag to many media at once (reused or created as needed). Resolves or rejects with an AppError string."
+      "returns": "BulkResult",
+      "doc": "Add a personal tag to many media at once (reused or created as needed). An optional filter resolves the media set server-side. Resolves with a per-item summary or rejects with an AppError string."
     },
     {
       "name": "media_bulk_delete",
-      "args": { "ids": "string[]" },
-      "returns": "string[]",
-      "doc": "Soft-delete many media. Resolves with a trash id per media (for group undo) or rejects with an AppError string."
+      "args": {
+        "ids": "string[]",
+        "filter": "BulkFilter | null"
+      },
+      "returns": "BulkDeleteResult",
+      "doc": "Soft-delete many media. An optional filter resolves the media set server-side. Resolves with a per-item summary plus a trash id per deleted media (for group undo) or rejects with an AppError string."
     },
     {
       "name": "collection_list",
@@ -514,10 +535,11 @@
       "name": "collection_bulk_add",
       "args": {
         "collection_id": "string",
-        "media_ids": "string[]"
+        "media_ids": "string[]",
+        "filter": "BulkFilter | null"
       },
-      "returns": "void",
-      "doc": "Add many media to one collection. Resolves or rejects with an AppError string."
+      "returns": "BulkResult",
+      "doc": "Add many media to one collection (idempotent append). An optional filter resolves the media set server-side. Resolves with a per-item summary or rejects with an AppError string."
     },
     {
       "name": "collection_remove_member",

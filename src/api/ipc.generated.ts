@@ -90,6 +90,29 @@ export interface CollectionMemberView {
   position: number;
   media: MediaListItem;
 }
+export interface BulkFilter {
+  content_type: string | null;
+  format: string | null;
+  pub_status: string | null;
+  genre: string | null;
+  tag: string | null;
+  year: number | null;
+  favorite: boolean | null;
+}
+export interface BulkFailure {
+  media_id: string;
+  reason: string;
+}
+export interface BulkResult {
+  total: number;
+  succeeded: number;
+  failed: number;
+  failures: BulkFailure[];
+}
+export interface BulkDeleteResult {
+  summary: BulkResult;
+  trash_ids: string[];
+}
 export interface DashboardSummary {
   continue_watching: MediaListItem[];
   recently_completed: MediaListItem[];
@@ -588,22 +611,30 @@ export function trash_purge(args: { id: string }): Promise<void> {
   return invoke<void>("trash_purge", args);
 }
 
-/** Set the tracking status for many media at once (status engine applies). Resolves or rejects with an AppError string. */
+/** Set the tracking status for many media at once (status engine applies). An optional filter resolves the media set server-side (apply to the whole filtered selection). Resolves with a per-item summary — media that can't reach the target are in `failures`, not an error — or rejects with an AppError string. */
 export function tracking_bulk_set_status(args: {
   ids: string[];
   core_status: string;
-}): Promise<void> {
-  return invoke<void>("tracking_bulk_set_status", args);
+  filter: BulkFilter | null;
+}): Promise<BulkResult> {
+  return invoke<BulkResult>("tracking_bulk_set_status", args);
 }
 
-/** Add a personal tag to many media at once (reused or created as needed). Resolves or rejects with an AppError string. */
-export function media_bulk_add_tag(args: { ids: string[]; tag: string }): Promise<void> {
-  return invoke<void>("media_bulk_add_tag", args);
+/** Add a personal tag to many media at once (reused or created as needed). An optional filter resolves the media set server-side. Resolves with a per-item summary or rejects with an AppError string. */
+export function media_bulk_add_tag(args: {
+  ids: string[];
+  tag: string;
+  filter: BulkFilter | null;
+}): Promise<BulkResult> {
+  return invoke<BulkResult>("media_bulk_add_tag", args);
 }
 
-/** Soft-delete many media. Resolves with a trash id per media (for group undo) or rejects with an AppError string. */
-export function media_bulk_delete(args: { ids: string[] }): Promise<string[]> {
-  return invoke<string[]>("media_bulk_delete", args);
+/** Soft-delete many media. An optional filter resolves the media set server-side. Resolves with a per-item summary plus a trash id per deleted media (for group undo) or rejects with an AppError string. */
+export function media_bulk_delete(args: {
+  ids: string[];
+  filter: BulkFilter | null;
+}): Promise<BulkDeleteResult> {
+  return invoke<BulkDeleteResult>("media_bulk_delete", args);
 }
 
 /** List collections with member counts, for the Collections page and the add-to-list picker. Resolves with the rows or rejects with an AppError string. */
@@ -652,12 +683,13 @@ export function collection_members(args: {
   return invoke<CollectionMemberView[]>("collection_members", args);
 }
 
-/** Add many media to one collection. Resolves or rejects with an AppError string. */
+/** Add many media to one collection (idempotent append). An optional filter resolves the media set server-side. Resolves with a per-item summary or rejects with an AppError string. */
 export function collection_bulk_add(args: {
   collection_id: string;
   media_ids: string[];
-}): Promise<void> {
-  return invoke<void>("collection_bulk_add", args);
+  filter: BulkFilter | null;
+}): Promise<BulkResult> {
+  return invoke<BulkResult>("collection_bulk_add", args);
 }
 
 /** Remove one media from a collection; resolves with the removed media id or rejects with an AppError string. */

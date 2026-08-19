@@ -97,7 +97,7 @@ export function useAddMembers() {
   const { onAny } = useCollectionWrite();
   return useMutation({
     mutationFn: ({ collection_id, media_ids }: { collection_id: string; media_ids: string[] }) =>
-      collection_bulk_add({ collection_id, media_ids }),
+      collection_bulk_add({ collection_id, media_ids, filter: null }),
     onSuccess: onAny,
   });
 }

@@ -18,7 +18,8 @@ import { NO_PROGRESS } from "./testFixtures";
 
 /* MISSION-045 — Bulk-select mode + action bar. Covers entering select mode,
    select-all/clear, and the status / tag / delete / list actions wiring through
-   the bulk IPC commands. */
+   the bulk IPC commands. MISSION-078 adds the filtered-selection scope (apply
+   to all matching) and the per-item change summary toasts. */
 
 const TITLES = [
   {
@@ -52,17 +53,26 @@ const FACETS: MediaFacets = {
   years: [2026, 2011],
 };
 
+const FULL_SUMMARY = { total: 2, succeeded: 2, failed: 0, failures: [] };
+
 function mockLibrary(items: unknown = TITLES) {
   vi.mocked(invoke).mockImplementation((command: string) => {
     if (command === "media_facets") return Promise.resolve(FACETS);
     if (command === "media_list") return Promise.resolve(items);
-    if (command === "tracking_bulk_set_status") return Promise.resolve(undefined);
-    if (command === "media_bulk_add_tag") return Promise.resolve(undefined);
-    if (command === "media_bulk_delete") return Promise.resolve(["t-1", "t-2"]);
+    if (command === "tracking_bulk_set_status") return Promise.resolve(FULL_SUMMARY);
+    if (command === "media_bulk_add_tag") return Promise.resolve(FULL_SUMMARY);
+    if (command === "media_bulk_delete") {
+      return Promise.resolve({
+        summary: FULL_SUMMARY,
+        trash_ids: ["t-1", "t-2"],
+      });
+    }
     if (command === "collection_list") {
       return Promise.resolve([{ id: "c-1", name: "Reading Now" }]);
     }
-    if (command === "collection_bulk_add") return Promise.resolve(undefined);
+    if (command === "collection_bulk_add") {
+      return Promise.resolve({ total: 1, succeeded: 1, failed: 0, failures: [] });
+    }
     if (command === "trash_restore") return Promise.resolve(undefined);
     return Promise.resolve(null);
   });
@@ -166,6 +176,7 @@ describe("LibraryPage bulk select", () => {
     expect(invoke).toHaveBeenCalledWith("tracking_bulk_set_status", {
       ids: ["m-111", "m-222"],
       core_status: "in_progress",
+      filter: null,
     });
     expect(screen.queryByRole("toolbar", { name: "Select" })).not.toBeInTheDocument();
   });
@@ -185,6 +196,7 @@ describe("LibraryPage bulk select", () => {
     expect(invoke).toHaveBeenCalledWith("media_bulk_add_tag", {
       ids: ["m-111"],
       tag: "Comfort read",
+      filter: null,
     });
   });
 
@@ -196,7 +208,10 @@ describe("LibraryPage bulk select", () => {
     await userEvent.click(screen.getByRole("button", { name: "Select all" }));
     await userEvent.click(within(actionBar()).getByRole("button", { name: "Delete" }));
 
-    expect(invoke).toHaveBeenCalledWith("media_bulk_delete", { ids: ["m-111", "m-222"] });
+    expect(invoke).toHaveBeenCalledWith("media_bulk_delete", {
+      ids: ["m-111", "m-222"],
+      filter: null,
+    });
 
     const undo = await screen.findByRole("button", { name: "Undo" });
     await userEvent.click(undo);
@@ -216,6 +231,7 @@ describe("LibraryPage bulk select", () => {
     expect(invoke).toHaveBeenCalledWith("collection_bulk_add", {
       collection_id: "c-1",
       media_ids: ["m-111"],
+      filter: null,
     });
   });
 
@@ -232,5 +248,106 @@ describe("LibraryPage bulk select", () => {
     await userEvent.click(screen.getByRole("button", { name: "Steins;Gate" }));
     await userEvent.click(within(actionBar()).getByRole("button", { name: "Add to list" }));
     expect(await screen.findByText(/No collections yet/)).toBeInTheDocument();
+  });
+
+  it("shows the change summary after a bulk status change", async () => {
+    mockLibrary();
+    renderPage();
+    await enterSelectMode();
+
+    await userEvent.click(screen.getByRole("button", { name: "Select all" }));
+    await userEvent.click(within(actionBar()).getByRole("button", { name: "Status" }));
+    await userEvent.click(await screen.findByRole("button", { name: "In progress" }));
+
+    expect(await screen.findByText("Status updated — 2 of 2")).toBeInTheDocument();
+    expect(screen.queryByText(/skipped/)).not.toBeInTheDocument();
+  });
+
+  it("reports skipped titles when some media fail", async () => {
+    vi.mocked(invoke).mockImplementation((command: string) => {
+      if (command === "media_facets") return Promise.resolve(FACETS);
+      if (command === "media_list") return Promise.resolve(TITLES);
+      if (command === "tracking_bulk_set_status") {
+        return Promise.resolve({
+          total: 2,
+          succeeded: 1,
+          failed: 1,
+          failures: [{ media_id: "m-222", reason: "validation error: repeat requires completed" }],
+        });
+      }
+      return Promise.resolve(null);
+    });
+    renderPage();
+    await enterSelectMode();
+
+    await userEvent.click(screen.getByRole("button", { name: "Select all" }));
+    await userEvent.click(within(actionBar()).getByRole("button", { name: "Status" }));
+    await userEvent.click(await screen.findByRole("button", { name: "In progress" }));
+
+    expect(await screen.findByText("Status updated — 1 of 2")).toBeInTheDocument();
+    expect(await screen.findByText("1 title was skipped")).toBeInTheDocument();
+  });
+
+  it("applies a bulk action to the whole filtered selection", async () => {
+    mockLibrary();
+    renderPage();
+    await enterSelectMode();
+
+    await userEvent.click(screen.getByRole("button", { name: "Filter" }));
+    await userEvent.click(await screen.findByRole("button", { name: "Fantasy" }));
+    await userEvent.keyboard("{Escape}");
+
+    await userEvent.click(await screen.findByRole("button", { name: "Steins;Gate" }));
+    await userEvent.click(screen.getByRole("button", { name: "All 2 matching" }));
+
+    await userEvent.click(within(actionBar()).getByRole("button", { name: "Status" }));
+    await userEvent.click(await screen.findByRole("button", { name: "In progress" }));
+
+    expect(invoke).toHaveBeenCalledWith("tracking_bulk_set_status", {
+      ids: ["m-111"],
+      core_status: "in_progress",
+      filter: {
+        content_type: null,
+        format: null,
+        pub_status: null,
+        genre: "fantasy",
+        tag: null,
+        year: null,
+        favorite: null,
+      },
+    });
+  });
+
+  it("restores only the titles that were actually deleted", async () => {
+    vi.mocked(invoke).mockImplementation((command: string) => {
+      if (command === "media_facets") return Promise.resolve(FACETS);
+      if (command === "media_list") return Promise.resolve(TITLES);
+      if (command === "media_bulk_delete") {
+        return Promise.resolve({
+          summary: {
+            total: 2,
+            succeeded: 1,
+            failed: 1,
+            failures: [{ media_id: "m-222", reason: "validation error: media not found" }],
+          },
+          trash_ids: ["t-1"],
+        });
+      }
+      if (command === "trash_restore") return Promise.resolve(undefined);
+      return Promise.resolve(null);
+    });
+    renderPage();
+    await enterSelectMode();
+
+    await userEvent.click(screen.getByRole("button", { name: "Select all" }));
+    await userEvent.click(within(actionBar()).getByRole("button", { name: "Delete" }));
+
+    const undo = await screen.findByRole("button", { name: "Undo" });
+    await userEvent.click(undo);
+
+    const restoreCalls = vi
+      .mocked(invoke)
+      .mock.calls.filter(([command]) => command === "trash_restore");
+    expect(restoreCalls).toEqual([["trash_restore", { id: "t-1" }]]);
   });
 });

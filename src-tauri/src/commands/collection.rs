@@ -8,6 +8,7 @@ use tauri::command;
 use tauri::State;
 use tracing::info;
 
+use crate::application::bulk_service::{resolve_targets, BulkFilter, BulkResult};
 use crate::application::collection_service::{
     CollectionMemberView, CollectionService, CollectionView, SmartFilter,
 };
@@ -93,20 +94,26 @@ pub async fn collection_members(
     service.members(&collection_id).await
 }
 
-/// Add many media to one collection (idempotent append).
+/// Add many media to one collection (idempotent append). An optional facet
+/// `filter` resolves the media set server-side (MISSION-078); the result is a
+/// per-item summary.
 #[command]
 pub async fn collection_bulk_add(
     state: State<'_, SqlitePool>,
     collection_id: String,
     media_ids: Vec<String>,
-) -> Result<(), AppError> {
+    filter: Option<BulkFilter>,
+) -> Result<BulkResult, AppError> {
     info!(
         collection_id,
         count = media_ids.len(),
+        filtered = filter.is_some(),
         "collection_bulk_add invoked"
     );
-    let service = CollectionService::new(state.inner().clone());
-    service.add_members(&collection_id, &media_ids).await
+    let pool = state.inner().clone();
+    let targets = resolve_targets(&pool, filter.as_ref(), &media_ids).await?;
+    let service = CollectionService::new(pool);
+    service.add_members(&collection_id, &targets).await
 }
 
 /// Remove one media from a collection; resolves with the removed media id.

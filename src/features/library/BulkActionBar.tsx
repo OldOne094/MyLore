@@ -16,6 +16,7 @@ import {
   PopoverTrigger,
   useToast,
 } from "@/components/ui";
+import { cn } from "@/lib/cn";
 import { useRestoreTrashItem } from "@/features/trash/api";
 import {
   useBulkAddTag,
@@ -24,11 +25,15 @@ import {
   useBulkSetStatus,
   useCollectionListQuery,
 } from "./bulk";
+import type { LibraryFilters } from "./filters";
 
 /* MISSION-045 — Library action bar. Appears in bulk-select mode with one or
    more titles selected. Actions: set tracking status (status engine applies
    server-side), add a personal tag, add to a collection, soft-delete to trash
-   (undo restores the whole batch), and a placeholder Export (arrives later). */
+   (undo restores the whole batch), and a placeholder Export (arrives later).
+   MISSION-078 — with active filters the bar can switch its scope from the
+   selected titles to the whole filtered selection (resolved server-side), and
+   every action surfaces a per-item change summary. */
 
 /** Order matches `CoreStatus::ALL` in the Rust domain. */
 export const CORE_STATUSES = [
@@ -43,15 +48,21 @@ export const CORE_STATUSES = [
 
 export interface BulkActionBarProps {
   ids: string[];
+  /** Active library filters; when set, the bar offers a "whole filtered
+      selection" scope (MISSION-078). */
+  filter?: LibraryFilters | null;
+  /** Total titles matching the active filters (drives the scope label). */
+  matchingCount?: number;
   /** Called after a successful action so the page can leave select mode. */
   onDone: () => void;
 }
 
-export function BulkActionBar({ ids, onDone }: BulkActionBarProps) {
+export function BulkActionBar({ ids, filter, matchingCount, onDone }: BulkActionBarProps) {
   const { t } = useTranslation();
   const toast = useToast();
   const [tagOpen, setTagOpen] = useState(false);
   const [tag, setTag] = useState("");
+  const [scope, setScope] = useState<"selected" | "filtered">("selected");
 
   const setStatus = useBulkSetStatus();
   const addTag = useBulkAddTag();
@@ -63,12 +74,31 @@ export function BulkActionBar({ ids, onDone }: BulkActionBarProps) {
   const busy =
     setStatus.isPending || addTag.isPending || bulkDelete.isPending || addToCollection.isPending;
 
+  // The filtered scope only makes sense when there are active filters and the
+  // selection is smaller than the matching set. If filters changed under us,
+  // fall back to the selected scope rather than surprising the user.
+  const canScope = Boolean(filter) && (matchingCount ?? 0) > ids.length;
+  const effectiveScope = scope === "filtered" && canScope ? "filtered" : "selected";
+  const opFilter = effectiveScope === "filtered" ? filter : null;
+
+  const reportPartial = (failed: number) => {
+    if (failed > 0) {
+      toast.error({ title: t("bulk.partialFailures", { count: failed }) });
+    }
+  };
+
   const handleStatus = (status: string) => {
     setStatus.mutate(
-      { ids, core_status: status },
+      { ids, core_status: status, filter: opFilter },
       {
-        onSuccess: () => {
-          toast.success({ title: t("bulk.statusSet") });
+        onSuccess: (result) => {
+          toast.success({
+            title: t("bulk.statusSetSummary", {
+              succeeded: result.succeeded,
+              total: result.total,
+            }),
+          });
+          reportPartial(result.failed);
           onDone();
         },
         onError: () => toast.error({ title: t("bulk.statusError") }),
@@ -80,10 +110,11 @@ export function BulkActionBar({ ids, onDone }: BulkActionBarProps) {
     const trimmed = tag.trim();
     if (!trimmed) return;
     addTag.mutate(
-      { ids, tag: trimmed },
+      { ids, tag: trimmed, filter: opFilter },
       {
-        onSuccess: () => {
-          toast.success({ title: t("bulk.tagAdded", { count: ids.length }) });
+        onSuccess: (result) => {
+          toast.success({ title: t("bulk.tagAddedSummary", { count: result.succeeded }) });
+          reportPartial(result.failed);
           setTag("");
           setTagOpen(false);
           onDone();
@@ -96,10 +127,11 @@ export function BulkActionBar({ ids, onDone }: BulkActionBarProps) {
   const handleAddToList = (collectionId: string) => {
     const name = collections.data?.find((c) => c.id === collectionId)?.name ?? "";
     addToCollection.mutate(
-      { collection_id: collectionId, media_ids: ids },
+      { collection_id: collectionId, ids, filter: opFilter },
       {
-        onSuccess: () => {
+        onSuccess: (result) => {
           toast.success({ title: t("bulk.listAdded", { name }) });
+          reportPartial(result.failed);
           onDone();
         },
         onError: () => toast.error({ title: t("bulk.listError") }),
@@ -108,24 +140,31 @@ export function BulkActionBar({ ids, onDone }: BulkActionBarProps) {
   };
 
   const handleDelete = () => {
-    bulkDelete.mutate(ids, {
-      onSuccess: (trashIds) => {
-        toast.success({
-          title: t("trash.deletedToast", { count: ids.length }),
-          action: {
-            label: t("trash.undo"),
-            onClick: () => {
-              void Promise.all(trashIds.map((id) => restoreTrash.mutateAsync(id))).then(
-                () => toast.success({ title: t("bulk.restoredToast", { count: ids.length }) }),
-                () => toast.error({ title: t("trash.restoreErrorToast") }),
-              );
+    bulkDelete.mutate(
+      { ids, filter: opFilter },
+      {
+        onSuccess: (result) => {
+          toast.success({
+            title: t("trash.deletedToast", { count: result.summary.succeeded }),
+            action: {
+              label: t("trash.undo"),
+              onClick: () => {
+                void Promise.all(result.trash_ids.map((id) => restoreTrash.mutateAsync(id))).then(
+                  () =>
+                    toast.success({
+                      title: t("bulk.restoredToast", { count: result.trash_ids.length }),
+                    }),
+                  () => toast.error({ title: t("trash.restoreErrorToast") }),
+                );
+              },
             },
-          },
-        });
-        onDone();
+          });
+          reportPartial(result.summary.failed);
+          onDone();
+        },
+        onError: () => toast.error({ title: t("bulk.deleteError") }),
       },
-      onError: () => toast.error({ title: t("bulk.deleteError") }),
-    });
+    );
   };
 
   return (
@@ -137,6 +176,37 @@ export function BulkActionBar({ ids, onDone }: BulkActionBarProps) {
       <span className="text-sm tabular-nums text-text-secondary">
         {t("library.selectionCount", { count: ids.length })}
       </span>
+
+      {canScope && (
+        <div
+          role="group"
+          aria-label={t("bulk.scope")}
+          className="inline-flex items-center gap-1 rounded-full border border-border-subtle bg-bg-surface p-1"
+        >
+          {(["selected", "filtered"] as const).map((value) => {
+            const active = effectiveScope === value;
+            const label =
+              value === "selected"
+                ? t("bulk.scopeSelected", { count: ids.length })
+                : t("bulk.scopeFiltered", { count: matchingCount });
+            return (
+              <button
+                key={value}
+                type="button"
+                aria-pressed={active}
+                disabled={busy}
+                onClick={() => setScope(value)}
+                className={cn(
+                  "rounded-full border-none bg-transparent px-2.5 py-1 text-sm text-text-secondary transition-colors duration-150 ease-out hover:bg-bg-hover hover:text-text-primary disabled:cursor-not-allowed disabled:opacity-50",
+                  active && "bg-accent text-bg-surface hover:bg-accent",
+                )}
+              >
+                {label}
+              </button>
+            );
+          })}
+        </div>
+      )}
 
       <div className="ms-auto flex items-center gap-2">
         <Popover>

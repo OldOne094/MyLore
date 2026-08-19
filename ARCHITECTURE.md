@@ -288,6 +288,16 @@ has no type column. `delimiter` is the CSV field delimiter, `separator` splits m
   collection"** snapshots the active filter + sort into `collection_create_smart`, the Collections
   page shows a Smart badge + create-smart dialog, and the detail page renders computed members
   read-only with an "Edit filter" dialog.
+- **Bulk ops (MISSION-078):** the library action-bar actions (`tracking_bulk_set_status`,
+  `media_bulk_add_tag`, `media_bulk_delete`, `collection_bulk_add`) accept an optional `BulkFilter`
+  (the 7 library facets). When present, `resolve_targets` maps it through the same `media_repo::list`
+  query and the operation runs against the **whole filtered selection** server-side (the client's
+  `ids` are ignored), so "apply to all N matching" never ships a giant id array over IPC. Every
+  operation resolves with a **per-item `BulkResult`** (`total`/`succeeded`/`failed` + `failures`
+  `{media_id, reason}`) — a media that can't move to the target status, an unknown id, or a FK
+  violation is recorded instead of aborting the batch; `media_bulk_delete` returns a `BulkDeleteResult`
+  whose `trash_ids` cover exactly the successful deletions so group undo is precise. The action bar
+  surfaces this with a **scope toggle** ("Selected N" / "All N matching") and summary toasts.
 
 ## 7. Backup & Restore
 

@@ -2,6 +2,7 @@
    args shape in `toMediaListArgs`. Every facet is nullable so an empty state
    equals "no filters" and mapping to the command stays mechanical. */
 
+import type { BulkFilter } from "@/api";
 import type { MediaListArgs } from "./api";
 import type { LibraryGroupBy } from "./grouping";
 
@@ -72,6 +73,21 @@ export function filtersToArgs(filters: LibraryFilters, sort: LibrarySort): Media
     ascending: sort.ascending,
     limit: null,
     offset: null,
+  };
+}
+
+/** Map active filters to the server-side bulk-op scope (MISSION-078). A falsy
+    filter maps to `null`, keeping the explicit-ids path of the bulk commands. */
+export function toBulkFilter(filter: LibraryFilters | null | undefined): BulkFilter | null {
+  if (!filter) return null;
+  return {
+    content_type: filter.content_type,
+    format: filter.format,
+    pub_status: filter.pub_status,
+    genre: filter.genre,
+    tag: filter.tag,
+    year: filter.year,
+    favorite: filter.favorite,
   };
 }
 

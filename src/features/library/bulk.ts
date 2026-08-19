@@ -1,7 +1,9 @@
 /* MISSION-045 — Library bulk actions. Wraps the bulk IPC commands behind typed
    hooks: set tracking status, add a personal tag, soft-delete to trash (with a
    group undo via the trash ids), and add to a collection. Every success
-   invalidates the affected cache fan-outs. */
+   invalidates the affected cache fan-outs. MISSION-078 adds an optional
+   `filter` scope so an action can apply to the whole filtered selection
+   (resolved server-side) and resolves with a per-item `BulkResult` summary. */
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
@@ -12,6 +14,17 @@ import {
   tracking_bulk_set_status,
 } from "@/api";
 import { queryKeys } from "@/api";
+import type { BulkDeleteResult, BulkResult } from "@/api";
+import type { LibraryFilters } from "./filters";
+import { toBulkFilter } from "./filters";
+
+/** Which media an action touches. Either the explicit selection (`ids`) or,
+    when `filter` is set, the whole filtered selection — the backend resolves
+    the ids server-side and ignores `ids`. */
+export interface BulkScope {
+  ids: string[];
+  filter?: LibraryFilters | null;
+}
 
 /** Read the collections available for the "add to list" action. */
 export function useCollectionListQuery() {
@@ -25,8 +38,12 @@ export function useCollectionListQuery() {
 export function useBulkSetStatus() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: ({ ids, core_status }: { ids: string[]; core_status: string }) =>
-      tracking_bulk_set_status({ ids, core_status }),
+    mutationFn: ({
+      ids,
+      filter,
+      core_status,
+    }: BulkScope & { core_status: string }): Promise<BulkResult> =>
+      tracking_bulk_set_status({ ids, core_status, filter: toBulkFilter(filter) }),
     onSuccess: async () => {
       await Promise.all([
         queryClient.invalidateQueries({ queryKey: queryKeys.media.lists() }),
@@ -42,7 +59,8 @@ export function useBulkSetStatus() {
 export function useBulkAddTag() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: ({ ids, tag }: { ids: string[]; tag: string }) => media_bulk_add_tag({ ids, tag }),
+    mutationFn: ({ ids, filter, tag }: BulkScope & { tag: string }): Promise<BulkResult> =>
+      media_bulk_add_tag({ ids, tag, filter: toBulkFilter(filter) }),
     onSuccess: async () => {
       await Promise.all([
         queryClient.invalidateQueries({ queryKey: queryKeys.media.lists() }),
@@ -52,11 +70,13 @@ export function useBulkAddTag() {
   });
 }
 
-/** Soft-delete many media; resolves with a trash id per media (group undo). */
+/** Soft-delete many media; resolves with a trash id per deleted media (group
+    undo restores exactly what was removed). */
 export function useBulkDelete() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: (ids: string[]) => media_bulk_delete({ ids }),
+    mutationFn: ({ ids, filter }: BulkScope): Promise<BulkDeleteResult> =>
+      media_bulk_delete({ ids, filter: toBulkFilter(filter) }),
     onSuccess: async () => {
       await Promise.all([
         queryClient.invalidateQueries({ queryKey: queryKeys.media.lists() }),
@@ -72,8 +92,12 @@ export function useBulkDelete() {
 export function useBulkAddToCollection() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: ({ collection_id, media_ids }: { collection_id: string; media_ids: string[] }) =>
-      collection_bulk_add({ collection_id, media_ids }),
+    mutationFn: ({
+      collection_id,
+      ids,
+      filter,
+    }: BulkScope & { collection_id: string }): Promise<BulkResult> =>
+      collection_bulk_add({ collection_id, media_ids: ids, filter: toBulkFilter(filter) }),
     onSuccess: async () => {
       await queryClient.invalidateQueries({ queryKey: queryKeys.collection.all() });
     },

@@ -25,7 +25,8 @@ import type { LibraryGroupBy } from "./grouping";
    per-view skeletons while loading, and a retry on failure. Rendering is
    virtualized. MISSION-045 adds bulk-select mode: a Select toggle flips cards
    and rows into checkboxes and a bottom action bar offers status / tag / list
-   / delete (export arrives later). */
+   / delete (export arrives later). MISSION-078 lets those actions apply to the
+   whole filtered selection (server-resolved) with a change summary. */
 
 function AddTitleTrigger() {
   const { t } = useTranslation();
@@ -243,7 +244,12 @@ export function LibraryPage() {
             onToggle={toggleItem}
           />
           {selectMode && selected.size > 0 ? (
-            <BulkActionBar ids={[...selected]} onDone={exitSelect} />
+            <BulkActionBar
+              ids={[...selected]}
+              filter={hasActiveFilters ? filters : null}
+              matchingCount={items.length}
+              onDone={exitSelect}
+            />
           ) : null}
         </>
       )}
