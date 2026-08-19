@@ -1,11 +1,13 @@
 //! Application layer: services / use-cases.
 //!
 //! `media_service` (MISSION-038) is live; `tracking_service`, `search_service`,
-//! `import_service`, `export_service`, `backup_service`, `provider_coordinator`,
-//! `collection_service` land with their milestones (M6–M11).
+//! `import_service`, `export_service`, `backup_service`, `provider_coordinator`
+//! land with their milestones (M6–M11). `collection_service` landed with
+//! MISSION-076.
 
 pub mod activity_service;
 pub mod bulk_service;
+pub mod collection_service;
 pub mod dashboard_service;
 pub mod enrich_service;
 pub mod export_service;

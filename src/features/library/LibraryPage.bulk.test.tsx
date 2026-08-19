@@ -231,6 +231,6 @@ describe("LibraryPage bulk select", () => {
 
     await userEvent.click(screen.getByRole("button", { name: "Steins;Gate" }));
     await userEvent.click(within(actionBar()).getByRole("button", { name: "Add to list" }));
-    expect(await screen.findByText(/No lists yet/)).toBeInTheDocument();
+    expect(await screen.findByText(/No collections yet/)).toBeInTheDocument();
   });
 });

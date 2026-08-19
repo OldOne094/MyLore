@@ -262,6 +262,19 @@ has no type column. `delimiter` is the CSV field delimiter, `separator` splits m
   `media::list`/search/dashboard queries already selected `COALESCE(r.favorite, 0)`), and the grid /
   list / compact views render the shared `FavoriteFlag` heart on favorited rows. The favorites filter
   shipped earlier with the filter panel (MISSION-041) — it maps to the SQL `r.favorite = 1` predicate.
+- **Collections (MISSION-076):** manual collections live in the M6 `collection` /
+  `collection_member` tables. `commands/collection.rs` exposes 8 commands
+  (`collection_list`/`create`/`rename`/`delete`/`members`/`bulk_add`/`remove_member`/`reorder`) backed
+  by `CollectionService` — the ordering column is `collection_member.position`, and membership reads
+  join `collection_member × media × LEFT JOIN review` so the detail rows carry progress + the
+  `favorite` flag. **`collection_reorder` validates the given media-id set equals the current members**
+  (guards against drift) and rewrites positions 0..n preserving `added_at`. The frontend Collections
+  page (`/collections`) is a card grid with create/rename/delete dialogs; the detail page
+  (`/collections/:id`) reorders members with **native HTML5 drag-and-drop** (no DnD library — handlers
+  never read `dataTransfer`, so jsdom tests drive them via `fireEvent`) plus accessible Up/Down
+  buttons, with optimistic cache writes that roll back on error. Bulk add to a collection from the
+  library action bar now routes through `collection_bulk_add` (the MISSION-045 `BulkService`
+  collection path was retired).
 
 ## 7. Backup & Restore
 

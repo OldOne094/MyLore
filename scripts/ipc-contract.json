@@ -31,6 +31,14 @@
       "shape": "id: string; content_type: string; title: string; pub_status: string; release_year: number | null; cover_asset_id: string | null; updated_at: string; favorite: boolean; progress: ProgressSummary"
     },
     {
+      "name": "CollectionView",
+      "shape": "id: string; name: string; member_count: number; created_at: string"
+    },
+    {
+      "name": "CollectionMemberView",
+      "shape": "position: number; media: MediaListItem"
+    },
+    {
       "name": "DashboardSummary",
       "shape": "continue_watching: MediaListItem[]; recently_completed: MediaListItem[]; recently_added: MediaListItem[]"
     },
@@ -459,8 +467,32 @@
     {
       "name": "collection_list",
       "args": {},
-      "returns": "{ id: string; name: string }[]",
-      "doc": "List collections for the add-to-list picker. Resolves with collection rows or rejects with an AppError string."
+      "returns": "CollectionView[]",
+      "doc": "List collections with member counts, for the Collections page and the add-to-list picker. Resolves with the rows or rejects with an AppError string."
+    },
+    {
+      "name": "collection_create",
+      "args": { "name": "string" },
+      "returns": "CollectionView",
+      "doc": "Create a manual collection; resolves with its view or rejects with an AppError string."
+    },
+    {
+      "name": "collection_rename",
+      "args": { "collection_id": "string", "name": "string" },
+      "returns": "CollectionView",
+      "doc": "Rename a collection; resolves with the updated view or rejects with an AppError string."
+    },
+    {
+      "name": "collection_delete",
+      "args": { "collection_id": "string" },
+      "returns": "string",
+      "doc": "Delete a collection (members cascade). Resolves with the removed name or rejects with an AppError string."
+    },
+    {
+      "name": "collection_members",
+      "args": { "collection_id": "string" },
+      "returns": "CollectionMemberView[]",
+      "doc": "A collection's members in display order. Resolves with the rows or rejects with an AppError string."
     },
     {
       "name": "collection_bulk_add",
@@ -470,6 +502,18 @@
       },
       "returns": "void",
       "doc": "Add many media to one collection. Resolves or rejects with an AppError string."
+    },
+    {
+      "name": "collection_remove_member",
+      "args": { "collection_id": "string", "media_id": "string" },
+      "returns": "string",
+      "doc": "Remove one media from a collection; resolves with the removed media id or rejects with an AppError string."
+    },
+    {
+      "name": "collection_reorder",
+      "args": { "collection_id": "string", "media_ids": "string[]" },
+      "returns": "void",
+      "doc": "Persist a drag/drop reorder of a collection's members (the media ids must be exactly the current members). Resolves or rejects with an AppError string."
     },
     {
       "name": "task_list",

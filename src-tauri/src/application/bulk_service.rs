@@ -1,9 +1,10 @@
 //! Bulk operations application service (MISSION-045).
 //!
 //! Actions behind the library action bar: set tracking status, add a personal
-//! tag, soft-delete (to trash), and add to a collection. All four operate on a
-//! set of media ids selected in the UI. MISSION-078 extends this with
-//! filtered-selection bulk ops that carry a change summary.
+//! tag, and soft-delete (to trash). All three operate on a set of media ids
+//! selected in the UI. MISSION-078 extends this with filtered-selection bulk
+//! ops that carry a change summary. (Add-to-collection lives in
+//! `collection_service` since MISSION-076.)
 //!
 //! Status uses the domain status engine per media, so stamps (started_at /
 //! finished_at / repeat_count) stay correct and the Repeat-guard still applies.
@@ -22,14 +23,7 @@ use crate::domain::enums::CoreStatus;
 use crate::domain::status::apply_transition;
 use crate::domain::value_objects::{DateOnly, MediaId};
 use crate::error::AppError;
-use crate::infrastructure::repositories::{collection, media, tracking};
-
-/// A collection row surfaced to the "add to list" picker.
-#[derive(Debug, Clone, serde::Serialize)]
-pub struct CollectionItem {
-    pub id: String,
-    pub name: String,
-}
+use crate::infrastructure::repositories::{media, tracking};
 
 /// Bulk use-cases over a set of media ids.
 pub struct BulkService {
@@ -97,52 +91,12 @@ impl BulkService {
         }
         Ok(trash_ids)
     }
-
-    /// List collections for the "add to list" picker.
-    pub async fn list_collections(&self) -> Result<Vec<CollectionItem>, AppError> {
-        let rows = collection::list(&self.pool).await?;
-        Ok(rows
-            .into_iter()
-            .map(|row| CollectionItem {
-                id: row.id,
-                name: row.name,
-            })
-            .collect())
-    }
-
-    /// Add many media to one collection. The collection must exist; members are
-    /// appended after the existing ones (existing rows just update position).
-    pub async fn add_to_list(
-        &self,
-        collection_id: &str,
-        media_ids: &[String],
-    ) -> Result<(), AppError> {
-        if collection::get(&self.pool, collection_id).await?.is_none() {
-            return Err(AppError::validation(format!(
-                "collection not found: {collection_id}"
-            )));
-        }
-        let added_at = Utc::now().to_rfc3339();
-        let base = collection::members(&self.pool, collection_id).await?.len() as i64;
-        for (index, media_id) in media_ids.iter().enumerate() {
-            collection::add_member(
-                &self.pool,
-                collection_id,
-                media_id,
-                base + index as i64,
-                &added_at,
-            )
-            .await?;
-        }
-        Ok(())
-    }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
     use crate::application::media_service::{AddMediaInput, MediaListInput, MediaService};
-    use crate::infrastructure::repositories::collection::CollectionRecord;
     use crate::infrastructure::repositories::{activity, tracking};
     use crate::infrastructure::test_support::migrated_pool;
 
@@ -355,73 +309,6 @@ mod tests {
             .await
             .expect("list");
         assert!(remaining.is_empty(), "all media soft-deleted");
-        pool.close().await;
-        cleanup(&path);
-    }
-
-    #[tokio::test]
-    async fn list_collections_returns_rows() {
-        let (pool, path) = migrated_pool("bulk_list_collections.db").await;
-        let service = BulkService::new(pool.clone());
-        collection::create(
-            &pool,
-            &CollectionRecord {
-                id: "c-1".into(),
-                name: "Reading Now".into(),
-                is_smart: false,
-                filter_def: None,
-                sort_order: 0,
-                created_at: "2026-01-01".into(),
-            },
-        )
-        .await
-        .expect("create");
-
-        let rows = service.list_collections().await.expect("list");
-        assert_eq!(rows.len(), 1);
-        assert_eq!(rows[0].name, "Reading Now");
-        pool.close().await;
-        cleanup(&path);
-    }
-
-    #[tokio::test]
-    async fn add_to_list_appends_members() {
-        let (pool, path) = migrated_pool("bulk_add_to_list.db").await;
-        let ids = seed_media(&pool, 2).await;
-        let service = BulkService::new(pool.clone());
-        collection::create(
-            &pool,
-            &CollectionRecord {
-                id: "c-1".into(),
-                name: "Reading Now".into(),
-                is_smart: false,
-                filter_def: None,
-                sort_order: 0,
-                created_at: "2026-01-01".into(),
-            },
-        )
-        .await
-        .expect("create");
-
-        service.add_to_list("c-1", &ids).await.expect("add");
-
-        let members = collection::members(&pool, "c-1").await.expect("members");
-        assert_eq!(members.len(), 2);
-        assert_eq!(members[0].media_id, ids[0]);
-        assert_eq!(members[1].media_id, ids[1]);
-        pool.close().await;
-        cleanup(&path);
-    }
-
-    #[tokio::test]
-    async fn add_to_list_rejects_unknown_collection() {
-        let (pool, path) = migrated_pool("bulk_add_to_list_bad.db").await;
-        let service = BulkService::new(pool.clone());
-        let err = service
-            .add_to_list("c-nope", &["m-1".to_string()])
-            .await
-            .expect_err("unknown collection");
-        assert!(matches!(err, AppError::Validation(_)));
         pool.close().await;
         cleanup(&path);
     }

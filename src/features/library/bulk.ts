@@ -13,12 +13,6 @@ import {
 } from "@/api";
 import { queryKeys } from "@/api";
 
-/** A collection row surfaced by `collection_list` (add-to-list picker). */
-export interface CollectionItem {
-  id: string;
-  name: string;
-}
-
 /** Read the collections available for the "add to list" action. */
 export function useCollectionListQuery() {
   return useQuery({

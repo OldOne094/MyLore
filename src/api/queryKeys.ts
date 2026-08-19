@@ -54,7 +54,9 @@ export const queryKeys = {
   collection: {
     all: () => ["collection"] as const,
     lists: () => ["collection", "list"] as const,
-    detail: (collectionId: number) => ["collection", "detail", collectionId] as const,
+    detail: (collectionId: string) => ["collection", "detail", collectionId] as const,
+    /** A collection's members in display order (MISSION-076). */
+    members: (collectionId: string) => ["collection", "members", collectionId] as const,
   },
   stats: {
     all: () => ["stats"] as const,

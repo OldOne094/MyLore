@@ -67,6 +67,16 @@ export interface MediaListItem {
   favorite: boolean;
   progress: ProgressSummary;
 }
+export interface CollectionView {
+  id: string;
+  name: string;
+  member_count: number;
+  created_at: string;
+}
+export interface CollectionMemberView {
+  position: number;
+  media: MediaListItem;
+}
 export interface DashboardSummary {
   continue_watching: MediaListItem[];
   recently_completed: MediaListItem[];
@@ -583,9 +593,34 @@ export function media_bulk_delete(args: { ids: string[] }): Promise<string[]> {
   return invoke<string[]>("media_bulk_delete", args);
 }
 
-/** List collections for the add-to-list picker. Resolves with collection rows or rejects with an AppError string. */
-export function collection_list(): Promise<{ id: string; name: string }[]> {
-  return invoke<{ id: string; name: string }[]>("collection_list");
+/** List collections with member counts, for the Collections page and the add-to-list picker. Resolves with the rows or rejects with an AppError string. */
+export function collection_list(): Promise<CollectionView[]> {
+  return invoke<CollectionView[]>("collection_list");
+}
+
+/** Create a manual collection; resolves with its view or rejects with an AppError string. */
+export function collection_create(args: { name: string }): Promise<CollectionView> {
+  return invoke<CollectionView>("collection_create", args);
+}
+
+/** Rename a collection; resolves with the updated view or rejects with an AppError string. */
+export function collection_rename(args: {
+  collection_id: string;
+  name: string;
+}): Promise<CollectionView> {
+  return invoke<CollectionView>("collection_rename", args);
+}
+
+/** Delete a collection (members cascade). Resolves with the removed name or rejects with an AppError string. */
+export function collection_delete(args: { collection_id: string }): Promise<string> {
+  return invoke<string>("collection_delete", args);
+}
+
+/** A collection's members in display order. Resolves with the rows or rejects with an AppError string. */
+export function collection_members(args: {
+  collection_id: string;
+}): Promise<CollectionMemberView[]> {
+  return invoke<CollectionMemberView[]>("collection_members", args);
 }
 
 /** Add many media to one collection. Resolves or rejects with an AppError string. */
@@ -594,6 +629,22 @@ export function collection_bulk_add(args: {
   media_ids: string[];
 }): Promise<void> {
   return invoke<void>("collection_bulk_add", args);
+}
+
+/** Remove one media from a collection; resolves with the removed media id or rejects with an AppError string. */
+export function collection_remove_member(args: {
+  collection_id: string;
+  media_id: string;
+}): Promise<string> {
+  return invoke<string>("collection_remove_member", args);
+}
+
+/** Persist a drag/drop reorder of a collection's members (the media ids must be exactly the current members). Resolves or rejects with an AppError string. */
+export function collection_reorder(args: {
+  collection_id: string;
+  media_ids: string[];
+}): Promise<void> {
+  return invoke<void>("collection_reorder", args);
 }
 
 /** Every background task snapshot, newest first. Resolves with the list or rejects with an AppError string. */

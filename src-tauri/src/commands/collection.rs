@@ -1,0 +1,115 @@
+//! Collection commands (MISSION-076). Thin handlers over
+//! `application::collection_service` — CRUD over the user's collections plus
+//! ordered membership (bulk add, single remove, drag/drop reorder).
+
+use sqlx::SqlitePool;
+use tauri::command;
+use tauri::State;
+use tracing::info;
+
+use crate::application::collection_service::{
+    CollectionMemberView, CollectionService, CollectionView,
+};
+use crate::error::AppError;
+
+/// List collections with member counts, for the Collections page and the
+/// add-to-list picker.
+#[command]
+pub async fn collection_list(
+    state: State<'_, SqlitePool>,
+) -> Result<Vec<CollectionView>, AppError> {
+    info!("collection_list invoked");
+    let service = CollectionService::new(state.inner().clone());
+    service.list().await
+}
+
+/// Create a manual collection; resolves with its view.
+#[command]
+pub async fn collection_create(
+    state: State<'_, SqlitePool>,
+    name: String,
+) -> Result<CollectionView, AppError> {
+    info!(name, "collection_create invoked");
+    let service = CollectionService::new(state.inner().clone());
+    service.create(&name).await
+}
+
+/// Rename a collection; resolves with the updated view.
+#[command]
+pub async fn collection_rename(
+    state: State<'_, SqlitePool>,
+    collection_id: String,
+    name: String,
+) -> Result<CollectionView, AppError> {
+    info!(collection_id, name, "collection_rename invoked");
+    let service = CollectionService::new(state.inner().clone());
+    service.rename(&collection_id, &name).await
+}
+
+/// Delete a collection; members cascade. Resolves with the removed name.
+#[command]
+pub async fn collection_delete(
+    state: State<'_, SqlitePool>,
+    collection_id: String,
+) -> Result<String, AppError> {
+    info!(collection_id, "collection_delete invoked");
+    let service = CollectionService::new(state.inner().clone());
+    service.delete(&collection_id).await
+}
+
+/// A collection's members in display order.
+#[command]
+pub async fn collection_members(
+    state: State<'_, SqlitePool>,
+    collection_id: String,
+) -> Result<Vec<CollectionMemberView>, AppError> {
+    info!(collection_id, "collection_members invoked");
+    let service = CollectionService::new(state.inner().clone());
+    service.members(&collection_id).await
+}
+
+/// Add many media to one collection (idempotent append).
+#[command]
+pub async fn collection_bulk_add(
+    state: State<'_, SqlitePool>,
+    collection_id: String,
+    media_ids: Vec<String>,
+) -> Result<(), AppError> {
+    info!(
+        collection_id,
+        count = media_ids.len(),
+        "collection_bulk_add invoked"
+    );
+    let service = CollectionService::new(state.inner().clone());
+    service.add_members(&collection_id, &media_ids).await
+}
+
+/// Remove one media from a collection; resolves with the removed media id.
+#[command]
+pub async fn collection_remove_member(
+    state: State<'_, SqlitePool>,
+    collection_id: String,
+    media_id: String,
+) -> Result<String, AppError> {
+    info!(collection_id, media_id, "collection_remove_member invoked");
+    let service = CollectionService::new(state.inner().clone());
+    service.remove_member(&collection_id, &media_id).await?;
+    Ok(media_id)
+}
+
+/// Persist a drag/drop reorder of a collection's members. The provided media
+/// ids must be exactly the current members; positions are rewritten 0..n.
+#[command]
+pub async fn collection_reorder(
+    state: State<'_, SqlitePool>,
+    collection_id: String,
+    media_ids: Vec<String>,
+) -> Result<(), AppError> {
+    info!(
+        collection_id,
+        count = media_ids.len(),
+        "collection_reorder invoked"
+    );
+    let service = CollectionService::new(state.inner().clone());
+    service.reorder(&collection_id, &media_ids).await
+}

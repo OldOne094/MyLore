@@ -1,13 +1,14 @@
 //! Bulk commands (MISSION-045). Thin handlers over `application::bulk_service` —
 //! the library action bar's bulk actions: set tracking status, add a personal
-//! tag, soft-delete (to trash), and add to a collection.
+//! tag, and soft-delete (to trash). (Add-to-collection commands live in
+//! `commands/collection.rs` since MISSION-076.)
 
 use sqlx::SqlitePool;
 use tauri::command;
 use tauri::State;
 use tracing::info;
 
-use crate::application::bulk_service::{BulkService, CollectionItem};
+use crate::application::bulk_service::BulkService;
 use crate::error::AppError;
 
 /// Set the tracking status for many media at once (status engine applies).
@@ -46,30 +47,4 @@ pub async fn media_bulk_delete(
     info!(count = ids.len(), "media_bulk_delete invoked");
     let service = BulkService::new(state.inner().clone());
     service.delete(&ids).await
-}
-
-/// List collections for the "add to list" picker.
-#[command]
-pub async fn collection_list(
-    state: State<'_, SqlitePool>,
-) -> Result<Vec<CollectionItem>, AppError> {
-    info!("collection_list invoked");
-    let service = BulkService::new(state.inner().clone());
-    service.list_collections().await
-}
-
-/// Add many media to one collection.
-#[command]
-pub async fn collection_bulk_add(
-    state: State<'_, SqlitePool>,
-    collection_id: String,
-    media_ids: Vec<String>,
-) -> Result<(), AppError> {
-    info!(
-        collection_id,
-        count = media_ids.len(),
-        "collection_bulk_add invoked"
-    );
-    let service = BulkService::new(state.inner().clone());
-    service.add_to_list(&collection_id, &media_ids).await
 }

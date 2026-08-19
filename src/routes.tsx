@@ -2,6 +2,7 @@ import { Navigate, type RouteObject } from "react-router";
 import { AppShell } from "@/components/shell/AppShell";
 import {
   CalendarPage,
+  CollectionDetailPage,
   CollectionsPage,
   DashboardPage,
   DiscoverPage,
@@ -29,6 +30,7 @@ export const appRoutes: RouteObject[] = [
       { path: "search", element: <SearchPage /> },
       { path: "discover", element: <DiscoverPage /> },
       { path: "collections", element: <CollectionsPage /> },
+      { path: "collections/:collectionId", element: <CollectionDetailPage /> },
       { path: "reviews", element: <ReviewsPage /> },
       { path: "stats", element: <StatsPage /> },
       { path: "calendar", element: <CalendarPage /> },
