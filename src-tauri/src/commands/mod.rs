@@ -7,6 +7,7 @@ use tracing::info;
 use crate::error::AppError;
 
 pub mod bulk;
+pub mod calendar;
 pub mod collection;
 pub mod dashboard;
 pub mod discover;

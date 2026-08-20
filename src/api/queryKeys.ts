@@ -63,6 +63,11 @@ export const queryKeys = {
     /** Whole-library statistics overview (MISSION-080). */
     summary: () => ["stats", "summary"] as const,
   },
+  calendar: {
+    all: () => ["calendar"] as const,
+    /** One month of air/release dates + activity (MISSION-081). */
+    month: (year: number, month: number) => ["calendar", "month", year, month] as const,
+  },
   search: {
     all: () => ["search"] as const,
     local: (query: string) => ["search", "local", query] as const,

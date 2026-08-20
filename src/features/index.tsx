@@ -23,5 +23,5 @@ export { CollectionsPage } from "@/features/collections/CollectionsPage";
 export { CollectionDetailPage } from "@/features/collections/CollectionDetailPage";
 export const ReviewsPage = placeholder("/reviews");
 export { StatsPage } from "@/features/stats/StatsPage";
-export const CalendarPage = placeholder("/calendar");
+export { CalendarPage } from "@/features/calendar/CalendarPage";
 export { SettingsPage } from "@/features/settings/SettingsPage";

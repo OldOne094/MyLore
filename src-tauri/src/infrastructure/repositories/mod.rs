@@ -10,6 +10,7 @@
 
 pub mod activity;
 pub mod asset;
+pub mod calendar;
 pub mod collection;
 pub mod media;
 pub mod node;

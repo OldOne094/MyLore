@@ -318,6 +318,16 @@ has no type column. `delimiter` is the CSV field delimiter, `separator` splits m
   ships counts + distributions (keys are the enum strings reused for `coreStatus.*` / `contentType.*`
   i18n) over `stats_summary`; the Stats page renders seven tabular-numbers cards and four
   hand-rolled horizontal-bar charts (no chart library, logical properties keep it RTL-safe).
+- **Calendar (MISSION-081):** `CalendarService::month` assembles one month of **air dates** and
+  **activity** per local calendar day. Air events come from `content_node.release_date` (direct
+  `[start, next_month)` window) LEFT JOINed with media for title/content_type; activity events are
+  bucketed by converting each RFC3339 `created_at` to `chrono::Local` and querying a **±1-day
+  window**, so any event whose *local* date falls in the month is captured regardless of UTC offset.
+  `calendar_repo::air_dates` / `activity_in_range` return `AirDateRow`/`ActivityRow` (title already
+  joined); the service shapes `CalendarItem` (label via the shared `unit_label` — "E5"/"Ch7") and
+  `CalendarDay` (no `today` — the frontend computes its own local today). `CalendarPage` renders a
+  Sunday-start 7-column grid with `aria-pressed` day cells (accent dot = air, tertiary dot =
+  activity), RTL-aware chevrons, and a day-list panel whose chips link to `library/:id`.
 
 ## 7. Backup & Restore
 

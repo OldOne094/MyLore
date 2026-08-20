@@ -7,6 +7,7 @@
 
 pub mod activity_service;
 pub mod bulk_service;
+pub mod calendar_service;
 pub mod collection_service;
 pub mod dashboard_service;
 pub mod enrich_service;

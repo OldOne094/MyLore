@@ -297,6 +297,24 @@ export interface StatsView {
   consumed_pages: number;
   year_counts: StatCount[];
 }
+export interface CalendarItem {
+  media_id: string | null;
+  title: string;
+  content_type: string | null;
+  label: string | null;
+  kind: string | null;
+  time: string | null;
+}
+export interface CalendarDay {
+  date: string;
+  airs: CalendarItem[];
+  activity: CalendarItem[];
+}
+export interface CalendarMonth {
+  year: number;
+  month: number;
+  days: CalendarDay[];
+}
 
 /** Placeholder greeting command (create-tauri-app scaffold). Resolves with the greeting or rejects with an AppError string. */
 export function greet(args: { name: string }): Promise<string> {
@@ -757,6 +775,11 @@ export function task_cancel(args: { id: string }): Promise<TaskSnapshot> {
 /** Resolve the library statistics overview: counts per status and content type, hours and pages consumed, completion rate, average rating, favorites, and the rating + release-year distributions. Resolves with the StatsView or rejects with an AppError string. */
 export function stats_summary(): Promise<StatsView> {
   return invoke<StatsView>("stats_summary");
+}
+
+/** Resolve one calendar month: content-node air/release dates plus the user activity trail, bucketed per local day. Resolves with the CalendarMonth or rejects with an AppError string. */
+export function calendar_month(args: { year: number; month: number }): Promise<CalendarMonth> {
+  return invoke<CalendarMonth>("calendar_month", args);
 }
 
 export function listenTaskChanged(handler: (payload: TaskSnapshot) => void): Promise<UnlistenFn> {
