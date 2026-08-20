@@ -161,6 +161,22 @@
     {
       "name": "CalendarMonth",
       "shape": "year: number; month: number; days: CalendarDay[]"
+    },
+    {
+      "name": "GenreCount",
+      "shape": "name: string; count: number"
+    },
+    {
+      "name": "RecapMedia",
+      "shape": "media_id: string | null; title: string; content_type: string | null; activity_count: number"
+    },
+    {
+      "name": "RecapTotals",
+      "shape": "added: number; started: number; completed: number; reviewed: number; progress: number"
+    },
+    {
+      "name": "YearRecap",
+      "shape": "year: number; totals: RecapTotals; by_month: number[]; top_genres: GenreCount[]; top_media: RecapMedia[]; longest_streak: number; best_month: number | null"
     }
   ],
   "commands": [
@@ -614,6 +630,12 @@
       },
       "returns": "CalendarMonth",
       "doc": "Resolve one calendar month: content-node air/release dates plus the user activity trail, bucketed per local day. Resolves with the CalendarMonth or rejects with an AppError string."
+    },
+    {
+      "name": "recap_year",
+      "args": { "year": "number" },
+      "returns": "YearRecap",
+      "doc": "Resolve the year-in-review recap for one year: headline totals, a monthly completion chart, top genres of finished media, the most-active media, and the longest streak of consecutive active days — all bucketed by local time. Resolves with the YearRecap or rejects with an AppError string."
     }
   ],
   "events": [

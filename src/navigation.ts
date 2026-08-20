@@ -9,6 +9,7 @@ import {
   Settings,
   Star,
   Trash2,
+  Trophy,
   type LucideIcon,
 } from "lucide-react";
 
@@ -34,6 +35,7 @@ export const NAV_ITEMS: NavItem[] = [
   { path: "/reviews", key: "reviews", icon: Star, hintKey: "nav.hint_reviews" },
   { path: "/stats", key: "stats", icon: BarChart3, hintKey: "nav.hint_stats" },
   { path: "/calendar", key: "calendar", icon: Calendar, hintKey: "nav.hint_calendar" },
+  { path: "/recap", key: "recap", icon: Trophy, hintKey: "nav.hint_recap" },
   { path: "/settings", key: "settings", icon: Settings, hintKey: "nav.hint_settings" },
   { path: "/trash", key: "trash", icon: Trash2, hintKey: "nav.hint_trash" },
 ];

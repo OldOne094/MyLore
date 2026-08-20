@@ -14,6 +14,7 @@ pub mod calendar;
 pub mod collection;
 pub mod media;
 pub mod node;
+pub mod recap;
 pub mod review;
 pub mod tracking;
 pub mod trash;

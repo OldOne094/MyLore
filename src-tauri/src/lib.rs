@@ -118,6 +118,7 @@ pub fn run() {
             commands::review::review_delete,
             commands::stats::stats_summary,
             commands::calendar::calendar_month,
+            commands::recap::recap_year,
             commands::media::media_tags,
             commands::media::media_add_tag,
             commands::media::media_remove_tag

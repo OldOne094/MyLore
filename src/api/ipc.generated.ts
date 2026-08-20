@@ -315,6 +315,32 @@ export interface CalendarMonth {
   month: number;
   days: CalendarDay[];
 }
+export interface GenreCount {
+  name: string;
+  count: number;
+}
+export interface RecapMedia {
+  media_id: string | null;
+  title: string;
+  content_type: string | null;
+  activity_count: number;
+}
+export interface RecapTotals {
+  added: number;
+  started: number;
+  completed: number;
+  reviewed: number;
+  progress: number;
+}
+export interface YearRecap {
+  year: number;
+  totals: RecapTotals;
+  by_month: number[];
+  top_genres: GenreCount[];
+  top_media: RecapMedia[];
+  longest_streak: number;
+  best_month: number | null;
+}
 
 /** Placeholder greeting command (create-tauri-app scaffold). Resolves with the greeting or rejects with an AppError string. */
 export function greet(args: { name: string }): Promise<string> {
@@ -780,6 +806,11 @@ export function stats_summary(): Promise<StatsView> {
 /** Resolve one calendar month: content-node air/release dates plus the user activity trail, bucketed per local day. Resolves with the CalendarMonth or rejects with an AppError string. */
 export function calendar_month(args: { year: number; month: number }): Promise<CalendarMonth> {
   return invoke<CalendarMonth>("calendar_month", args);
+}
+
+/** Resolve the year-in-review recap for one year: headline totals, a monthly completion chart, top genres of finished media, the most-active media, and the longest streak of consecutive active days — all bucketed by local time. Resolves with the YearRecap or rejects with an AppError string. */
+export function recap_year(args: { year: number }): Promise<YearRecap> {
+  return invoke<YearRecap>("recap_year", args);
 }
 
 export function listenTaskChanged(handler: (payload: TaskSnapshot) => void): Promise<UnlistenFn> {

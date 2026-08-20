@@ -68,6 +68,11 @@ export const queryKeys = {
     /** One month of air/release dates + activity (MISSION-081). */
     month: (year: number, month: number) => ["calendar", "month", year, month] as const,
   },
+  recap: {
+    all: () => ["recap"] as const,
+    /** Year-in-review recap (MISSION-082). */
+    year: (year: number) => ["recap", "year", year] as const,
+  },
   search: {
     all: () => ["search"] as const,
     local: (query: string) => ["search", "local", query] as const,

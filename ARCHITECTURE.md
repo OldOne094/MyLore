@@ -318,6 +318,15 @@ has no type column. `delimiter` is the CSV field delimiter, `separator` splits m
   ships counts + distributions (keys are the enum strings reused for `coreStatus.*` / `contentType.*`
   i18n) over `stats_summary`; the Stats page renders seven tabular-numbers cards and four
   hand-rolled horizontal-bar charts (no chart library, logical properties keep it RTL-safe).
+- **Recap (MISSION-082):** `RecapService::year` turns a year of activity (MISSION-051) into a
+  celebratory recap. It reuses `calendar::activity_in_range` for the raw events (same projection),
+  filters them to the *local* year (each RFC3339 timestamp converted via `chrono::Local`, queried
+  with the same ±1-day window), and derives `RecapTotals` (distinct media per kind + progress-event
+  count), `by_month` completions, `best_month`, `top_media` (top 5 by event count) and
+  `longest_streak` (longest run of consecutive active days) in one pass. `recap_repo::completed_genres`
+  ranks the finished media's genres by distinct-media count. `YearRecap` ships over `recap_year`; the
+  Recap page renders stat cards, highlights, a hand-rolled 12-bar month chart (`Intl` month names,
+  best month in accent) and the standouts list.
 - **Calendar (MISSION-081):** `CalendarService::month` assembles one month of **air dates** and
   **activity** per local calendar day. Air events come from `content_node.release_date` (direct
   `[start, next_month)` window) LEFT JOINed with media for title/content_type; activity events are

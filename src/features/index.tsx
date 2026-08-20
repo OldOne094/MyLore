@@ -24,4 +24,5 @@ export { CollectionDetailPage } from "@/features/collections/CollectionDetailPag
 export const ReviewsPage = placeholder("/reviews");
 export { StatsPage } from "@/features/stats/StatsPage";
 export { CalendarPage } from "@/features/calendar/CalendarPage";
+export { RecapPage } from "@/features/recap/RecapPage";
 export { SettingsPage } from "@/features/settings/SettingsPage";
