@@ -21,6 +21,7 @@ pub mod progress_service;
 pub mod providers;
 pub mod review_service;
 pub mod search_service;
+pub mod stats_service;
 pub mod task_service;
 pub mod tracking_service;
 pub mod trash_service;

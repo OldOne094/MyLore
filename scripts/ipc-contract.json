@@ -141,6 +141,14 @@
     {
       "name": "TaskSnapshot",
       "shape": "id: string; kind: string; title: string; state: string; progress: number | null; message: string | null; error: string | null; result: unknown | null; created_at: string; updated_at: string"
+    },
+    {
+      "name": "StatCount",
+      "shape": "key: string; count: number"
+    },
+    {
+      "name": "StatsView",
+      "shape": "total: number; status_counts: StatCount[]; content_type_counts: StatCount[]; rating_counts: StatCount[]; avg_rating: number | null; favorites: number; completed_media: number; completion_rate: number | null; avg_percent: number | null; consumed_minutes: number; consumed_hours: number; consumed_pages: number; year_counts: StatCount[]"
     }
   ],
   "commands": [
@@ -579,6 +587,12 @@
       "args": { "id": "string" },
       "returns": "TaskSnapshot",
       "doc": "Request cancellation of a background task. The runner observes the flag at its next checkpoint (dropping its in-flight transaction). Resolves with the current snapshot or rejects with an AppError string when the id is unknown."
+    },
+    {
+      "name": "stats_summary",
+      "args": {},
+      "returns": "StatsView",
+      "doc": "Resolve the library statistics overview: counts per status and content type, hours and pages consumed, completion rate, average rating, favorites, and the rating + release-year distributions. Resolves with the StatsView or rejects with an AppError string."
     }
   ],
   "events": [

@@ -278,6 +278,25 @@ export interface TaskSnapshot {
   created_at: string;
   updated_at: string;
 }
+export interface StatCount {
+  key: string;
+  count: number;
+}
+export interface StatsView {
+  total: number;
+  status_counts: StatCount[];
+  content_type_counts: StatCount[];
+  rating_counts: StatCount[];
+  avg_rating: number | null;
+  favorites: number;
+  completed_media: number;
+  completion_rate: number | null;
+  avg_percent: number | null;
+  consumed_minutes: number;
+  consumed_hours: number;
+  consumed_pages: number;
+  year_counts: StatCount[];
+}
 
 /** Placeholder greeting command (create-tauri-app scaffold). Resolves with the greeting or rejects with an AppError string. */
 export function greet(args: { name: string }): Promise<string> {
@@ -733,6 +752,11 @@ export function task_get(args: { id: string }): Promise<TaskSnapshot> {
 /** Request cancellation of a background task. The runner observes the flag at its next checkpoint (dropping its in-flight transaction). Resolves with the current snapshot or rejects with an AppError string when the id is unknown. */
 export function task_cancel(args: { id: string }): Promise<TaskSnapshot> {
   return invoke<TaskSnapshot>("task_cancel", args);
+}
+
+/** Resolve the library statistics overview: counts per status and content type, hours and pages consumed, completion rate, average rating, favorites, and the rating + release-year distributions. Resolves with the StatsView or rejects with an AppError string. */
+export function stats_summary(): Promise<StatsView> {
+  return invoke<StatsView>("stats_summary");
 }
 
 export function listenTaskChanged(handler: (payload: TaskSnapshot) => void): Promise<UnlistenFn> {

@@ -22,6 +22,6 @@ export { DiscoverPage } from "@/features/discover/DiscoverPage";
 export { CollectionsPage } from "@/features/collections/CollectionsPage";
 export { CollectionDetailPage } from "@/features/collections/CollectionDetailPage";
 export const ReviewsPage = placeholder("/reviews");
-export const StatsPage = placeholder("/stats");
+export { StatsPage } from "@/features/stats/StatsPage";
 export const CalendarPage = placeholder("/calendar");
 export { SettingsPage } from "@/features/settings/SettingsPage";

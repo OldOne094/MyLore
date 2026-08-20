@@ -60,7 +60,8 @@ export const queryKeys = {
   },
   stats: {
     all: () => ["stats"] as const,
-    summary: (mediaId: number) => ["stats", "summary", mediaId] as const,
+    /** Whole-library statistics overview (MISSION-080). */
+    summary: () => ["stats", "summary"] as const,
   },
   search: {
     all: () => ["search"] as const,

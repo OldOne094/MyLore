@@ -424,6 +424,101 @@ pub async fn next_unread_unit(
     }))
 }
 
+/// A tracked media's projection for the stats service (MISSION-080): the
+/// tracking/media/review columns the domain statistics computation needs.
+#[derive(Debug, Clone)]
+pub struct TrackedMediaRow {
+    pub media_id: String,
+    pub content_type: String,
+    pub core_status: String,
+    pub rating: Option<i64>,
+    pub favorite: bool,
+    pub release_year: Option<i64>,
+}
+
+/// All tracked media joined with their review columns (rating + favorite) and
+/// release year, for the whole-library statistics computation.
+pub async fn tracked_media(pool: &SqlitePool) -> Result<Vec<TrackedMediaRow>, AppError> {
+    let rows = sqlx::query(
+        "SELECT m.id, m.content_type, t.core_status, r.rating, \
+         COALESCE(r.favorite, 0) AS favorite, m.release_year \
+         FROM tracking t \
+         JOIN media m ON m.id = t.media_id \
+         LEFT JOIN review r ON r.media_id = m.id",
+    )
+    .fetch_all(pool)
+    .await?;
+    Ok(rows
+        .into_iter()
+        .map(|row| TrackedMediaRow {
+            media_id: row.get(0),
+            content_type: row.get(1),
+            core_status: row.get(2),
+            rating: row.get(3),
+            favorite: row.get::<i64, _>(4) != 0,
+            release_year: row.get(5),
+        })
+        .collect())
+}
+
+/// Per-media progress numbers for the stats service (MISSION-080): weighted
+/// totals + consumed minutes, computed exactly like the domain progress engine
+/// (pages for books, unit counts otherwise).
+#[derive(Debug, Clone)]
+pub struct ProgressStatsRow {
+    pub media_id: String,
+    pub total_weight: i64,
+    pub completed_weight: i64,
+    pub completed_minutes: i64,
+}
+
+/// Weighted progress + consumed minutes for a set of media ids, resolved in one
+/// batched aggregate query per chunk (mirrors `progress_summaries`). Media with
+/// no countable nodes produce no row.
+pub async fn progress_stats(
+    pool: &SqlitePool,
+    media_ids: &[String],
+) -> Result<Vec<ProgressStatsRow>, AppError> {
+    if media_ids.is_empty() {
+        return Ok(Vec::new());
+    }
+    let mut rows = Vec::new();
+    for chunk in media_ids.chunks(500) {
+        let placeholders = chunk.iter().map(|_| "?").collect::<Vec<_>>().join(", ");
+        let sql = format!(
+            "SELECT cn.media_id, \
+                COALESCE(SUM(CASE WHEN m.content_type = 'book' \
+                   THEN COALESCE(cn.page_count, 1) ELSE 1 END), 0) AS total_weight, \
+                COALESCE(SUM(CASE WHEN COALESCE(np.state, 'unread') IN ('read', 'watched') \
+                   THEN CASE WHEN m.content_type = 'book' \
+                     THEN COALESCE(cn.page_count, 1) ELSE 1 END ELSE 0 END), 0) \
+                   AS completed_weight, \
+                COALESCE(SUM(CASE WHEN COALESCE(np.state, 'unread') IN ('read', 'watched') \
+                   THEN COALESCE(cn.duration_min, 0) ELSE 0 END), 0) AS completed_minutes \
+             FROM content_node cn \
+             JOIN media m ON m.id = cn.media_id \
+             LEFT JOIN node_progress np ON np.node_id = cn.id \
+             WHERE cn.media_id IN ({placeholders}) \
+               AND cn.kind IN ({UNIT_KINDS}) \
+             GROUP BY cn.media_id"
+        );
+        let mut query = sqlx::query(&sql);
+        for id in chunk {
+            query = query.bind(id.as_str());
+        }
+        let got = query.fetch_all(pool).await?;
+        for row in got {
+            rows.push(ProgressStatsRow {
+                media_id: row.get(0),
+                total_weight: row.get(1),
+                completed_weight: row.get(2),
+                completed_minutes: row.get(3),
+            });
+        }
+    }
+    Ok(rows)
+}
+
 /// Ordering for `recent_media_by_status` (MISSION-050 dashboard widgets).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum RecentOrder {
@@ -1057,6 +1152,139 @@ mod tests {
             none.is_empty(),
             "empty status list resolves without SQL error"
         );
+        pool.close().await;
+        cleanup_files(&path);
+    }
+
+    #[tokio::test]
+    async fn tracked_media_joins_tracking_media_and_review() {
+        let (pool, path) = migrated_pool("tracking_stats_media.db").await;
+        sqlx::query(
+            "INSERT INTO media (id, content_type, title_main, release_year, created_at, updated_at)
+             VALUES ('m-1', 'anime', 'A', 2011, '2026-01-01', '2026-01-01'),
+                    ('m-2', 'book', 'B', NULL, '2026-01-01', '2026-01-01')",
+        )
+        .execute(&pool)
+        .await
+        .expect("seed media");
+        upsert_tracking(&pool, &tracking("m-1", "completed"))
+            .await
+            .expect("track m-1");
+        upsert_tracking(&pool, &tracking("m-2", "planned"))
+            .await
+            .expect("track m-2");
+        sqlx::query(
+            "INSERT INTO review (media_id, rating, favorite, created_at, updated_at)
+                     VALUES ('m-1', 9, 1, '2026-01-02', '2026-01-02')",
+        )
+        .execute(&pool)
+        .await
+        .expect("seed review");
+
+        let mut rows = tracked_media(&pool).await.expect("tracked");
+        rows.sort_by(|a, b| a.media_id.cmp(&b.media_id));
+        assert_eq!(rows.len(), 2);
+        assert_eq!(rows[0].media_id, "m-1");
+        assert_eq!(rows[0].content_type, "anime");
+        assert_eq!(rows[0].core_status, "completed");
+        assert_eq!(rows[0].rating, Some(9));
+        assert!(rows[0].favorite);
+        assert_eq!(rows[0].release_year, Some(2011));
+        assert_eq!(rows[1].media_id, "m-2");
+        assert_eq!(rows[1].core_status, "planned");
+        assert_eq!(rows[1].rating, None);
+        assert!(!rows[1].favorite);
+        assert_eq!(rows[1].release_year, None);
+
+        pool.close().await;
+        cleanup_files(&path);
+    }
+
+    #[tokio::test]
+    async fn tracked_media_skips_untracked_media() {
+        let (pool, path) = migrated_pool("tracking_stats_media_untracked.db").await;
+        sqlx::query(
+            "INSERT INTO media (id, content_type, title_main, created_at, updated_at)
+             VALUES ('m-1', 'anime', 'A', '2026-01-01', '2026-01-01'),
+                    ('m-2', 'novel', 'B', '2026-01-01', '2026-01-01')",
+        )
+        .execute(&pool)
+        .await
+        .expect("seed media");
+        upsert_tracking(&pool, &tracking("m-1", "in_progress"))
+            .await
+            .expect("track m-1");
+
+        let rows = tracked_media(&pool).await.expect("tracked");
+        assert_eq!(rows.len(), 1, "untracked media produce no row");
+        assert_eq!(rows[0].media_id, "m-1");
+
+        pool.close().await;
+        cleanup_files(&path);
+    }
+
+    #[tokio::test]
+    async fn progress_stats_weighs_pages_and_counts_minutes() {
+        let (pool, path) = migrated_pool("tracking_stats_progress.db").await;
+        sqlx::query(
+            "INSERT INTO media (id, content_type, title_main, created_at, updated_at)
+             VALUES ('m-1', 'anime', 'Anime', '2026-01-01', '2026-01-01'),
+                    ('m-2', 'book', 'Book', '2026-01-01', '2026-01-01')",
+        )
+        .execute(&pool)
+        .await
+        .expect("seed media");
+        seed_node_with_kind(&pool, "e1", "m-1", "episode", 1).await;
+        seed_node_with_kind(&pool, "e2", "m-1", "episode", 2).await;
+        seed_node_with_kind(&pool, "s1", "m-1", "season", 1).await;
+        seed_node_with_kind(&pool, "c1", "m-2", "chapter", 1).await;
+        seed_node_with_kind(&pool, "c2", "m-2", "chapter", 2).await;
+        set_progress(
+            &pool,
+            &NodeProgress {
+                node_id: "e1".into(),
+                state: "watched".into(),
+                read_at: Some("2026-01-02".into()),
+                note: None,
+                rating: None,
+                updated_at: "2026-01-02".into(),
+            },
+        )
+        .await
+        .expect("watch e1");
+        set_progress(
+            &pool,
+            &NodeProgress {
+                node_id: "c1".into(),
+                state: "read".into(),
+                read_at: Some("2026-01-02".into()),
+                note: None,
+                rating: None,
+                updated_at: "2026-01-02".into(),
+            },
+        )
+        .await
+        .expect("read c1");
+
+        let mut rows = progress_stats(&pool, &["m-1".into(), "m-2".into()])
+            .await
+            .expect("stats");
+        rows.sort_by(|a, b| a.media_id.cmp(&b.media_id));
+
+        let anime = &rows[0];
+        assert_eq!(anime.total_weight, 2, "seasons are not countable units");
+        assert_eq!(anime.completed_weight, 1);
+        assert_eq!(anime.completed_minutes, 24, "one watched 24-min episode");
+
+        let book = &rows[1];
+        assert_eq!(book.total_weight, 60, "books weigh chapters by pages");
+        assert_eq!(book.completed_weight, 30);
+        assert_eq!(
+            book.completed_minutes, 24,
+            "only the consumed chapter's duration counts (not the unread one)"
+        );
+
+        assert!(progress_stats(&pool, &[]).await.expect("empty").is_empty());
         pool.close().await;
         cleanup_files(&path);
     }

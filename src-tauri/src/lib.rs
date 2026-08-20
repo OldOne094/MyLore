@@ -116,6 +116,7 @@ pub fn run() {
             commands::review::review_save,
             commands::review::review_acknowledge_warnings,
             commands::review::review_delete,
+            commands::stats::stats_summary,
             commands::media::media_tags,
             commands::media::media_add_tag,
             commands::media::media_remove_tag

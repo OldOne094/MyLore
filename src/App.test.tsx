@@ -32,12 +32,29 @@ function renderApp(initialEntry = "/") {
   );
 }
 
-const STATS_HINT = "Time watched, pages read and your ratings distribution.";
+const EMPTY_STATS = {
+  total: 0,
+  status_counts: [],
+  content_type_counts: [],
+  rating_counts: [],
+  avg_rating: null,
+  favorites: 0,
+  completed_media: 0,
+  completion_rate: null,
+  avg_percent: null,
+  consumed_minutes: 0,
+  consumed_hours: 0,
+  consumed_pages: 0,
+  year_counts: [],
+};
 
 beforeEach(() => {
   vi.mocked(invoke).mockImplementation((cmd: string) => {
     if (cmd === "dashboard_summary") {
       return Promise.resolve({ continue_watching: [], recently_completed: [], recently_added: [] });
+    }
+    if (cmd === "stats_summary") {
+      return Promise.resolve(EMPTY_STATS);
     }
     return Promise.resolve([]);
   });
@@ -62,7 +79,7 @@ describe("App shell", () => {
     const user = userEvent.setup();
     renderApp("/library");
     await user.click(screen.getByRole("link", { name: "Stats" }));
-    expect(await screen.findByText(STATS_HINT)).toBeInTheDocument();
+    expect(await screen.findByText("No stats yet")).toBeInTheDocument();
   });
 
   it("highlights the active nav item", async () => {

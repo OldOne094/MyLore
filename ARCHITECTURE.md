@@ -309,6 +309,15 @@ has no type column. `delimiter` is the CSV field delimiter, `separator` splits m
   review row (reusing the shared `review.forMedia` cache) with a one-tap acknowledge; the Review tab
   edits them via chips. The `pace` column's CHECK stays server-side only (the vocabulary validation
   is duplicated in `features/library/reviewMeta.ts` for the pickers).
+- **Stats (MISSION-080):** `StatsService::summary` wires the MISSION-027 pure `compute_stats`
+  (`domain/stats.rs`) to the DB: `tracking_repo::tracked_media` (tracking JOIN media LEFT JOIN review —
+  one row per tracked title carrying status, content type, rating, favorite, release year) plus
+  `tracking_repo::progress_stats` (batched aggregates over countable node kinds; book chapters are
+  weighed by page count and consumed episode minutes are summed into `consumed_hours`). Stats are
+  **real-data-only** — no `with_estimate` node-tree totals enter the picture. The `StatsView` DTO
+  ships counts + distributions (keys are the enum strings reused for `coreStatus.*` / `contentType.*`
+  i18n) over `stats_summary`; the Stats page renders seven tabular-numbers cards and four
+  hand-rolled horizontal-bar charts (no chart library, logical properties keep it RTL-safe).
 
 ## 7. Backup & Restore
 
