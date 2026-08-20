@@ -44,6 +44,10 @@ export interface ReviewView {
   notes: string | null;
   favorite: boolean;
   is_spoiler: boolean;
+  moods: string[];
+  pace: string | null;
+  content_warnings: string[];
+  warnings_acknowledged_at: string | null;
   created_at: string;
   updated_at: string;
 }
@@ -436,8 +440,16 @@ export function review_save(args: {
   notes: string | null;
   favorite: boolean;
   is_spoiler: boolean;
+  moods: string[];
+  pace: string | null;
+  content_warnings: string[];
 }): Promise<ReviewView> {
   return invoke<ReviewView>("review_save", args);
+}
+
+/** Acknowledge a media's current content-warning set (MISSION-079) — stamps warnings_acknowledged_at now and resolves with the updated row, or rejects when there is no review / no warnings to acknowledge. */
+export function review_acknowledge_warnings(args: { media_id: string }): Promise<ReviewView> {
+  return invoke<ReviewView>("review_acknowledge_warnings", args);
 }
 
 /** Delete a media's review row. Resolves or rejects with an AppError string. */

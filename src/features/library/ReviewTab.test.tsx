@@ -22,6 +22,10 @@ const REVIEW: ReviewView = {
   notes: "Re-read after the anime.",
   favorite: true,
   is_spoiler: true,
+  moods: ["dark", "tense"],
+  pace: "medium",
+  content_warnings: ["violence"],
+  warnings_acknowledged_at: "2026-01-02T00:00:00Z",
   created_at: "2026-01-01T00:00:00Z",
   updated_at: "2026-01-02T00:00:00Z",
 };
@@ -56,6 +60,10 @@ function mockReview(view: ReviewView | null, tags = TAGS) {
         notes: null,
         favorite: false,
         is_spoiler: false,
+        moods: [],
+        pace: null,
+        content_warnings: [],
+        warnings_acknowledged_at: null,
         created_at: "2026-01-01T00:00:00Z",
         updated_at: "2026-01-02T00:00:00Z",
       });
@@ -83,6 +91,13 @@ describe("ReviewTab", () => {
     expect(screen.getByRole("checkbox", { name: /Contains spoilers/ })).toBeChecked();
     expect(screen.getByText("cozy")).toBeInTheDocument();
     expect(screen.getByText("re-read")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Dark" })).toHaveAttribute("aria-pressed", "true");
+    expect(screen.getByRole("button", { name: "Tense" })).toHaveAttribute("aria-pressed", "true");
+    expect(screen.getByRole("button", { name: "Medium" })).toHaveAttribute("aria-pressed", "true");
+    expect(screen.getByRole("button", { name: "Violence" })).toHaveAttribute(
+      "aria-pressed",
+      "true",
+    );
     expect(invoke).toHaveBeenCalledWith("review_get", { media_id: "m-111" });
     expect(invoke).toHaveBeenCalledWith("media_tags", { media_id: "m-111" });
   });
@@ -114,6 +129,9 @@ describe("ReviewTab", () => {
         notes: null,
         favorite: false,
         is_spoiler: false,
+        moods: [],
+        pace: null,
+        content_warnings: [],
       }),
     );
     expect(await screen.findByText("Review saved")).toBeInTheDocument();
@@ -140,6 +158,9 @@ describe("ReviewTab", () => {
         notes: null,
         favorite: true,
         is_spoiler: false,
+        moods: [],
+        pace: null,
+        content_warnings: [],
       }),
     );
   });
@@ -162,6 +183,50 @@ describe("ReviewTab", () => {
         notes: null,
         favorite: false,
         is_spoiler: true,
+        moods: [],
+        pace: null,
+        content_warnings: [],
+      }),
+    );
+  });
+
+  it("picks mood, pace and content-warning chips and saves them", async () => {
+    mockReview(null, []);
+    renderTab();
+    await screen.findByText("No review yet — write one below.");
+
+    await userEvent.click(screen.getByRole("button", { name: "Dark" }));
+    await userEvent.click(screen.getByRole("button", { name: "Mysterious" }));
+    expect(screen.getByRole("button", { name: "Dark" })).toHaveAttribute("aria-pressed", "true");
+    expect(screen.getByRole("button", { name: "Mysterious" })).toHaveAttribute(
+      "aria-pressed",
+      "true",
+    );
+
+    await userEvent.click(screen.getByRole("button", { name: "Slow" }));
+    expect(screen.getByRole("button", { name: "Slow" })).toHaveAttribute("aria-pressed", "true");
+
+    await userEvent.click(screen.getByRole("button", { name: "Violence" }));
+    await userEvent.click(screen.getByRole("button", { name: "Violence" }));
+    expect(screen.getByRole("button", { name: "Violence" })).toHaveAttribute(
+      "aria-pressed",
+      "false",
+    );
+    await userEvent.click(screen.getByRole("button", { name: "Gore" }));
+
+    await userEvent.click(screen.getByRole("button", { name: "Save review" }));
+    await waitFor(() =>
+      expect(invoke).toHaveBeenCalledWith("review_save", {
+        media_id: "m-111",
+        rating: null,
+        review: null,
+        short_review: null,
+        notes: null,
+        favorite: false,
+        is_spoiler: false,
+        moods: ["dark", "mysterious"],
+        pace: "slow",
+        content_warnings: ["gore"],
       }),
     );
   });

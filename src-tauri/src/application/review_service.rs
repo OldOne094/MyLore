@@ -1,16 +1,27 @@
 //! Review service (MISSION-074).
 //!
 //! Single-media user-owned review use-cases: read the review row, save it
-//! (validating the domain invariants), or clear it. Saving an *empty* review
-//! (no rating, no text, not a favorite) deletes the row instead of persisting
-//! cruft — the persisted row only exists while the user owns at least one bit
-//! of review data.
+//! (validating the domain invariants), clear it, or acknowledge the current
+//! content-warning set (MISSION-079). Saving an *empty* review (no rating, no
+//! text, no favorite, no mood/pace/content-warning metadata) deletes the row
+//! instead of persisting cruft — the persisted row only exists while the user
+//! owns at least one bit of review data.
+//!
+//! Mood/pace/content-warning metadata (MISSION-079) is normalized to a
+//! canonical form: keys are validated against the fixed domain vocabulary,
+//! deduplicated and sorted. The content-warning acknowledgment timestamp is
+//! tied to the *current* warning set — it is preserved on a save that leaves
+//! the set unchanged and cleared when the set changes or becomes empty
+//! ("acknowledged-with-timestamp metadata, never forced").
+
+use std::collections::BTreeSet;
+use std::str::FromStr;
 
 use chrono::Utc;
 use sqlx::SqlitePool;
 
 use crate::application::activity_service::log_reviewed;
-use crate::domain::review::Review;
+use crate::domain::review::{ContentWarning, Mood, Pace, Review};
 use crate::domain::value_objects::{MediaId, Rating};
 use crate::error::AppError;
 use crate::infrastructure::repositories::{media, review};
@@ -25,6 +36,13 @@ pub struct ReviewView {
     pub notes: Option<String>,
     pub favorite: bool,
     pub is_spoiler: bool,
+    /// Canonical mood keys (sorted, deduplicated).
+    pub moods: Vec<String>,
+    pub pace: Option<String>,
+    /// Canonical content-warning keys (sorted, deduplicated).
+    pub content_warnings: Vec<String>,
+    /// When the user last acknowledged the current content-warning set.
+    pub warnings_acknowledged_at: Option<String>,
     pub created_at: String,
     pub updated_at: String,
 }
@@ -39,6 +57,9 @@ pub struct SaveReviewInput {
     pub notes: Option<String>,
     pub favorite: bool,
     pub is_spoiler: bool,
+    pub moods: Vec<String>,
+    pub pace: Option<String>,
+    pub content_warnings: Vec<String>,
 }
 
 /// Review use-cases for a single media.
@@ -59,8 +80,11 @@ impl ReviewService {
 
     /// Save (create or update) a media's review. Preserves the original
     /// `created_at`, stamps `updated_at` now, validates the domain invariants
-    /// (rating bounds, spoiler-requires-text). An entirely empty review is
-    /// treated as *clear* — the row is deleted and an empty view is resolved.
+    /// (rating bounds, spoiler-requires-text, metadata vocabulary) and
+    /// normalizes the metadata. The content-warning acknowledgment is
+    /// preserved only when the warning set is unchanged. An entirely empty
+    /// review is treated as *clear* — the row is deleted and an empty view is
+    /// resolved.
     pub async fn save(&self, input: SaveReviewInput) -> Result<ReviewView, AppError> {
         let media_id = MediaId::new(&input.media_id)?;
         if media::get(&self.pool, media_id.as_str()).await?.is_none() {
@@ -72,6 +96,9 @@ impl ReviewService {
 
         let now = Utc::now().to_rfc3339();
         let rating = input.rating.map(i64_to_rating).transpose()?;
+        let moods = normalize_moods(&input.moods)?;
+        let pace = normalize_pace(input.pace.as_deref())?;
+        let content_warnings = normalize_warnings(&input.content_warnings)?;
         let existing = review::get(&self.pool, media_id.as_str()).await?;
         let created_at = existing
             .as_ref()
@@ -88,10 +115,16 @@ impl ReviewService {
                 notes: None,
                 favorite: false,
                 is_spoiler: false,
+                moods: vec![],
+                pace: None,
+                content_warnings: vec![],
+                warnings_acknowledged_at: None,
                 created_at,
                 updated_at: now,
             });
         }
+
+        let warnings_acknowledged_at = preserved_acknowledgment(&existing, &content_warnings);
 
         let domain = Review {
             media_id,
@@ -101,6 +134,10 @@ impl ReviewService {
             notes: input.notes.clone(),
             favorite: input.favorite,
             is_spoiler: input.is_spoiler,
+            moods,
+            pace,
+            content_warnings,
+            warnings_acknowledged_at,
             created_at: created_at.clone(),
             updated_at: now.clone(),
         };
@@ -114,12 +151,44 @@ impl ReviewService {
             notes: domain.notes,
             favorite: domain.favorite,
             is_spoiler: domain.is_spoiler,
+            moods: domain.moods.iter().map(|m| m.as_str().to_string()).collect(),
+            pace: domain.pace.map(|p| p.as_str().to_string()),
+            content_warnings: domain
+                .content_warnings
+                .iter()
+                .map(|w| w.as_str().to_string())
+                .collect(),
+            warnings_acknowledged_at: domain.warnings_acknowledged_at,
             created_at: domain.created_at,
             updated_at: domain.updated_at,
         };
         review::upsert(&self.pool, &record).await?;
         log_reviewed(&self.pool, &record.media_id, record.rating).await;
 
+        Ok(view_from_record(&record))
+    }
+
+    /// Acknowledge the media's current content-warning set (idempotent — the
+    /// stamp is refreshed). Requires an existing review that carries content
+    /// warnings; never forced, always the user's explicit action.
+    pub async fn acknowledge_warnings(&self, media_id: &str) -> Result<ReviewView, AppError> {
+        let media_id = MediaId::new(media_id)?;
+        let existing = review::get(&self.pool, media_id.as_str())
+            .await?
+            .ok_or_else(|| AppError::validation("no review to acknowledge warnings for"))?;
+        if existing.content_warnings.is_empty() {
+            return Err(AppError::validation(
+                "no content warnings to acknowledge",
+            ));
+        }
+
+        let now = Utc::now().to_rfc3339();
+        let record = review::ReviewRecord {
+            warnings_acknowledged_at: Some(now.clone()),
+            updated_at: now,
+            ..existing
+        };
+        review::upsert(&self.pool, &record).await?;
         Ok(view_from_record(&record))
     }
 
@@ -138,8 +207,9 @@ impl ReviewService {
     }
 }
 
-/// An empty review carries no rating, no text, and isn't a favorite — nothing
-/// the user owns, so the row is cleared instead of persisted.
+/// An empty review carries no rating, no text, isn't a favorite, and has no
+/// mood/pace/content-warning metadata — nothing the user owns, so the row is
+/// cleared instead of persisted.
 fn is_empty(input: &SaveReviewInput) -> bool {
     input.rating.is_none()
         && input
@@ -161,6 +231,58 @@ fn is_empty(input: &SaveReviewInput) -> bool {
             .unwrap_or("")
             .is_empty()
         && !input.favorite
+        && input.moods.is_empty()
+        && input.pace.is_none()
+        && input.content_warnings.is_empty()
+}
+
+/// Resolve the saved acknowledgment: empty warnings never carry a stamp; an
+/// unchanged warning set keeps its existing stamp; any change clears it.
+fn preserved_acknowledgment(
+    existing: &Option<review::ReviewRecord>,
+    content_warnings: &[ContentWarning],
+) -> Option<String> {
+    if content_warnings.is_empty() {
+        return None;
+    }
+    let new_keys: Vec<String> = content_warnings.iter().map(|w| w.as_str().to_string()).collect();
+    match existing {
+        Some(row) if row.warnings_acknowledged_at.is_some() && row.content_warnings == new_keys => {
+            row.warnings_acknowledged_at.clone()
+        }
+        _ => None,
+    }
+}
+
+fn normalize_moods(values: &[String]) -> Result<Vec<Mood>, AppError> {
+    let mut moods: BTreeSet<Mood> = BTreeSet::new();
+    for value in values {
+        moods.insert(Mood::from_str(value.trim()).map_err(AppError::from)?);
+    }
+    Ok(moods.into_iter().collect())
+}
+
+fn normalize_pace(value: Option<&str>) -> Result<Option<Pace>, AppError> {
+    match value {
+        Some(raw) => {
+            let trimmed = raw.trim();
+            if trimmed.is_empty() {
+                return Ok(None);
+            }
+            Pace::from_str(trimmed).map(Some).map_err(AppError::from)
+        }
+        None => Ok(None),
+    }
+}
+
+fn normalize_warnings(values: &[String]) -> Result<Vec<ContentWarning>, AppError> {
+    let mut warnings: BTreeSet<ContentWarning> = BTreeSet::new();
+    for value in values {
+        warnings.insert(
+            ContentWarning::from_str(value.trim()).map_err(AppError::from)?,
+        );
+    }
+    Ok(warnings.into_iter().collect())
 }
 
 fn i64_to_rating(value: i64) -> Result<Rating, AppError> {
@@ -179,6 +301,10 @@ fn view_from_record(record: &review::ReviewRecord) -> ReviewView {
         notes: record.notes.clone(),
         favorite: record.favorite,
         is_spoiler: record.is_spoiler,
+        moods: record.moods.clone(),
+        pace: record.pace.clone(),
+        content_warnings: record.content_warnings.clone(),
+        warnings_acknowledged_at: record.warnings_acknowledged_at.clone(),
         created_at: record.created_at.clone(),
         updated_at: record.updated_at.clone(),
     }
@@ -209,6 +335,24 @@ mod tests {
             notes: None,
             favorite: true,
             is_spoiler: false,
+            moods: vec![],
+            pace: None,
+            content_warnings: vec![],
+        }
+    }
+
+    fn metadata_input(media_id: &str) -> SaveReviewInput {
+        SaveReviewInput {
+            media_id: media_id.to_string(),
+            rating: None,
+            review: None,
+            short_review: None,
+            notes: None,
+            favorite: false,
+            is_spoiler: false,
+            moods: vec!["tense".to_string(), "dark".to_string()],
+            pace: Some("medium".to_string()),
+            content_warnings: vec!["violence".to_string(), "gore".to_string()],
         }
     }
 
@@ -302,6 +446,9 @@ mod tests {
             notes: None,
             favorite: false,
             is_spoiler: false,
+            moods: vec![],
+            pace: None,
+            content_warnings: vec![],
         };
         let view = service.save(empty).await.expect("clear");
         assert_eq!(view.rating, None);
@@ -353,6 +500,130 @@ mod tests {
         ));
         assert!(matches!(
             service.delete("m-ghost").await.expect_err("unknown"),
+            AppError::Validation(_)
+        ));
+
+        pool.close().await;
+        cleanup_files(&path);
+    }
+
+    #[tokio::test]
+    async fn save_persists_normalized_metadata_and_keeps_the_row() {
+        let (pool, path) = migrated_pool("review_service_metadata.db").await;
+        let service = ReviewService::new(pool.clone());
+        seed_media(&pool, "m-1").await;
+
+        // Out-of-order + duplicate input lands canonical (sorted, deduped).
+        let mut input = metadata_input("m-1");
+        input.moods.push("dark".to_string());
+        input.content_warnings.push("violence".to_string());
+        let view = service.save(input).await.expect("save metadata");
+        assert_eq!(view.moods, vec!["dark", "tense"], "moods canonical");
+        assert_eq!(view.pace.as_deref(), Some("medium"));
+        assert_eq!(
+            view.content_warnings,
+            vec!["violence", "gore"],
+            "warnings canonical"
+        );
+        assert!(view.warnings_acknowledged_at.is_none());
+        assert!(review::get(&pool, "m-1").await.expect("get").is_some());
+
+        pool.close().await;
+        cleanup_files(&path);
+    }
+
+    #[tokio::test]
+    async fn save_rejects_unknown_mood_pace_and_warning_keys() {
+        let (pool, path) = migrated_pool("review_service_badmeta.db").await;
+        let service = ReviewService::new(pool.clone());
+        seed_media(&pool, "m-1").await;
+
+        let mut bad = metadata_input("m-1");
+        bad.moods = vec!["comfy".to_string()];
+        assert!(matches!(
+            service.save(bad).await.expect_err("unknown mood"),
+            AppError::Validation(_)
+        ));
+
+        let mut bad = metadata_input("m-1");
+        bad.pace = Some("brisk".to_string());
+        assert!(matches!(
+            service.save(bad).await.expect_err("unknown pace"),
+            AppError::Validation(_)
+        ));
+
+        let mut bad = metadata_input("m-1");
+        bad.content_warnings = vec!["spiders".to_string()];
+        assert!(matches!(
+            service.save(bad).await.expect_err("unknown warning"),
+            AppError::Validation(_)
+        ));
+
+        assert!(review::get(&pool, "m-1").await.expect("get").is_none());
+
+        pool.close().await;
+        cleanup_files(&path);
+    }
+
+    #[tokio::test]
+    async fn acknowledgment_is_preserved_only_for_the_unchanged_set() {
+        let (pool, path) = migrated_pool("review_service_ack.db").await;
+        let service = ReviewService::new(pool.clone());
+        seed_media(&pool, "m-1").await;
+
+        service.save(metadata_input("m-1")).await.expect("save");
+        service.acknowledge_warnings("m-1").await.expect("acknowledge");
+        let acknowledged = review::get(&pool, "m-1").await.expect("get").unwrap();
+        assert!(acknowledged.warnings_acknowledged_at.is_some());
+        let stamp = acknowledged.warnings_acknowledged_at.clone();
+
+        // Same set → stamp preserved across a save.
+        let view = service.save(metadata_input("m-1")).await.expect("re-save");
+        assert_eq!(view.warnings_acknowledged_at, stamp);
+
+        // Changed set → stamp cleared (the new set is unacknowledged).
+        let mut changed = metadata_input("m-1");
+        changed.content_warnings = vec!["death".to_string()];
+        let view = service.save(changed).await.expect("changed warnings");
+        assert!(view.warnings_acknowledged_at.is_none());
+
+        // Acknowledging again re-stamps the new set.
+        let view = service
+            .acknowledge_warnings("m-1")
+            .await
+            .expect("re-acknowledge");
+        assert!(view.warnings_acknowledged_at.is_some());
+
+        // Empty set → stamp cleared.
+        let mut cleared = metadata_input("m-1");
+        cleared.content_warnings = vec![];
+        let view = service.save(cleared).await.expect("cleared warnings");
+        assert!(view.warnings_acknowledged_at.is_none());
+
+        pool.close().await;
+        cleanup_files(&path);
+    }
+
+    #[tokio::test]
+    async fn acknowledge_warnings_requires_a_review_and_a_warning_set() {
+        let (pool, path) = migrated_pool("review_service_ack_req.db").await;
+        let service = ReviewService::new(pool.clone());
+        seed_media(&pool, "m-1").await;
+
+        assert!(matches!(
+            service
+                .acknowledge_warnings("m-1")
+                .await
+                .expect_err("no review"),
+            AppError::Validation(_)
+        ));
+
+        service.save(input("m-1")).await.expect("save plain review");
+        assert!(matches!(
+            service
+                .acknowledge_warnings("m-1")
+                .await
+                .expect_err("no warnings"),
             AppError::Validation(_)
         ));
 

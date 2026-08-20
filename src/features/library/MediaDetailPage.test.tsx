@@ -218,7 +218,12 @@ describe("MediaDetailPage", () => {
   });
 
   it("shows an error toast when the delete fails", async () => {
-    vi.mocked(invoke).mockResolvedValueOnce(DETAIL).mockRejectedValueOnce("boom");
+    vi.mocked(invoke).mockImplementation((cmd: string) => {
+      if (cmd === "media_get") return Promise.resolve(DETAIL);
+      if (cmd === "review_get") return Promise.resolve(null);
+      if (cmd === "media_delete") return Promise.reject("boom");
+      return Promise.resolve(undefined);
+    });
     renderPage();
     await screen.findByRole("heading", { name: "Steins;Gate" });
 
@@ -294,7 +299,12 @@ describe("MediaDetailPage", () => {
       provider: "anilist",
       provider_url: "https://anilist.co/anime/9253",
     };
-    vi.mocked(invoke).mockResolvedValueOnce(PROVIDER_DETAIL).mockRejectedValueOnce("boom");
+    vi.mocked(invoke).mockImplementation((cmd: string) => {
+      if (cmd === "media_get") return Promise.resolve(PROVIDER_DETAIL);
+      if (cmd === "review_get") return Promise.resolve(null);
+      if (cmd === "media_enrich") return Promise.reject("boom");
+      return Promise.resolve(undefined);
+    });
     renderPage();
     await screen.findByRole("heading", { name: "Steins;Gate" });
 
@@ -310,5 +320,45 @@ describe("MediaDetailPage", () => {
     await screen.findByRole("heading", { name: "Steins;Gate" });
 
     expect(screen.queryByRole("button", { name: /Refresh .* from .*/ })).not.toBeInTheDocument();
+  });
+
+  it("renders mood, pace and content-warning badges and acknowledges the warnings", async () => {
+    const REVIEW = {
+      media_id: "m-111",
+      rating: null,
+      review: null,
+      short_review: null,
+      notes: null,
+      favorite: false,
+      is_spoiler: false,
+      moods: ["dark", "tense"],
+      pace: "slow",
+      content_warnings: ["violence", "gore"],
+      warnings_acknowledged_at: null,
+      created_at: "2026-01-01T00:00:00Z",
+      updated_at: "2026-01-02T00:00:00Z",
+    };
+    const ACKED = { ...REVIEW, warnings_acknowledged_at: "2026-03-01T00:00:00Z" };
+    vi.mocked(invoke).mockImplementation((cmd: string) => {
+      if (cmd === "media_get") return Promise.resolve(DETAIL);
+      if (cmd === "review_get") return Promise.resolve(REVIEW);
+      if (cmd === "review_acknowledge_warnings") return Promise.resolve(ACKED);
+      return Promise.resolve(undefined);
+    });
+    renderPage();
+    await screen.findByRole("heading", { name: "Steins;Gate" });
+
+    expect(await screen.findByText("Dark")).toBeInTheDocument();
+    expect(screen.getByText("Tense")).toBeInTheDocument();
+    expect(screen.getByText("Slow")).toBeInTheDocument();
+    expect(screen.getByText("Violence")).toBeInTheDocument();
+    expect(screen.getByText("Gore")).toBeInTheDocument();
+
+    await userEvent.click(screen.getByRole("button", { name: /Acknowledge content warnings for/ }));
+    expect(invoke).toHaveBeenCalledWith("review_acknowledge_warnings", {
+      media_id: "m-111",
+    });
+    expect(await screen.findByText("Content warnings acknowledged")).toBeInTheDocument();
+    expect(await screen.findByText("Acknowledged")).toBeInTheDocument();
   });
 });

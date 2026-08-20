@@ -1,5 +1,6 @@
 //! Review commands (MISSION-074). Thin handlers over
-//! `application::review_service` — read/save/clear a media's user-owned review.
+//! `application::review_service` — read/save/clear a media's user-owned review
+//! and acknowledge its content-warning set (MISSION-079).
 
 use sqlx::SqlitePool;
 use tauri::command;
@@ -35,6 +36,9 @@ pub async fn review_save(
     notes: Option<String>,
     favorite: bool,
     is_spoiler: bool,
+    moods: Vec<String>,
+    pace: Option<String>,
+    content_warnings: Vec<String>,
 ) -> Result<ReviewView, AppError> {
     info!(media_id, "review_save invoked");
     let service = ReviewService::new(state.inner().clone());
@@ -46,8 +50,24 @@ pub async fn review_save(
         notes,
         favorite,
         is_spoiler,
+        moods,
+        pace,
+        content_warnings,
     };
     service.save(input).await
+}
+
+/// Acknowledge a media's current content-warning set (MISSION-079) — stamps
+/// `warnings_acknowledged_at` now and resolves with the updated row, or
+/// rejects when there is no review / no warnings to acknowledge.
+#[command]
+pub async fn review_acknowledge_warnings(
+    state: State<'_, SqlitePool>,
+    media_id: String,
+) -> Result<ReviewView, AppError> {
+    info!(media_id, "review_acknowledge_warnings invoked");
+    let service = ReviewService::new(state.inner().clone());
+    service.acknowledge_warnings(&media_id).await
 }
 
 /// Delete a media's review row. Resolves or rejects with an AppError string.

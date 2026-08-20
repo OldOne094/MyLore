@@ -1,13 +1,16 @@
 /* MISSION-074 — Per-media review & notes. Reads the review row for the detail
    page's Review tab, saves it (validating the server-side invariants), clears
-   it, and manages the media's personal tags. The save response is seeded into
-   the review cache so the tab reflects the write immediately. */
+   it, and manages the media's personal tags. MISSION-079 adds the
+   mood/pace/content-warning metadata and the content-warning acknowledgment.
+   The save/acknowledge responses are seeded into the review cache so the tab
+   and the detail-page badges reflect the write immediately. */
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   media_add_tag,
   media_remove_tag,
   media_tags,
+  review_acknowledge_warnings,
   review_delete,
   review_get,
   review_save,
@@ -24,13 +27,20 @@ export interface SaveReviewInput {
   notes: string | null;
   favorite: boolean;
   is_spoiler: boolean;
+  /** Canonical mood keys (MISSION-079). */
+  moods: string[];
+  pace: string | null;
+  /** Canonical content-warning keys (MISSION-079). */
+  content_warnings: string[];
 }
 
-/** Read the review row for one media (`null` when unreviewed). */
-export function useReviewQuery(mediaId: string) {
+/** Read the review row for one media (`null` when unreviewed). `enabled` lets
+    callers defer the fetch until a media id is available (MISSION-079). */
+export function useReviewQuery(mediaId: string, enabled = true) {
   return useQuery({
     queryKey: queryKeys.review.forMedia(mediaId),
     queryFn: () => review_get({ media_id: mediaId }),
+    enabled,
   });
 }
 
@@ -47,11 +57,25 @@ export function useSaveReview() {
         notes: input.notes,
         favorite: input.favorite,
         is_spoiler: input.is_spoiler,
+        moods: input.moods,
+        pace: input.pace,
+        content_warnings: input.content_warnings,
       }),
     onSuccess: (view) => {
       queryClient.setQueryData(queryKeys.review.forMedia(view.media_id), view);
       void queryClient.invalidateQueries({ queryKey: queryKeys.media.details() });
       void queryClient.invalidateQueries({ queryKey: queryKeys.dashboard.all() });
+    },
+  });
+}
+
+/** Acknowledge a media's current content-warning set; seeds the cache. */
+export function useAcknowledgeWarnings() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (media_id: string) => review_acknowledge_warnings({ media_id }),
+    onSuccess: (view) => {
+      queryClient.setQueryData(queryKeys.review.forMedia(view.media_id), view);
     },
   });
 }

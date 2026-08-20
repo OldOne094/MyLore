@@ -298,6 +298,17 @@ has no type column. `delimiter` is the CSV field delimiter, `separator` splits m
   violation is recorded instead of aborting the batch; `media_bulk_delete` returns a `BulkDeleteResult`
   whose `trash_ids` cover exactly the successful deletions so group undo is precise. The action bar
   surfaces this with a **scope toggle** ("Selected N" / "All N matching") and summary toasts.
+- **Review metadata (MISSION-079):** StoryGraph-style mood / pace / content-warning fields live on the
+  `review` row (`migration 0009` — `moods`/`content_warnings` as canonical JSON arrays, `pace` as a
+  CHECK-constrained single value, `warnings_acknowledged_at`). The domain owns the fixed
+  vocabularies (`Mood`/`Pace`/`ContentWarning` in `domain/review.rs`); `ReviewService::save`
+  normalizes keys (vocabulary-validated, sorted, deduped) and treats the acknowledgment as metadata
+  of the *current* warning set — **preserved when the set is unchanged, cleared when it changes or
+  becomes empty**, never forced. `review_acknowledge_warnings` stamps `warnings_acknowledged_at` now
+  (idempotent, requires a review with warnings). The detail-page hero renders the badges from the
+  review row (reusing the shared `review.forMedia` cache) with a one-tap acknowledge; the Review tab
+  edits them via chips. The `pace` column's CHECK stays server-side only (the vocabulary validation
+  is duplicated in `features/library/reviewMeta.ts` for the pickers).
 
 ## 7. Backup & Restore
 

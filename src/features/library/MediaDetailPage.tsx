@@ -1,5 +1,14 @@
 import { useState } from "react";
-import { ArrowLeft, FileText, ListTree, RefreshCcw, Star, Activity, Trash2 } from "lucide-react";
+import {
+  ArrowLeft,
+  Check,
+  FileText,
+  ListTree,
+  RefreshCcw,
+  Star,
+  Activity,
+  Trash2,
+} from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { Link, useNavigate, useParams } from "react-router";
 import {
@@ -18,6 +27,7 @@ import type { EnrichView } from "@/api";
 import { NodeTree } from "./NodeTree";
 import { TrackingTab } from "./TrackingTab";
 import { ReviewTab } from "./ReviewTab";
+import { useAcknowledgeWarnings, useReviewQuery } from "./review";
 import { EnrichDialog } from "./EnrichDialog";
 import { useDeleteMedia, useRestoreTrashItem } from "@/features/trash/api";
 import { STATUS_VARIANTS } from "./mediaMeta";
@@ -26,7 +36,9 @@ import { CoverImage } from "./CoverImage";
 /* MISSION-042 — Media detail page. Hero (cover, title, meta badges, actions)
    above tabbed sections: Overview / Details / Tracking / Review. Overview and
    Details render the aggregate fields; Tracking is the MISSION-048 status
-   picker; Review is the MISSION-074 rating/review/notes/tags editor. */
+   picker; Review is the MISSION-074 rating/review/notes/tags editor. MISSION-079
+   adds the user-owned StoryGraph-style badges to the hero — mood / pace chips
+   and content-warning badges with a one-tap acknowledgment stamp. */
 
 type DetailTab = "overview" | "details" | "tracking" | "review";
 
@@ -81,9 +93,19 @@ export function MediaDetailPage() {
   const { data, isPending, isError, refetch } = useMediaDetailQuery(id ?? "");
   const { data: coverViews } = useAssetViews(data?.cover_asset_id ? [data.cover_asset_id] : []);
   const cover = coverViews?.[0] ?? null;
+  const { data: review } = useReviewQuery(data?.id ?? "", data != null);
   const deleteMedia = useDeleteMedia();
   const restoreTrashItem = useRestoreTrashItem();
   const enrichMedia = useEnrichMedia();
+  const acknowledgeWarnings = useAcknowledgeWarnings();
+
+  const handleAcknowledge = () => {
+    if (!review) return;
+    acknowledgeWarnings.mutate(review.media_id, {
+      onSuccess: () => toast.success({ title: t("review.warningsAcknowledgeToast") }),
+      onError: () => toast.error({ title: t("review.warningsAcknowledgeErrorToast") }),
+    });
+  };
 
   const handleEnrich = () => {
     if (!data) return;
@@ -219,6 +241,43 @@ export function MediaDetailPage() {
               </Badge>
               {data.release_year ? (
                 <span className="text-sm tabular-nums text-text-tertiary">{data.release_year}</span>
+              ) : null}
+              {review?.pace ? <Badge variant="neutral">{t(`pace.${review.pace}`)}</Badge> : null}
+              {(review?.moods ?? []).map((mood) => (
+                <Badge key={mood} variant="accent">
+                  {t(`mood.${mood}`)}
+                </Badge>
+              ))}
+              {(review?.content_warnings?.length ?? 0) > 0 && review ? (
+                <span className="flex flex-wrap items-center gap-2">
+                  {review.content_warnings.map((warning) => (
+                    <Badge
+                      key={warning}
+                      variant="neutral"
+                      className="border-danger/30 bg-danger/10 text-danger"
+                    >
+                      {t(`warning.${warning}`)}
+                    </Badge>
+                  ))}
+                  {review.warnings_acknowledged_at ? (
+                    <span className="inline-flex items-center gap-1 text-xs text-text-tertiary">
+                      <Check size={12} aria-hidden="true" />
+                      {t("review.warningsAcknowledged")}
+                    </span>
+                  ) : (
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      disabled={acknowledgeWarnings.isPending}
+                      onClick={handleAcknowledge}
+                      aria-label={t("review.warningsAcknowledgeAria", {
+                        title: data.title_main,
+                      })}
+                    >
+                      {t("review.warningsAcknowledge")}
+                    </Button>
+                  )}
+                </span>
               ) : null}
             </div>
             {data.synopsis ? (

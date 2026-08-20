@@ -369,6 +369,10 @@ mod tests {
             notes: Some("read with tea".to_string()),
             favorite: true,
             is_spoiler: false,
+            moods: vec![],
+            pace: None,
+            content_warnings: vec![],
+            warnings_acknowledged_at: None,
             created_at: "2026-01-01".to_string(),
             updated_at: "2026-01-02".to_string(),
         };

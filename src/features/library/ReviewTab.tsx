@@ -12,6 +12,7 @@ import {
   useToast,
 } from "@/components/ui";
 import { cn } from "@/lib/cn";
+import { CONTENT_WARNINGS, MOODS, PACES } from "./reviewMeta";
 import {
   useAddMediaTag,
   useDeleteReview,
@@ -23,9 +24,12 @@ import {
 
 /* MISSION-074 — Review tab. The user-owned record for a title: favorite flag,
    a 1–10 rating (star picker), a full review (with an optional spoiler flag),
-   a short review, private notes, and personal tags. Everything saves through
-   `review_save` (which validates the domain invariants server-side and clears
-   the row when the review becomes empty) and the personal-tag commands. */
+   a short review, private notes, and personal tags. MISSION-079 adds the
+   StoryGraph-style metadata — mood (multi), pace (single) and content-warning
+   (multi) chips from fixed vocabularies. Everything saves through `review_save`
+   (which validates the domain invariants server-side and clears the row when
+   the review becomes empty) and the personal-tag commands. Content warnings
+   are acknowledged (with a timestamp) on the detail page, never here. */
 
 const MAX_RATING = 10;
 
@@ -36,6 +40,9 @@ interface Draft {
   notes: string;
   favorite: boolean;
   is_spoiler: boolean;
+  moods: string[];
+  pace: string | null;
+  content_warnings: string[];
 }
 
 const EMPTY_DRAFT: Draft = {
@@ -45,6 +52,9 @@ const EMPTY_DRAFT: Draft = {
   notes: "",
   favorite: false,
   is_spoiler: false,
+  moods: [],
+  pace: null,
+  content_warnings: [],
 };
 
 function formatDate(iso: string): string {
@@ -114,6 +124,9 @@ export function ReviewTab({ mediaId }: { mediaId: string }) {
             notes: data.notes ?? "",
             favorite: data.favorite,
             is_spoiler: data.is_spoiler,
+            moods: data.moods,
+            pace: data.pace,
+            content_warnings: data.content_warnings,
           }
         : EMPTY_DRAFT,
     );
@@ -145,6 +158,9 @@ export function ReviewTab({ mediaId }: { mediaId: string }) {
         notes: draft.notes.trim() || null,
         favorite: draft.favorite,
         is_spoiler: draft.is_spoiler,
+        moods: draft.moods,
+        pace: draft.pace,
+        content_warnings: draft.content_warnings,
       },
       {
         onSuccess: () => toast.success({ title: t("review.savedToast") }),
@@ -183,6 +199,9 @@ export function ReviewTab({ mediaId }: { mediaId: string }) {
   };
 
   const tagList = tags.data ?? [];
+
+  const toggleKey = (key: string, list: string[]) =>
+    list.includes(key) ? list.filter((item) => item !== key) : [...list, key];
 
   return (
     <div className="flex max-w-xl flex-col gap-8">
@@ -341,6 +360,93 @@ export function ReviewTab({ mediaId }: { mediaId: string }) {
               {t("review.tagAdd")}
             </Button>
           </form>
+        </div>
+      </section>
+
+      <section aria-labelledby="review-mood-heading">
+        <SectionHeading title={t("review.moodTitle")} hint={t("review.moodHint")} />
+        <div role="group" aria-label={t("review.moodTitle")} className="mt-3 flex flex-wrap gap-2">
+          {MOODS.map((mood) => {
+            const selected = draft.moods.includes(mood);
+            return (
+              <button
+                key={mood}
+                type="button"
+                aria-pressed={selected}
+                disabled={busy}
+                onClick={() => setDraft((d) => ({ ...d, moods: toggleKey(mood, d.moods) }))}
+                className={cn(
+                  "rounded-full border px-3 py-1.5 text-sm transition-colors duration-150 ease-out disabled:opacity-60",
+                  selected
+                    ? "border-accent/40 bg-accent-soft text-accent"
+                    : "border-border-subtle text-text-secondary hover:border-border-strong hover:text-text-primary",
+                )}
+              >
+                {t(`mood.${mood}`)}
+              </button>
+            );
+          })}
+        </div>
+      </section>
+
+      <section aria-labelledby="review-pace-heading">
+        <SectionHeading title={t("review.paceTitle")} hint={t("review.paceHint")} />
+        <div role="group" aria-label={t("review.paceTitle")} className="mt-3 flex flex-wrap gap-2">
+          {PACES.map((pace) => {
+            const selected = draft.pace === pace;
+            return (
+              <button
+                key={pace}
+                type="button"
+                aria-pressed={selected}
+                disabled={busy}
+                onClick={() => setDraft((d) => ({ ...d, pace: selected ? null : pace }))}
+                className={cn(
+                  "rounded-full border px-3 py-1.5 text-sm transition-colors duration-150 ease-out disabled:opacity-60",
+                  selected
+                    ? "border-accent/40 bg-accent-soft text-accent"
+                    : "border-border-subtle text-text-secondary hover:border-border-strong hover:text-text-primary",
+                )}
+              >
+                {t(`pace.${pace}`)}
+              </button>
+            );
+          })}
+        </div>
+      </section>
+
+      <section aria-labelledby="review-warnings-heading">
+        <SectionHeading title={t("review.warningsTitle")} hint={t("review.warningsHint")} />
+        <div
+          role="group"
+          aria-label={t("review.warningsTitle")}
+          className="mt-3 flex flex-wrap gap-2"
+        >
+          {CONTENT_WARNINGS.map((warning) => {
+            const selected = draft.content_warnings.includes(warning);
+            return (
+              <button
+                key={warning}
+                type="button"
+                aria-pressed={selected}
+                disabled={busy}
+                onClick={() =>
+                  setDraft((d) => ({
+                    ...d,
+                    content_warnings: toggleKey(warning, d.content_warnings),
+                  }))
+                }
+                className={cn(
+                  "rounded-full border px-3 py-1.5 text-sm transition-colors duration-150 ease-out disabled:opacity-60",
+                  selected
+                    ? "border-danger/40 bg-danger/10 text-danger"
+                    : "border-border-subtle text-text-secondary hover:border-border-strong hover:text-text-primary",
+                )}
+              >
+                {t(`warning.${warning}`)}
+              </button>
+            );
+          })}
         </div>
       </section>
 

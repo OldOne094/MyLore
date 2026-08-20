@@ -114,6 +114,7 @@ pub fn run() {
             commands::tracking::tracking_set_auto_track,
             commands::review::review_get,
             commands::review::review_save,
+            commands::review::review_acknowledge_warnings,
             commands::review::review_delete,
             commands::media::media_tags,
             commands::media::media_add_tag,
