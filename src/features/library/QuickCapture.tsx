@@ -16,6 +16,7 @@ import { nodeUnitLabel } from "./progress";
 import { unreadUnits } from "./progress";
 import { useMarkNextUnit } from "./progress";
 import { useMarkRange } from "./progress";
+import { useDebouncedValue } from "@/lib/useDebouncedValue";
 
 /* MISSION-049 — Quick capture. A global popover (Mod+Enter, or the palette
    command) to catch up on progress fast: type-ahead over the library, pick a
@@ -40,7 +41,10 @@ function QuickCapturePanel() {
   const activeRef = useRef<HTMLButtonElement>(null);
 
   const trimmed = query.trim();
-  const results = useMediaSearchQuery(trimmed);
+  // Debounce the type-ahead so fast typing collapses into one query
+  // (MISSION-094).
+  const debounced = useDebouncedValue(trimmed, 200);
+  const results = useMediaSearchQuery(debounced);
   const items = results.data ?? [];
 
   const nodesQuery = useQuery({

@@ -487,6 +487,9 @@ Cancellation propagates to Tokio tasks and HTTP requests (drop-based cancellatio
   components; indexes per `DATABASE.md §5`.
 - Benchmarks in CI: search latency, insert, bulk import, startup, memory (spec §99).
 - No premature optimization; measure before and after.
+- **Implemented state (MISSION-094):** library + import preview are virtualized; covers batch-
+  resolve through the disk cache; type-ahead search is debounced (200ms) with previous results
+  kept on screen; setup logs database-phase durations for startup regressions.
 
 ## 13. i18n & RTL
 

@@ -13,5 +13,8 @@ export function useMediaSearchQuery(query: string) {
     queryKey: queryKeys.search.local(trimmed),
     queryFn: () => media_search({ query: trimmed }),
     enabled: trimmed.length > 0,
+    // Keep the previous results on screen while a new query is in flight so
+    // type-ahead doesn't flash empty between keystrokes (MISSION-094).
+    placeholderData: (previous) => previous,
   });
 }

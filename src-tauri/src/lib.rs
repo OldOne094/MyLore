@@ -29,6 +29,9 @@ pub fn run() {
         .plugin(tauri_plugin_store::Builder::new().build())
         .plugin(tauri_plugin_dialog::init())
         .setup(|app| {
+            // Startup timing (MISSION-094): the database phase is the bulk of
+            // pre-window work; log its duration so regressions surface.
+            let startup = std::time::Instant::now();
             let data_dir = app.path().app_data_dir()?;
             infrastructure::logging::init(&data_dir.join("logs"));
 
@@ -46,7 +49,11 @@ pub fn run() {
             }
 
             let pool = tauri::async_runtime::block_on(infrastructure::db::connect(&db_path))?;
-            tracing::info!(db = %db_path.display(), "database opened");
+            tracing::info!(
+                db = %db_path.display(),
+                ms = startup.elapsed().as_millis() as u64,
+                "database opened"
+            );
 
             // MISSION-088: verify integrity before migrating. On corruption
             // the app still launches — in recovery mode — so the recovery
@@ -101,6 +108,11 @@ pub fn run() {
                 }
             });
             app.manage(backups);
+
+            tracing::info!(
+                ms = startup.elapsed().as_millis() as u64,
+                "startup services ready"
+            );
 
             // Background task manager (MISSION-070): every long operation runs
             // as a cancelable task; changes stream to the UI as `task_changed`.
