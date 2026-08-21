@@ -1,0 +1,97 @@
+name: Release
+
+# MISSION-099 — Release pipeline. Pushing a `v*` tag builds signed installers
+# for all three desktop platforms and attaches them to a GitHub Release.
+#
+# Signing (optional until certificates are provisioned):
+#   - Windows: set `windowsCertificateThumbprint` / `certificateSubjectName` in
+#     tauri.conf.json bundle.windows and provide the PFX via the
+#     `WINDOWS_PFX` + `WINDOWS_PFX_PASSWORD` secrets (imported here before the
+#     build).
+#   - macOS: provide `APPLE_CERTIFICATE` (+ password) secrets; tauri imports
+#     them automatically when APPLE_SIGNING_IDENTITY resolves.
+# Without those secrets the artifacts build unsigned — fine for alpha/beta.
+
+on:
+  push:
+    tags:
+      - "v*"
+
+jobs:
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - platform: ubuntu-22.04
+          - platform: macos-latest
+          - platform: windows-latest
+    runs-on: ${{ matrix.platform }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Linux system dependencies (Tauri)
+        if: matrix.platform == 'ubuntu-22.04'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            libwebkit2gtk-4.1-dev \
+            librsvg2-dev \
+            patchelf \
+            build-essential \
+            libssl-dev
+          sudo apt-get install -y libappindicator3-dev \
+            || sudo apt-get install -y libayatana-appindicator3-dev
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: swatinem/rust-cache@v2
+        with:
+          workspaces: src-tauri
+
+      - name: Install frontend dependencies
+        run: npm ci
+
+      - name: Version sync gate
+        run: node scripts/release.mjs check
+
+      - name: Import Windows signing certificate
+        if: matrix.platform == 'windows-latest' && env.WINDOWS_PFX != ''
+        env:
+          WINDOWS_PFX: ${{ secrets.WINDOWS_PFX }}
+          WINDOWS_PFX_PASSWORD: ${{ secrets.WINDOWS_PFX_PASSWORD }}
+        shell: pwsh
+        run: |
+          $pfxPath = Join-Path $env:RUNNER_TEMP "signing.pfx"
+          [IO.File]::WriteAllBytes("$pfxPath", [Convert]::FromBase64String($env:WINDOWS_PFX))
+          Import-PfxCertificate -FilePath $pfxPath -CertStoreLocation Cert:\CurrentUser\My -Password (ConvertTo-SecureString $env:WINDOWS_PFX_PASSWORD -AsPlainText -Force)
+
+      - name: Import macOS signing certificate
+        if: matrix.platform == 'macos-latest' && env.APPLE_CERTIFICATE != ''
+        env:
+          APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
+          APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
+        run: |
+          echo "$APPLE_CERTIFICATE" | base64 --decode > certificate.p12
+          security create-keychain -p mylore-build build.keychain
+          security import certificate.p12 -k build.keychain -P "$APPLE_CERTIFICATE_PASSWORD" -T /usr/bin/codesign
+          security default-keychain -s build.keychain
+          security unlock-keychain -p mylore-build build.keychain
+          security set-key-partition-list -S apple-tool:,apple: -s -k mylore-build build.keychain
+
+      - name: Build installers
+        uses: tauri-apps/tauri-action@v0
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          APPLE_SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}
+        with:
+          tagName: ${{ github.ref_name }}
+          releaseName: "MyLore ${{ github.ref_name }}"
+          releaseBody: "See CHANGELOG.md for the changes in this release."
+          releaseDraft: true
+          prerelease: ${{ contains(github.ref_name, '-') }}
