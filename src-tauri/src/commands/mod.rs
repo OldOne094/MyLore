@@ -18,6 +18,7 @@ pub mod import;
 pub mod media;
 pub mod node;
 pub mod providers;
+pub mod reading;
 pub mod recap;
 pub mod review;
 pub mod stats;

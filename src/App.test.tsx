@@ -56,6 +56,16 @@ beforeEach(() => {
     if (cmd === "stats_summary") {
       return Promise.resolve(EMPTY_STATS);
     }
+    if (cmd === "reading_recap") {
+      return Promise.resolve({
+        year: new Date().getFullYear(),
+        by_month: Array.from({ length: 12 }, () => ({ pages: 0, chapters: 0 })),
+        totals: { pages: 0, chapters: 0, finished: 0 },
+        mood_counts: [],
+        pace_counts: [],
+        format_counts: [],
+      });
+    }
     return Promise.resolve([]);
   });
 });

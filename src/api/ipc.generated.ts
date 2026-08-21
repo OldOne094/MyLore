@@ -341,6 +341,23 @@ export interface YearRecap {
   longest_streak: number;
   best_month: number | null;
 }
+export interface MonthReading {
+  pages: number;
+  chapters: number;
+}
+export interface ReadingTotals {
+  pages: number;
+  chapters: number;
+  finished: number;
+}
+export interface ReadingRecap {
+  year: number;
+  by_month: MonthReading[];
+  totals: ReadingTotals;
+  mood_counts: StatCount[];
+  pace_counts: StatCount[];
+  format_counts: StatCount[];
+}
 
 /** Placeholder greeting command (create-tauri-app scaffold). Resolves with the greeting or rejects with an AppError string. */
 export function greet(args: { name: string }): Promise<string> {
@@ -808,9 +825,14 @@ export function calendar_month(args: { year: number; month: number }): Promise<C
   return invoke<CalendarMonth>("calendar_month", args);
 }
 
-/** Resolve the year-in-review recap for one year: headline totals, a monthly completion chart, top genres of finished media, the most-active media, and the longest streak of consecutive active days — all bucketed by local time. Resolves with the YearRecap or rejects with an AppError string. */
+/** Resolve the year-in-review recap for one year: headline totals, a monthly completion chart, top genres of finished media, the most-active media, and the longest streak of consecutive active days - all bucketed by local time. Resolves with the YearRecap or rejects with an AppError string. */
 export function recap_year(args: { year: number }): Promise<YearRecap> {
   return invoke<YearRecap>("recap_year", args);
+}
+
+/** Resolve the reading recap for one year: pages and chapters consumed per month (book pages weighed by page count, all bucketed by local time), the year totals including distinct finished reading media, plus all-time taste distributions - mood set, pace and format - built from review metadata and tracked reading media. Resolves with the ReadingRecap or rejects with an AppError string. */
+export function reading_recap(args: { year: number }): Promise<ReadingRecap> {
+  return invoke<ReadingRecap>("reading_recap", args);
 }
 
 export function listenTaskChanged(handler: (payload: TaskSnapshot) => void): Promise<UnlistenFn> {

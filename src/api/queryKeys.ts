@@ -73,6 +73,11 @@ export const queryKeys = {
     /** Year-in-review recap (MISSION-082). */
     year: (year: number) => ["recap", "year", year] as const,
   },
+  readingRecap: {
+    all: () => ["readingRecap"] as const,
+    /** Reading recap for one year (MISSION-083). */
+    year: (year: number) => ["readingRecap", "year", year] as const,
+  },
   search: {
     all: () => ["search"] as const,
     local: (query: string) => ["search", "local", query] as const,

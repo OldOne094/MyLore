@@ -337,6 +337,32 @@ has no type column. `delimiter` is the CSV field delimiter, `separator` splits m
   `CalendarDay` (no `today` — the frontend computes its own local today). `CalendarPage` renders a
   Sunday-start 7-column grid with `aria-pressed` day cells (accent dot = air, tertiary dot =
   activity), RTL-aware chevrons, and a day-list panel whose chips link to `library/:id`.
+- **Reading recap (MISSION-083):** `ReadingRecapService::recap(year)` adds StoryGraph-style reading
+  stats under the Stats page. `reading_repo::monthly_reading` scans consumed nodes in a ±1-day
+  local-year window (state read/watched, content types book/novel/web_novel/manga/manhwa/manhua);
+  book chapters weigh by `page_count` (1 when unknown), non-book chapters count as chapters but
+  0 pages — identical to MISSION-080's `consumed_pages`. Distinct finished media reuse
+  `activity_in_range` (kind completed + reading type + local year). All-time taste distributions:
+  moods/pace folded from the review rows' JSON metadata (`taste_rows`), formats from tracked
+  reading media (`reading_formats`). Migration `0012` is index-only (`node_progress(read_at)`).
+  `ReadingRecap` ships over `reading_recap`; the Stats page renders the **ReadingSection** (year
+  select, three tabular cards, two hand-rolled month-bar charts and three horizontal distribution
+  charts reusing the shared `DistributionChart`, extracted from StatsPage for reuse).
+- **Reading groups (MISSION-114–118, planned seam):** decentralized friend groups for tracking
+  novels/books together — local-first, no central server. Design constraints fixed up front:
+  group data lives in its own tables (`reading_group` / `group_member` / `group_note`), never in
+  the personal aggregates ADR-007 protects; cross-device references use a stable *work identity*
+  (provider id or normalized title+author+year hash via the existing identity_candidates logic),
+  since each device's `media` UUIDs differ. Conflict policy by ownership: CRDT (`yrs`) only for
+  shared notes; each member's shelf is single-writer; group settings owner-only with an epoch.
+  Transport is async store-and-forward over Nostr relays behind a `p2p` cargo feature (default
+  build stays dependency-free), outbox-first so nothing is lost offline.
+  - **Threat model (explicit):** E2EE (XChaCha20-Poly1305, group key in the OS keyring, shared
+    only via out-of-band QR/link invite) protects payloads, but public relays still observe
+    metadata — IP address, pubkey, timing, packet sizes, group size. The feature is therefore
+    fully opt-in behind an explicit privacy screen stating what leaves the device, ships relay +
+    E2EE status badges, supports self-hosted relays, avoids presence indicators entirely, and
+    rotates the group key (new epoch) when a member is removed.
 
 ## 7. Backup & Restore
 

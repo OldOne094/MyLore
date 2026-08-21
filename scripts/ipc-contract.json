@@ -177,6 +177,18 @@
     {
       "name": "YearRecap",
       "shape": "year: number; totals: RecapTotals; by_month: number[]; top_genres: GenreCount[]; top_media: RecapMedia[]; longest_streak: number; best_month: number | null"
+    },
+    {
+      "name": "MonthReading",
+      "shape": "pages: number; chapters: number"
+    },
+    {
+      "name": "ReadingTotals",
+      "shape": "pages: number; chapters: number; finished: number"
+    },
+    {
+      "name": "ReadingRecap",
+      "shape": "year: number; by_month: MonthReading[]; totals: ReadingTotals; mood_counts: StatCount[]; pace_counts: StatCount[]; format_counts: StatCount[]"
     }
   ],
   "commands": [
@@ -635,7 +647,13 @@
       "name": "recap_year",
       "args": { "year": "number" },
       "returns": "YearRecap",
-      "doc": "Resolve the year-in-review recap for one year: headline totals, a monthly completion chart, top genres of finished media, the most-active media, and the longest streak of consecutive active days — all bucketed by local time. Resolves with the YearRecap or rejects with an AppError string."
+      "doc": "Resolve the year-in-review recap for one year: headline totals, a monthly completion chart, top genres of finished media, the most-active media, and the longest streak of consecutive active days - all bucketed by local time. Resolves with the YearRecap or rejects with an AppError string."
+    },
+    {
+      "name": "reading_recap",
+      "args": { "year": "number" },
+      "returns": "ReadingRecap",
+      "doc": "Resolve the reading recap for one year: pages and chapters consumed per month (book pages weighed by page count, all bucketed by local time), the year totals including distinct finished reading media, plus all-time taste distributions - mood set, pace and format - built from review metadata and tracked reading media. Resolves with the ReadingRecap or rejects with an AppError string."
     }
   ],
   "events": [

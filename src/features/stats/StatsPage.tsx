@@ -1,7 +1,9 @@
 import { BarChart3, RefreshCcw } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { Button, EmptyState, Skeleton } from "@/components/ui";
-import { useStatsSummaryQuery, type StatCount, type StatsView } from "./api";
+import { ReadingSection } from "@/features/reading/ReadingSection";
+import { DistributionChart } from "./DistributionChart";
+import { useStatsSummaryQuery, type StatsView } from "./api";
 
 /* MISSION-080 — Stats page (REQ-STAT-001). A calm overview of the tracked
    library: stat cards with tabular numbers (titles, completion, average
@@ -72,50 +74,6 @@ function StatCard({ label, value, suffix }: { label: string; value: string; suff
   );
 }
 
-function DistributionChart({
-  title,
-  rows,
-  format,
-}: {
-  title: string;
-  rows: StatCount[];
-  format: (key: string) => string;
-}) {
-  const { t } = useTranslation();
-  const visible = rows.filter((row) => row.count > 0);
-  const max = Math.max(1, ...visible.map((row) => row.count));
-  return (
-    <section className="rounded-md border border-border-subtle bg-bg-surface p-4">
-      <h2 className="text-sm font-semibold text-text-primary">{title}</h2>
-      {visible.length === 0 ? (
-        <p className="mt-2 text-sm text-text-tertiary">{t("stats.noData")}</p>
-      ) : (
-        <ul className="mt-3 flex flex-col gap-2">
-          {visible.map((row) => (
-            <li key={row.key} className="flex items-center gap-2">
-              <span className="w-24 shrink-0 truncate text-xs text-text-secondary">
-                {format(row.key)}
-              </span>
-              <div
-                className="h-2 flex-1 overflow-hidden rounded-full bg-accent/20"
-                aria-hidden="true"
-              >
-                <div
-                  className="h-full rounded-full bg-accent transition-[width] duration-150 ease-out"
-                  style={{ width: `${(row.count / max) * 100}%` }}
-                />
-              </div>
-              <span className="w-8 shrink-0 text-end text-xs tabular-nums text-text-tertiary">
-                {row.count}
-              </span>
-            </li>
-          ))}
-        </ul>
-      )}
-    </section>
-  );
-}
-
 export function StatsPage() {
   const { t } = useTranslation();
   const { data, isLoading, isError, refetch } = useStatsSummaryQuery();
@@ -173,24 +131,29 @@ export function StatsPage() {
         <DistributionChart
           title={t("stats.byStatus")}
           rows={stats.status_counts}
+          emptyLabel={t("stats.noData")}
           format={(key) => t(`coreStatus.${key}`, { defaultValue: key })}
         />
         <DistributionChart
           title={t("stats.byType")}
           rows={stats.content_type_counts}
+          emptyLabel={t("stats.noData")}
           format={(key) => t(`contentType.${key}`, { defaultValue: key })}
         />
         <DistributionChart
           title={t("stats.byRating")}
           rows={stats.rating_counts}
+          emptyLabel={t("stats.noData")}
           format={(key) => key}
         />
         <DistributionChart
           title={t("stats.byYear")}
           rows={stats.year_counts}
+          emptyLabel={t("stats.noData")}
           format={(key) => key}
         />
       </div>
+      <ReadingSection />
     </section>
   );
 }

@@ -5,7 +5,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { MemoryRouter, Route, Routes } from "react-router";
 import "@/i18n";
 import i18n from "@/i18n";
-import type { StatsView } from "@/api";
+import type { ReadingRecap, StatsView } from "@/api";
 
 vi.mock("@tauri-apps/api/core", () => ({
   invoke: vi.fn(),
@@ -42,9 +42,21 @@ function stats(overrides: Partial<StatsView> = {}): StatsView {
   };
 }
 
+function emptyReadingRecap(): ReadingRecap {
+  return {
+    year: new Date().getFullYear(),
+    by_month: Array.from({ length: 12 }, () => ({ pages: 0, chapters: 0 })),
+    totals: { pages: 0, chapters: 0, finished: 0 },
+    mood_counts: [],
+    pace_counts: [],
+    format_counts: [],
+  };
+}
+
 function wrap(response: unknown) {
   vi.mocked(invoke).mockImplementation((cmd: string) => {
     if (cmd === "stats_summary") return Promise.resolve(response);
+    if (cmd === "reading_recap") return Promise.resolve(emptyReadingRecap());
     return Promise.resolve([]);
   });
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
