@@ -150,90 +150,65 @@ pub fn default_provider_configs() -> Vec<ProviderConfig> {
     ]
 }
 
-/// Offline-test helpers shared by adapter tests.
+/// Offline-test harness shared by adapter tests (MISSION-098). Every provider
+/// test serves recorded fixtures from tests/fixtures/<provider>/ through a
+/// wiremock server the client injected base URL points at, so the suite never
+/// touches the real network.
 #[cfg(test)]
 pub(crate) mod test_support {
-    /// Read a recorded fixture under `tests/fixtures/<provider>/`.
-    pub(crate) fn anilist_fixture(name: &str) -> String {
+    use wiremock::matchers::{method, path};
+    use wiremock::{Mock, MockServer, ResponseTemplate};
+
+    /// Read a recorded fixture under tests/fixtures/<provider>/<name>.
+    pub(crate) fn fixture(provider: &str, name: &str) -> String {
         std::fs::read_to_string(format!(
-            "{}/tests/fixtures/anilist/{name}",
+            "{}/tests/fixtures/{provider}/{name}",
             env!("CARGO_MANIFEST_DIR")
         ))
-        .expect("anilist fixture file exists")
+        .unwrap_or_else(|error| panic!("{provider}/{name} fixture missing: {error}"))
     }
 
-    /// Read a recorded fixture under `tests/fixtures/tmdb/`.
-    pub(crate) fn tmdb_fixture(name: &str) -> String {
-        std::fs::read_to_string(format!(
-            "{}/tests/fixtures/tmdb/{name}",
-            env!("CARGO_MANIFEST_DIR")
-        ))
-        .expect("tmdb fixture file exists")
+    /// Mount a recorded fixture: GET route serves 200 + body.
+    pub(crate) async fn mount_get(server: &MockServer, route: &str, provider: &str, name: &str) {
+        Mock::given(method("GET"))
+            .and(path(route))
+            .respond_with(ResponseTemplate::new(200).set_body_string(fixture(provider, name)))
+            .mount(server)
+            .await;
     }
 
-    /// Read a recorded fixture under `tests/fixtures/mangadex/`.
-    pub(crate) fn mangadex_fixture(name: &str) -> String {
-        std::fs::read_to_string(format!(
-            "{}/tests/fixtures/mangadex/{name}",
-            env!("CARGO_MANIFEST_DIR")
-        ))
-        .expect("mangadex fixture file exists")
+    /// Mount a recorded fixture: POST route serves 200 + body.
+    pub(crate) async fn mount_post(server: &MockServer, route: &str, provider: &str, name: &str) {
+        Mock::given(method("POST"))
+            .and(path(route))
+            .respond_with(ResponseTemplate::new(200).set_body_string(fixture(provider, name)))
+            .mount(server)
+            .await;
     }
 
-    /// Read a recorded fixture under `tests/fixtures/openlibrary/`.
-    pub(crate) fn openlibrary_fixture(name: &str) -> String {
-        std::fs::read_to_string(format!(
-            "{}/tests/fixtures/openlibrary/{name}",
-            env!("CARGO_MANIFEST_DIR")
-        ))
-        .expect("openlibrary fixture file exists")
-    }
-
-    /// Read a recorded fixture under `tests/fixtures/jikan/`.
-    pub(crate) fn jikan_fixture(name: &str) -> String {
-        std::fs::read_to_string(format!(
-            "{}/tests/fixtures/jikan/{name}",
-            env!("CARGO_MANIFEST_DIR")
-        ))
-        .expect("jikan fixture file exists")
-    }
-
-    /// Read a recorded fixture under `tests/fixtures/googlebooks/`.
-    pub(crate) fn googlebooks_fixture(name: &str) -> String {
-        std::fs::read_to_string(format!(
-            "{}/tests/fixtures/googlebooks/{name}",
-            env!("CARGO_MANIFEST_DIR")
-        ))
-        .expect("googlebooks fixture file exists")
-    }
-
-    /// Read a fixture under `tests/fixtures/hardcover/` (hand-built from the
-    /// published GraphQL schema + Typesense search docs).
-    pub(crate) fn hardcover_fixture(name: &str) -> String {
-        std::fs::read_to_string(format!(
-            "{}/tests/fixtures/hardcover/{name}",
-            env!("CARGO_MANIFEST_DIR")
-        ))
-        .expect("hardcover fixture file exists")
-    }
-
-    /// Read a fixture under `tests/fixtures/novelupdates/` (hand-built from the
-    /// LNReader plugin's selectors — NU's Cloudflare layer blocks recording).
-    pub(crate) fn novelupdates_fixture(name: &str) -> String {
-        std::fs::read_to_string(format!(
-            "{}/tests/fixtures/novelupdates/{name}",
-            env!("CARGO_MANIFEST_DIR")
-        ))
-        .expect("novelupdates fixture file exists")
-    }
-
-    /// Read a fixture under `tests/fixtures/bangumi/` (hand-built from the
-    /// verified v0 API responses).
-    pub(crate) fn bangumi_fixture(name: &str) -> String {
-        std::fs::read_to_string(format!(
-            "{}/tests/fixtures/bangumi/{name}",
-            env!("CARGO_MANIFEST_DIR")
-        ))
-        .expect("bangumi fixture file exists")
+    /// Fixture integrity (MISSION-098): every committed recording must be
+    /// non-empty and parse as JSON when it carries the .json extension,
+    /// guarding offline CI against truncated or hand-edit-corrupted files.
+    #[test]
+    fn all_committed_fixtures_are_intact() {
+        let root = format!("{}/tests/fixtures", env!("CARGO_MANIFEST_DIR"));
+        let mut checked = 0;
+        for entry in std::fs::read_dir(&root).expect("fixtures dir") {
+            let provider_dir = entry.expect("provider dir").path();
+            if !provider_dir.is_dir() || provider_dir.file_name().expect("name") == "import" {
+                continue; // import fixtures are CSV/JSON inputs covered elsewhere
+            }
+            for file in std::fs::read_dir(&provider_dir).expect("provider fixtures") {
+                let path = file.expect("fixture file").path();
+                let body = std::fs::read_to_string(&path).expect("readable");
+                assert!(!body.trim().is_empty(), "{} is empty", path.display());
+                if path.extension().and_then(|e| e.to_str()) == Some("json") {
+                    serde_json::from_str::<serde_json::Value>(&body)
+                        .unwrap_or_else(|error| panic!("{} invalid JSON: {error}", path.display()));
+                }
+                checked += 1;
+            }
+        }
+        assert!(checked >= 20, "expected the full corpus, got {checked}");
     }
 }

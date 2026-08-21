@@ -132,7 +132,7 @@ mod tests {
 
     use super::*;
     use crate::application::providers::coordinator::ProviderCoordinator;
-    use crate::infrastructure::providers::test_support::googlebooks_fixture;
+    use crate::infrastructure::providers::test_support::fixture;
 
     const DUNE: &str = "l4YzAwAAQBAJ";
 
@@ -143,10 +143,10 @@ mod tests {
         ))
     }
 
-    async fn mount(server: &MockServer, route: &str, fixture: &str) {
+    async fn mount(server: &MockServer, route: &str, name: &str) {
         Mock::given(method("GET"))
             .and(path(route))
-            .respond_with(ResponseTemplate::new(200).set_body_string(googlebooks_fixture(fixture)))
+            .respond_with(ResponseTemplate::new(200).set_body_string(fixture("googlebooks", name)))
             .mount(server)
             .await;
     }
@@ -171,7 +171,7 @@ mod tests {
             .and(query_param("maxResults", "20"))
             .respond_with(
                 ResponseTemplate::new(200)
-                    .set_body_string(googlebooks_fixture("search_volumes.json")),
+                    .set_body_string(fixture("googlebooks", "search_volumes.json")),
             )
             .mount(&server)
             .await;

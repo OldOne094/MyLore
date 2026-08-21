@@ -457,6 +457,12 @@ Cancellation propagates to Tokio tasks and HTTP requests (drop-based cancellatio
 
 ## 9. Error handling
 
+- **Provider offline testing (MISSION-098):** recorded fixtures for all ten providers live under
+  `tests/fixtures/<provider>/` and every adapter test serves them through in-process wiremock
+  servers with injected base URLs — the provider suite never touches the real network. A shared
+  harness (`test_support::fixture` + `mount_get`/`mount_post`) replaces per-provider readers,
+  and a fixture-integrity test validates the whole corpus (non-empty, JSON parses).
+
 - **Domain errors** (`MediaNotFound`, `InvalidStatus`, `DuplicateConflict`) — typed enums in Rust.
 - **Infrastructure errors** (`DbError`, `IoError`, `BackupCorrupt`).
 - **Provider errors** (`RateLimited{retryAfter}`, `Timeout`, `ProviderDown`, `NotFound`,

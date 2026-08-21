@@ -383,16 +383,16 @@ fn relation_kind(relation: Option<&str>) -> MediaRelationKind {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::infrastructure::providers::test_support::bangumi_fixture;
+    use crate::infrastructure::providers::test_support::fixture;
 
     fn subject_fixture() -> Subject {
         let data: crate::infrastructure::providers::bangumi::response::Subject =
-            serde_json::from_str(&bangumi_fixture("subject_detail.json")).unwrap();
+            serde_json::from_str(&fixture("bangumi", "subject_detail.json")).unwrap();
         data
     }
 
     fn search_fixture() -> PagedEpisode {
-        serde_json::from_str(&bangumi_fixture("episodes.json")).unwrap()
+        serde_json::from_str(&fixture("bangumi", "episodes.json")).unwrap()
     }
 
     #[test]
@@ -436,7 +436,7 @@ mod tests {
     #[test]
     fn candidate_maps_search_row() {
         let data: super::super::response::PagedSubject =
-            serde_json::from_str(&bangumi_fixture("search_subjects.json")).unwrap();
+            serde_json::from_str(&fixture("bangumi", "search_subjects.json")).unwrap();
         let c = candidate(&data.data[0]).unwrap();
         assert_eq!(c.provider, "bangumi");
         assert_eq!(c.provider_id, "1902");
@@ -557,7 +557,7 @@ mod tests {
     #[test]
     fn relations_map_to_domain_kinds() {
         let data: Vec<RelatedSubject> =
-            serde_json::from_str(&bangumi_fixture("relations.json")).unwrap();
+            serde_json::from_str(&fixture("bangumi", "relations.json")).unwrap();
         let rels = relations(&data);
         assert_eq!(rels.len(), 3);
         assert_eq!(

@@ -269,18 +269,21 @@ fn push_into_volume(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::infrastructure::providers::test_support::novelupdates_fixture;
+    use crate::infrastructure::providers::test_support::fixture;
 
     fn search_row() -> SearchRow {
-        let page =
-            super::super::response::parse_search_rows(&novelupdates_fixture("search_series.html"));
+        let page = super::super::response::parse_search_rows(&fixture(
+            "novelupdates",
+            "search_series.html",
+        ));
         page.into_iter()
             .find(|r| r.slug == "dungeon-defender")
             .unwrap()
     }
 
     fn series_page() -> SeriesPage {
-        super::super::response::parse_series_page(&novelupdates_fixture(
+        super::super::response::parse_series_page(&fixture(
+            "novelupdates",
             "series_dungeon_defender.html",
         ))
         .expect("series page present")
@@ -391,7 +394,8 @@ mod tests {
 
     #[test]
     fn feed_builds_volume_and_loose_chapters_chronological() {
-        let page = super::super::response::parse_chapter_labels(&novelupdates_fixture(
+        let page = super::super::response::parse_chapter_labels(&fixture(
+            "novelupdates",
             "chapters_dungeon_defender.html",
         ));
         let tree = nodes(&page, "dungeon-defender");

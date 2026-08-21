@@ -223,11 +223,11 @@ mod tests {
     use serde_json::from_str;
 
     use super::*;
-    use crate::infrastructure::providers::test_support::hardcover_fixture;
+    use crate::infrastructure::providers::test_support::fixture;
 
     fn search_rows() -> Vec<SearchBook> {
         let envelope: super::super::response::Envelope<super::super::response::SearchPayload> =
-            from_str(&hardcover_fixture("search_books.json")).unwrap();
+            from_str(&fixture("hardcover", "search_books.json")).unwrap();
         let payload = envelope.data.unwrap();
         payload
             .search
@@ -239,7 +239,7 @@ mod tests {
 
     fn dune_book() -> Book {
         let envelope: super::super::response::Envelope<super::super::response::BooksData> =
-            from_str(&hardcover_fixture("book_details.json")).unwrap();
+            from_str(&fixture("hardcover", "book_details.json")).unwrap();
         let data = envelope.data.unwrap();
         data.books[0].clone()
     }

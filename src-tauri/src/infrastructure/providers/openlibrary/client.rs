@@ -104,7 +104,7 @@ mod tests {
     use wiremock::{Mock, MockServer, ResponseTemplate};
 
     use super::*;
-    use crate::infrastructure::providers::test_support::openlibrary_fixture;
+    use crate::infrastructure::providers::test_support::fixture;
 
     fn client_with(server: &MockServer) -> OpenLibraryClient {
         let http = reqwest::Client::builder()
@@ -124,7 +124,7 @@ mod tests {
             .and(header("user-agent", APP_USER_AGENT))
             .respond_with(
                 ResponseTemplate::new(200)
-                    .set_body_string(openlibrary_fixture("search_books.json")),
+                    .set_body_string(fixture("openlibrary", "search_books.json")),
             )
             .mount(&server)
             .await;

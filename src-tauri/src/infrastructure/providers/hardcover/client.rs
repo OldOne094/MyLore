@@ -137,7 +137,7 @@ mod tests {
 
     use super::*;
     use crate::infrastructure::providers::hardcover::graphql;
-    use crate::infrastructure::providers::test_support::hardcover_fixture;
+    use crate::infrastructure::providers::test_support::fixture;
 
     #[tokio::test]
     async fn posts_query_and_sends_bearer_token() {
@@ -153,7 +153,8 @@ mod tests {
                 json!({ "variables": { "query": "dune" } }),
             ))
             .respond_with(
-                ResponseTemplate::new(200).set_body_string(hardcover_fixture("search_books.json")),
+                ResponseTemplate::new(200)
+                    .set_body_string(fixture("hardcover", "search_books.json")),
             )
             .mount(&server)
             .await;
@@ -173,7 +174,8 @@ mod tests {
         Mock::given(method("POST"))
             .and(path("/"))
             .respond_with(
-                ResponseTemplate::new(200).set_body_string(hardcover_fixture("search_books.json")),
+                ResponseTemplate::new(200)
+                    .set_body_string(fixture("hardcover", "search_books.json")),
             )
             .mount(&server)
             .await;

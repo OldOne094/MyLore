@@ -366,15 +366,15 @@ fn map_staff_role(role: Option<&str>) -> Option<PersonRole> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::infrastructure::providers::test_support::anilist_fixture;
+    use crate::infrastructure::providers::test_support::fixture;
 
-    fn parse<T: serde::de::DeserializeOwned>(fixture: &str) -> T {
-        serde_json::from_str(&anilist_fixture(fixture)).expect("fixture parses")
+    fn parse<T: serde::de::DeserializeOwned>(name: &str) -> T {
+        serde_json::from_str(&fixture("anilist", name)).expect("fixture parses")
     }
 
-    fn details(fixture: &str) -> MediaFull {
+    fn details(name: &str) -> MediaFull {
         let data: super::super::response::Envelope<super::super::response::DetailsData> =
-            parse(fixture);
+            parse(name);
         data.data.and_then(|d| d.media).expect("media present")
     }
 

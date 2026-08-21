@@ -177,12 +177,12 @@ mod tests {
     use serde_json::from_str;
 
     use super::*;
-    use crate::infrastructure::providers::test_support::googlebooks_fixture;
+    use crate::infrastructure::providers::test_support::fixture;
 
     #[test]
     fn candidate_maps_search_row() {
         let data: super::super::response::VolumesResponse =
-            from_str(&googlebooks_fixture("search_volumes.json")).unwrap();
+            from_str(&fixture("googlebooks", "search_volumes.json")).unwrap();
         let c = candidate(data.items.first().unwrap()).unwrap();
         assert_eq!(c.provider, "googlebooks");
         assert_eq!(c.provider_id, "l4YzAwAAQBAJ");
@@ -199,7 +199,7 @@ mod tests {
     #[test]
     fn candidate_drops_volumes_without_id_or_title() {
         let data: super::super::response::VolumesResponse =
-            from_str(&googlebooks_fixture("search_volumes.json")).unwrap();
+            from_str(&fixture("googlebooks", "search_volumes.json")).unwrap();
         let mut v = data.items[0].clone();
         v.volume_info.as_mut().unwrap().title = None;
         assert!(candidate(&v).is_none());
@@ -218,7 +218,7 @@ mod tests {
     #[test]
     fn media_maps_volume() {
         let data: super::super::response::VolumesResponse =
-            from_str(&googlebooks_fixture("search_volumes.json")).unwrap();
+            from_str(&fixture("googlebooks", "search_volumes.json")).unwrap();
         let m = media(data.items.first().unwrap()).unwrap();
         assert_eq!(m.provider_id, "l4YzAwAAQBAJ");
         assert_eq!(m.title_main, "Dune");

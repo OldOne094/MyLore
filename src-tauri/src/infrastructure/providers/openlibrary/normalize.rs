@@ -194,11 +194,11 @@ mod tests {
     use serde_json::from_str;
 
     use super::*;
-    use crate::infrastructure::providers::test_support::openlibrary_fixture;
+    use crate::infrastructure::providers::test_support::fixture;
 
     fn search_doc() -> SearchDoc {
         let data: super::super::response::SearchResponse =
-            from_str(&openlibrary_fixture("search_books.json")).unwrap();
+            from_str(&fixture("openlibrary", "search_books.json")).unwrap();
         data.docs.first().unwrap().clone()
     }
 
@@ -244,7 +244,7 @@ mod tests {
 
     #[test]
     fn media_maps_work_and_authors() {
-        let work: WorkResponse = from_str(&openlibrary_fixture("work.json")).unwrap();
+        let work: WorkResponse = from_str(&fixture("openlibrary", "work.json")).unwrap();
         let m = media(&work, authors(&["Frank Herbert".into()]));
         assert_eq!(m.provider_id, "OL89650W");
         assert_eq!(m.title_main, "Dune");

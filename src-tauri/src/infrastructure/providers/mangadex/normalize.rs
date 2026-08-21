@@ -369,10 +369,10 @@ fn push_external(out: &mut Vec<ExternalId>, provider: &str, value: &str, url: Op
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::infrastructure::providers::test_support::mangadex_fixture;
+    use crate::infrastructure::providers::test_support::fixture;
 
-    fn parse<T: serde::de::DeserializeOwned>(fixture: &str) -> T {
-        serde_json::from_str(&mangadex_fixture(fixture)).expect("fixture parses")
+    fn parse<T: serde::de::DeserializeOwned>(name: &str) -> T {
+        serde_json::from_str(&fixture("mangadex", name)).expect("fixture parses")
     }
 
     fn berserk() -> Manga {

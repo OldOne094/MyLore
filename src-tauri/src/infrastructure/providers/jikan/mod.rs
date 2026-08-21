@@ -162,7 +162,7 @@ mod tests {
 
     use super::*;
     use crate::application::providers::coordinator::ProviderCoordinator;
-    use crate::infrastructure::providers::test_support::jikan_fixture;
+    use crate::infrastructure::providers::test_support::fixture;
 
     const HUNTER: &str = "11061";
 
@@ -173,10 +173,10 @@ mod tests {
         ))
     }
 
-    async fn mount(server: &MockServer, route: &str, fixture: &str) {
+    async fn mount(server: &MockServer, route: &str, name: &str) {
         Mock::given(method("GET"))
             .and(path(route))
-            .respond_with(ResponseTemplate::new(200).set_body_string(jikan_fixture(fixture)))
+            .respond_with(ResponseTemplate::new(200).set_body_string(fixture("jikan", name)))
             .mount(server)
             .await;
     }
@@ -198,7 +198,7 @@ mod tests {
             .and(path("/anime"))
             .and(query_param("q", "movie-title"))
             .respond_with(
-                ResponseTemplate::new(200).set_body_string(jikan_fixture("search_anime.json")),
+                ResponseTemplate::new(200).set_body_string(fixture("jikan", "search_anime.json")),
             )
             .mount(&server)
             .await;

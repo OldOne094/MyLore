@@ -105,7 +105,7 @@ mod tests {
     use wiremock::{Mock, MockServer, ResponseTemplate};
 
     use super::*;
-    use crate::infrastructure::providers::test_support::mangadex_fixture;
+    use crate::infrastructure::providers::test_support::fixture;
 
     fn client_with(server: &MockServer) -> MangaDexClient {
         MangaDexClient::with_endpoint(reqwest::Client::new(), server.uri())
@@ -119,7 +119,8 @@ mod tests {
             .and(query_param("title", "berserk"))
             .and(query_param("contentRating[]", "safe"))
             .respond_with(
-                ResponseTemplate::new(200).set_body_string(mangadex_fixture("search_manga.json")),
+                ResponseTemplate::new(200)
+                    .set_body_string(fixture("mangadex", "search_manga.json")),
             )
             .mount(&server)
             .await;

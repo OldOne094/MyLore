@@ -207,7 +207,7 @@ mod tests {
 
     use super::*;
     use crate::application::providers::coordinator::ProviderCoordinator;
-    use crate::infrastructure::providers::test_support::tmdb_fixture;
+    use crate::infrastructure::providers::test_support::fixture;
 
     fn provider_with(server: &MockServer) -> TmdbProvider {
         let client = TmdbClient::with_endpoint(reqwest::Client::new(), server.uri())
@@ -215,10 +215,10 @@ mod tests {
         TmdbProvider::new(client)
     }
 
-    async fn mount(server: &MockServer, route: &str, fixture: &str) {
+    async fn mount(server: &MockServer, route: &str, name: &str) {
         Mock::given(method("GET"))
             .and(path(route))
-            .respond_with(ResponseTemplate::new(200).set_body_string(tmdb_fixture(fixture)))
+            .respond_with(ResponseTemplate::new(200).set_body_string(fixture("tmdb", name)))
             .mount(server)
             .await;
     }

@@ -129,7 +129,7 @@ mod tests {
 
     use super::*;
     use crate::infrastructure::providers::anilist::graphql;
-    use crate::infrastructure::providers::test_support::anilist_fixture;
+    use crate::infrastructure::providers::test_support::fixture;
 
     #[tokio::test]
     async fn posts_query_and_variables_and_parses_data() {
@@ -143,7 +143,7 @@ mod tests {
                 json!({ "variables": { "q": "bebop", "type": null } }),
             ))
             .respond_with(
-                ResponseTemplate::new(200).set_body_string(anilist_fixture("search_anime.json")),
+                ResponseTemplate::new(200).set_body_string(fixture("anilist", "search_anime.json")),
             )
             .mount(&server)
             .await;

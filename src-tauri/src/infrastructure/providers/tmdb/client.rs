@@ -115,7 +115,7 @@ mod tests {
     use wiremock::{Mock, MockServer, ResponseTemplate};
 
     use super::*;
-    use crate::infrastructure::providers::test_support::tmdb_fixture;
+    use crate::infrastructure::providers::test_support::fixture;
 
     fn client_with(server: &MockServer) -> TmdbClient {
         TmdbClient::with_endpoint(reqwest::Client::new(), server.uri()).with_api_key("test-key")
@@ -128,7 +128,8 @@ mod tests {
             .and(path("/movie/603/external_ids"))
             .and(query_param("api_key", "test-key"))
             .respond_with(
-                ResponseTemplate::new(200).set_body_string(tmdb_fixture("external_ids_movie.json")),
+                ResponseTemplate::new(200)
+                    .set_body_string(fixture("tmdb", "external_ids_movie.json")),
             )
             .mount(&server)
             .await;

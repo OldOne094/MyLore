@@ -163,7 +163,7 @@ mod tests {
     use super::*;
     use crate::application::providers::coordinator::ProviderCoordinator;
     use crate::domain::enums::{MediaRelationKind, NodeKind};
-    use crate::infrastructure::providers::test_support::bangumi_fixture;
+    use crate::infrastructure::providers::test_support::fixture;
 
     const SANGATSU: &str = "211567";
 
@@ -174,10 +174,10 @@ mod tests {
         ))
     }
 
-    async fn mount(server: &MockServer, route: &str, fixture: &str) {
+    async fn mount(server: &MockServer, route: &str, name: &str) {
         Mock::given(method("GET"))
             .and(path(route))
-            .respond_with(ResponseTemplate::new(200).set_body_string(bangumi_fixture(fixture)))
+            .respond_with(ResponseTemplate::new(200).set_body_string(fixture("bangumi", name)))
             .mount(server)
             .await;
     }
@@ -188,7 +188,8 @@ mod tests {
         Mock::given(method("POST"))
             .and(path("/v0/search/subjects"))
             .respond_with(
-                ResponseTemplate::new(200).set_body_string(bangumi_fixture("search_subjects.json")),
+                ResponseTemplate::new(200)
+                    .set_body_string(fixture("bangumi", "search_subjects.json")),
             )
             .mount(&server)
             .await;
@@ -206,7 +207,8 @@ mod tests {
         Mock::given(method("POST"))
             .and(path("/v0/search/subjects"))
             .respond_with(
-                ResponseTemplate::new(200).set_body_string(bangumi_fixture("search_subjects.json")),
+                ResponseTemplate::new(200)
+                    .set_body_string(fixture("bangumi", "search_subjects.json")),
             )
             .mount(&server)
             .await;
@@ -270,7 +272,7 @@ mod tests {
             .and(path("/v0/episodes"))
             .and(query_param("subject_id", SANGATSU))
             .respond_with(
-                ResponseTemplate::new(200).set_body_string(bangumi_fixture("episodes.json")),
+                ResponseTemplate::new(200).set_body_string(fixture("bangumi", "episodes.json")),
             )
             .mount(&server)
             .await;
@@ -306,7 +308,8 @@ mod tests {
         Mock::given(method("POST"))
             .and(path("/v0/search/subjects"))
             .respond_with(
-                ResponseTemplate::new(200).set_body_string(bangumi_fixture("search_subjects.json")),
+                ResponseTemplate::new(200)
+                    .set_body_string(fixture("bangumi", "search_subjects.json")),
             )
             .mount(&server)
             .await;

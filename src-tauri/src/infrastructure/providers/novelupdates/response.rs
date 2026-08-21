@@ -194,11 +194,11 @@ pub(crate) fn is_captcha_page(html: &str) -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::infrastructure::providers::test_support::novelupdates_fixture;
+    use crate::infrastructure::providers::test_support::fixture;
 
     #[test]
     fn search_rows_parse_into_rows() {
-        let rows = parse_search_rows(&novelupdates_fixture("search_series.html"));
+        let rows = parse_search_rows(&fixture("novelupdates", "search_series.html"));
         assert_eq!(rows.len(), 2);
         assert_eq!(rows[0].title, "Dungeon Defender");
         assert_eq!(rows[0].slug, "dungeon-defender");
@@ -213,7 +213,7 @@ mod tests {
 
     #[test]
     fn series_page_parses_all_fields() {
-        let page = parse_series_page(&novelupdates_fixture("series_dungeon_defender.html"))
+        let page = parse_series_page(&fixture("novelupdates", "series_dungeon_defender.html"))
             .expect("series page present");
         assert_eq!(page.title, "Dungeon Defender");
         assert!(page
@@ -237,7 +237,8 @@ mod tests {
 
     #[test]
     fn chapter_labels_newest_first() {
-        let labels = parse_chapter_labels(&novelupdates_fixture("chapters_dungeon_defender.html"));
+        let labels =
+            parse_chapter_labels(&fixture("novelupdates", "chapters_dungeon_defender.html"));
         assert_eq!(labels.len(), 4);
         assert_eq!(labels[0], "v1c4part3", "newest first as served");
         assert_eq!(labels[1], "v1c4part2");
@@ -250,8 +251,9 @@ mod tests {
         assert!(is_captcha_page(
             "<html><head><title>Just a moment...</title></head></html>"
         ));
-        assert!(is_captcha_page(&novelupdates_fixture("captcha.html")));
-        assert!(!is_captcha_page(&novelupdates_fixture(
+        assert!(is_captcha_page(&fixture("novelupdates", "captcha.html")));
+        assert!(!is_captcha_page(&fixture(
+            "novelupdates",
             "search_series.html"
         )));
     }

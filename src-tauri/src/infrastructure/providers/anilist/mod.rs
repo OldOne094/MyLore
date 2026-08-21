@@ -160,12 +160,12 @@ mod tests {
 
     use super::*;
     use crate::application::providers::coordinator::ProviderCoordinator;
-    use crate::infrastructure::providers::test_support::anilist_fixture;
+    use crate::infrastructure::providers::test_support::fixture;
 
-    async fn provider_with_fixture(server: &MockServer, fixture: &str) -> AniListProvider {
+    async fn provider_with_fixture(server: &MockServer, name: &str) -> AniListProvider {
         Mock::given(method("POST"))
             .and(path("/"))
-            .respond_with(ResponseTemplate::new(200).set_body_string(anilist_fixture(fixture)))
+            .respond_with(ResponseTemplate::new(200).set_body_string(fixture("anilist", name)))
             .mount(server)
             .await;
         let client = AniListClient::with_endpoint(reqwest::Client::new(), server.uri());

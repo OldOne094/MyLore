@@ -160,7 +160,7 @@ mod tests {
 
     use super::*;
     use crate::application::providers::coordinator::ProviderCoordinator;
-    use crate::infrastructure::providers::test_support::hardcover_fixture;
+    use crate::infrastructure::providers::test_support::fixture;
 
     const DUNE: &str = "3342";
 
@@ -171,11 +171,11 @@ mod tests {
         ))
     }
 
-    async fn mount(server: &MockServer, query: &str, fixture: &str) {
+    async fn mount(server: &MockServer, query: &str, name: &str) {
         Mock::given(method("POST"))
             .and(path("/"))
             .and(body_partial_json(json!({ "query": query })))
-            .respond_with(ResponseTemplate::new(200).set_body_string(hardcover_fixture(fixture)))
+            .respond_with(ResponseTemplate::new(200).set_body_string(fixture("hardcover", name)))
             .mount(server)
             .await;
     }
@@ -201,7 +201,8 @@ mod tests {
                 json!({ "variables": { "query": "dune" } }),
             ))
             .respond_with(
-                ResponseTemplate::new(200).set_body_string(hardcover_fixture("search_books.json")),
+                ResponseTemplate::new(200)
+                    .set_body_string(fixture("hardcover", "search_books.json")),
             )
             .mount(&server)
             .await;

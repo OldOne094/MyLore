@@ -184,7 +184,7 @@ mod tests {
 
     use super::*;
     use crate::application::providers::coordinator::ProviderCoordinator;
-    use crate::infrastructure::providers::test_support::openlibrary_fixture;
+    use crate::infrastructure::providers::test_support::fixture;
 
     const DUNE: &str = "OL89650W";
 
@@ -195,10 +195,10 @@ mod tests {
         ))
     }
 
-    async fn mount(server: &MockServer, route: &str, fixture: &str) {
+    async fn mount(server: &MockServer, route: &str, name: &str) {
         Mock::given(method("GET"))
             .and(path(route))
-            .respond_with(ResponseTemplate::new(200).set_body_string(openlibrary_fixture(fixture)))
+            .respond_with(ResponseTemplate::new(200).set_body_string(fixture("openlibrary", name)))
             .mount(server)
             .await;
     }
@@ -226,7 +226,7 @@ mod tests {
             .and(query_param("limit", "20"))
             .respond_with(
                 ResponseTemplate::new(200)
-                    .set_body_string(openlibrary_fixture("search_books.json")),
+                    .set_body_string(fixture("openlibrary", "search_books.json")),
             )
             .mount(&server)
             .await;

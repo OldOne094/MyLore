@@ -166,7 +166,7 @@ mod tests {
     use wiremock::{Mock, MockServer, ResponseTemplate};
 
     use super::*;
-    use crate::infrastructure::providers::test_support::bangumi_fixture;
+    use crate::infrastructure::providers::test_support::fixture;
 
     fn client_with(server: &MockServer) -> BangumiClient {
         let http = reqwest::Client::builder()
@@ -187,7 +187,8 @@ mod tests {
             .and(body_partial_json(json!({ "filter": { "type": [1, 2] } })))
             .and(body_partial_json(json!({ "sort": "match" })))
             .respond_with(
-                ResponseTemplate::new(200).set_body_string(bangumi_fixture("search_subjects.json")),
+                ResponseTemplate::new(200)
+                    .set_body_string(fixture("bangumi", "search_subjects.json")),
             )
             .mount(&server)
             .await;
@@ -206,7 +207,8 @@ mod tests {
         Mock::given(method("GET"))
             .and(path("/v0/subjects/211567"))
             .respond_with(
-                ResponseTemplate::new(200).set_body_string(bangumi_fixture("subject_detail.json")),
+                ResponseTemplate::new(200)
+                    .set_body_string(fixture("bangumi", "subject_detail.json")),
             )
             .mount(&server)
             .await;
@@ -223,7 +225,7 @@ mod tests {
             .and(path("/v0/episodes"))
             .and(query_param("subject_id", "211567"))
             .respond_with(
-                ResponseTemplate::new(200).set_body_string(bangumi_fixture("episodes.json")),
+                ResponseTemplate::new(200).set_body_string(fixture("bangumi", "episodes.json")),
             )
             .mount(&server)
             .await;
@@ -242,7 +244,7 @@ mod tests {
         Mock::given(method("GET"))
             .and(path("/v0/subjects/211567/subjects"))
             .respond_with(
-                ResponseTemplate::new(200).set_body_string(bangumi_fixture("relations.json")),
+                ResponseTemplate::new(200).set_body_string(fixture("bangumi", "relations.json")),
             )
             .mount(&server)
             .await;

@@ -115,7 +115,7 @@ mod tests {
     use wiremock::{Mock, MockServer, ResponseTemplate};
 
     use super::*;
-    use crate::infrastructure::providers::test_support::googlebooks_fixture;
+    use crate::infrastructure::providers::test_support::fixture;
 
     fn client_with(server: &MockServer) -> GoogleBooksClient {
         GoogleBooksClient::with_endpoint(reqwest::Client::new(), server.uri())
@@ -132,7 +132,7 @@ mod tests {
             .and(query_param("key", "test-key"))
             .respond_with(
                 ResponseTemplate::new(200)
-                    .set_body_string(googlebooks_fixture("search_volumes.json")),
+                    .set_body_string(fixture("googlebooks", "search_volumes.json")),
             )
             .mount(&server)
             .await;

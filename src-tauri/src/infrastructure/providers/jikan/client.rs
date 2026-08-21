@@ -102,7 +102,7 @@ mod tests {
     use wiremock::{Mock, MockServer, ResponseTemplate};
 
     use super::*;
-    use crate::infrastructure::providers::test_support::jikan_fixture;
+    use crate::infrastructure::providers::test_support::fixture;
 
     fn client_with(server: &MockServer) -> JikanClient {
         JikanClient::with_endpoint(reqwest::Client::new(), server.uri())
@@ -116,7 +116,7 @@ mod tests {
             .and(query_param("q", "hxh"))
             .and(query_param("limit", "20"))
             .respond_with(
-                ResponseTemplate::new(200).set_body_string(jikan_fixture("search_anime.json")),
+                ResponseTemplate::new(200).set_body_string(fixture("jikan", "search_anime.json")),
             )
             .mount(&server)
             .await;

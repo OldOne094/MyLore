@@ -162,7 +162,7 @@ mod tests {
 
     use super::*;
     use crate::application::providers::coordinator::ProviderCoordinator;
-    use crate::infrastructure::providers::test_support::novelupdates_fixture;
+    use crate::infrastructure::providers::test_support::fixture;
 
     const DUNGEON_DEFENDER: &str = "dungeon-defender";
 
@@ -173,10 +173,10 @@ mod tests {
         ))
     }
 
-    async fn mount(server: &MockServer, route: &str, fixture: &str) {
+    async fn mount(server: &MockServer, route: &str, name: &str) {
         Mock::given(method("GET"))
             .and(path(route))
-            .respond_with(ResponseTemplate::new(200).set_body_string(novelupdates_fixture(fixture)))
+            .respond_with(ResponseTemplate::new(200).set_body_string(fixture("novelupdates", name)))
             .mount(server)
             .await;
     }
@@ -207,7 +207,7 @@ mod tests {
             .and(query_param("pg", "1"))
             .respond_with(
                 ResponseTemplate::new(200)
-                    .set_body_string(novelupdates_fixture("search_series.html")),
+                    .set_body_string(fixture("novelupdates", "search_series.html")),
             )
             .mount(&server)
             .await;
@@ -285,7 +285,7 @@ mod tests {
             ))
             .respond_with(
                 ResponseTemplate::new(200)
-                    .set_body_string(novelupdates_fixture("chapters_dungeon_defender.html")),
+                    .set_body_string(fixture("novelupdates", "chapters_dungeon_defender.html")),
             )
             .mount(&server)
             .await;

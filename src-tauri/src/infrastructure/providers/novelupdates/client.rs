@@ -135,7 +135,7 @@ mod tests {
     use wiremock::{Mock, MockServer, ResponseTemplate};
 
     use super::*;
-    use crate::infrastructure::providers::test_support::novelupdates_fixture;
+    use crate::infrastructure::providers::test_support::fixture;
 
     fn client_with(server: &MockServer) -> NovelUpdatesClient {
         let http = reqwest::Client::builder()
@@ -154,7 +154,7 @@ mod tests {
             .and(header("user-agent", APP_USER_AGENT))
             .respond_with(
                 ResponseTemplate::new(200)
-                    .set_body_string(novelupdates_fixture("search_series.html")),
+                    .set_body_string(fixture("novelupdates", "search_series.html")),
             )
             .mount(&server)
             .await;
@@ -174,7 +174,7 @@ mod tests {
             .and(body_string("action=nd_getchapters&mygrr=0&mypostid=42817"))
             .respond_with(
                 ResponseTemplate::new(200)
-                    .set_body_string(novelupdates_fixture("chapters_dungeon_defender.html")),
+                    .set_body_string(fixture("novelupdates", "chapters_dungeon_defender.html")),
             )
             .mount(&server)
             .await;
@@ -199,7 +199,7 @@ mod tests {
         Mock::given(method("GET"))
             .and(path("/series-finder/"))
             .respond_with(
-                ResponseTemplate::new(200).set_body_string(novelupdates_fixture("captcha.html")),
+                ResponseTemplate::new(200).set_body_string(fixture("novelupdates", "captcha.html")),
             )
             .mount(&server)
             .await;
