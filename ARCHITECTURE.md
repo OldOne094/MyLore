@@ -429,6 +429,14 @@ shells keep rendering.
 
 ## 8. Background tasks
 
+- **E2E (MISSION-097):** Playwright drives the real renderer over the Vite dev server in the
+  installed Edge channel; the Tauri IPC boundary is stubbed pre-boot
+  (`window.__TAURI_INTERNALS__` shim with per-command fixtures, invocation recording, and faked
+  event/store/dialog plugins). Five user flows — add, search, track, import, backup/restore —
+  run deterministically and offline. The suite doubles as a UI-defect detector: its first run
+  surfaced the undefined-task-id cache collision, a latched "Backing up…" button and
+  unscrollable dialogs, all fixed.
+
 Unified `TaskManager` (**implemented**): every long operation (import, export, metadata sync, image
 download, backup, migration, provider search) is a cancelable task with states
 `queued → running(p) → success|failed|cancelled`, progress events to the UI, and a typed result.

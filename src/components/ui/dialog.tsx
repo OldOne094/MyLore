@@ -33,6 +33,7 @@ export function DialogContent({
       <DialogPrimitive.Content
         className={cn(
           "fixed left-1/2 top-1/2 z-50 w-[calc(100%-2rem)] max-w-lg",
+          "max-h-[85vh] overflow-y-auto",
           "translate-x-[-50%] translate-y-[-50%]",
           "rounded-lg border border-border-subtle bg-bg-raised shadow-lg",
           !noPadding && "p-6",

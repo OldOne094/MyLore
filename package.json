@@ -16,6 +16,7 @@
     "codegen:check": "node scripts/codegen-ipc.mjs --check",
     "test": "vitest run",
     "test:watch": "vitest",
+    "e2e": "playwright test",
     "prepare": "husky",
     "lint-staged": "lint-staged"
   },
@@ -54,6 +55,7 @@
   },
   "devDependencies": {
     "@eslint/js": "^10.0.1",
+    "@playwright/test": "^1.62.1",
     "@tauri-apps/cli": "^2",
     "@testing-library/jest-dom": "^7.0.1",
     "@testing-library/react": "^16.3.2",

@@ -70,12 +70,25 @@ export function BackupsSection() {
 
   const prefs = prefsQuery.data;
   const entries = listQuery.data ?? [];
-  const creating = createTaskId !== null && createTask?.state !== "failed";
+  const creating =
+    createTaskId !== null &&
+    createTask !== undefined &&
+    createTask.state !== "success" &&
+    createTask.state !== "failed" &&
+    createTask.state !== "cancelled";
 
   const runCreate = () => {
     if (creating) return;
     createBackup.mutate(undefined, {
-      onSuccess: (snapshot) => setCreateTaskId(snapshot.id),
+      onSuccess: (snapshot) => {
+        // A missing id means the spawn failed server-side; surface it rather
+        // than silently polling a dead task.
+        if (!snapshot.id) {
+          toast.error({ title: t("settings.backupsCreateFailed") });
+          return;
+        }
+        setCreateTaskId(snapshot.id);
+      },
       onError: () => toast.error({ title: t("settings.backupsCreateFailed") }),
     });
   };

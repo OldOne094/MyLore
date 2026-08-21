@@ -51,7 +51,9 @@ export function useTask(taskId: string | null, options: UseTaskOptions = {}) {
   return useQuery({
     queryKey: queryKeys.task.detail(taskId ?? ""),
     queryFn: () => task_get({ id: taskId! }),
-    enabled: taskId !== null,
+    // `!=` catches both null and undefined — an undefined id must never hit
+    // the wire and must never collide on the empty-key cache slot.
+    enabled: taskId != null,
   });
 }
 
