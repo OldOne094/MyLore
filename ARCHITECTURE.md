@@ -436,6 +436,12 @@ shells keep rendering.
   run deterministically and offline. The suite doubles as a UI-defect detector: its first run
   surfaced the undefined-task-id cache collision, a latched "Backing up…" button and
   unscrollable dialogs, all fixed.
+- **Release pipeline (MISSION-099/100):** versions are single-sourced by
+  `scripts/release.mjs` (package.json / tauri.conf.json / Cargo.toml; `check` is a CI gate).
+  Tagging `v*` runs `.github/workflows/release.yml`: a three-platform matrix builds installers
+  via tauri-action into a draft GitHub Release (prerelease on pre-release tags); Windows/macOS
+  signing steps activate only when their secrets are provisioned. Release stages and their
+  gates live in `MILESTONE-REPORT.md` (Alpha reached at 0.1.0-alpha.1).
 
 Unified `TaskManager` (**implemented**): every long operation (import, export, metadata sync, image
 download, backup, migration, provider search) is a cancelable task with states
