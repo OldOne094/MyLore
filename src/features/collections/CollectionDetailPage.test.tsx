@@ -138,6 +138,16 @@ afterEach(async () => {
 });
 
 describe("CollectionDetailPage", () => {
+  it("surfaces an error state when the collection fails to load (MISSION-091)", async () => {
+    vi.mocked(invoke).mockImplementation((command: string) => {
+      if (command === "collection_list") return Promise.reject(new Error("boom"));
+      return Promise.resolve([]);
+    });
+    renderPage();
+
+    expect(await screen.findByText("Couldn't load your collections")).toBeInTheDocument();
+  });
+
   it("renders the collection with its members in order", async () => {
     mockDetail();
     renderPage();

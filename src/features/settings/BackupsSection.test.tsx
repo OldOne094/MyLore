@@ -115,6 +115,17 @@ afterEach(async () => {
 });
 
 describe("BackupsSection", () => {
+  it("shows a calm empty state when no archives exist (MISSION-091)", async () => {
+    vi.mocked(invoke).mockImplementation(async (cmd: string) => {
+      if (cmd === "backup_list") return [];
+      if (cmd === "backup_prefs_get") return PREFS;
+      throw new Error(`unexpected command ${cmd}`);
+    });
+    renderSection();
+
+    expect(await screen.findByText("No backups yet.")).toBeInTheDocument();
+  });
+
   it("lists archives newest first with date and size", async () => {
     renderSection();
 

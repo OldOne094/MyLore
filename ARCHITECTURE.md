@@ -456,6 +456,10 @@ Cancellation propagates to Tokio tasks and HTTP requests (drop-based cancellatio
 - Commands return `Result<T, AppError>`; the TS wrapper maps `AppError` to typed JS errors with
   user-facing messages + codes. No empty `catch {}` anywhere (spec §42).
 - UI error surfaces: inline field errors, toast for transient, dedicated retry/empty states.
+- **States audit (MISSION-091):** every data surface implements the full set — loading skeleton
+  (`role="status"`), calm empty state, error with retry — verified across all 18 surfaces and
+  pinned by tests (search retry-recovery, collection-detail error, calendar skeleton,
+  backups-empty). New data surfaces must ship all four states plus their tests.
 
 ## 10. Logging
 

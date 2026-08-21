@@ -91,6 +91,33 @@ afterEach(async () => {
 });
 
 describe("CalendarPage", () => {
+  it("renders a loading skeleton while the month is in flight (MISSION-091)", async () => {
+    let resolveMonth: ((value: CalendarMonth) => void) | undefined;
+    vi.mocked(invoke).mockImplementation(
+      () =>
+        new Promise<CalendarMonth>((resolve) => {
+          resolveMonth = resolve;
+        }),
+    );
+    render(
+      <QueryClientProvider
+        client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}
+      >
+        <MemoryRouter initialEntries={["/calendar"]}>
+          <Routes>
+            <Route path="/calendar" element={<CalendarPage />} />
+          </Routes>
+        </MemoryRouter>
+      </QueryClientProvider>,
+    );
+
+    expect(screen.getByRole("status")).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "1" })).not.toBeInTheDocument();
+
+    resolveMonth?.(monthData(2026, 8));
+    expect(await screen.findByRole("button", { name: "1" })).toBeInTheDocument();
+  });
+
   it("renders the month grid with localized weekday headers", async () => {
     wrap();
     expect(await screen.findByRole("button", { name: "1" })).toBeInTheDocument();

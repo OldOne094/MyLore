@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { render, screen } from "@testing-library/react";
+import { fireEvent, render, screen } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { MemoryRouter, Route, Routes } from "react-router";
 import { ToastProvider } from "@/components/ui";
@@ -96,5 +96,15 @@ describe("SearchPage", () => {
       "href",
       "/library/m-2",
     );
+  });
+
+  it("surfaces an error with retry when the search fails (MISSION-091)", async () => {
+    vi.mocked(invoke).mockRejectedValue(new Error("boom"));
+    renderPage("steins");
+
+    expect(await screen.findByText("Couldn't search")).toBeInTheDocument();
+    vi.mocked(invoke).mockResolvedValue([ROWS[0]]);
+    fireEvent.click(screen.getByRole("button", { name: "Retry" }));
+    expect(await screen.findByRole("link", { name: "Steins;Gate" })).toBeInTheDocument();
   });
 });
