@@ -68,6 +68,38 @@ pub async fn migrate(pool: &SqlitePool) -> Result<(), AppError> {
     Ok(())
 }
 
+/// How many embedded migrations have not been applied to the database at
+/// `db_path` yet (MISSION-087 pre-migration backup hook). A missing database
+/// file or a fresh schema without `_sqlx_migrations` counts as zero pending —
+/// there is no old data to protect on a first run.
+pub async fn pending_migrations(db_path: &Path) -> Result<u32, AppError> {
+    if !db_path.exists() {
+        return Ok(0);
+    }
+    let pool = connect(db_path).await?;
+    let result = async {
+        let (has_bookkeeping,): (i64,) = sqlx::query_as(
+            "SELECT COUNT(*) FROM sqlite_master WHERE type = 'table' AND name = '_sqlx_migrations'",
+        )
+        .fetch_one(&pool)
+        .await?;
+        if has_bookkeeping == 0 {
+            return Ok(0);
+        }
+        let applied: Vec<(i64,)> = sqlx::query_as("SELECT version FROM _sqlx_migrations")
+            .fetch_all(&pool)
+            .await?;
+        let pending = MIGRATOR
+            .iter()
+            .filter(|migration| !applied.contains(&(migration.version,)))
+            .count();
+        Ok(pending as u32)
+    }
+    .await;
+    pool.close().await;
+    result
+}
+
 /// Open the database, verify integrity and apply migrations — the startup
 /// entry point.
 pub async fn init(db_path: &Path) -> Result<SqlitePool, AppError> {
@@ -195,6 +227,41 @@ mod tests {
             );
             pool.close().await;
         }
+        cleanup_files(&path);
+    }
+
+    #[tokio::test]
+    async fn pending_migrations_tracks_applied_state() {
+        // A missing file and a fresh schema count as zero pending.
+        assert_eq!(
+            pending_migrations(&temp_db_path("missing-pending.db"))
+                .await
+                .expect("missing file"),
+            0
+        );
+
+        // Fully migrated: nothing pending.
+        let path = temp_db_path("pending.db");
+        {
+            let pool = init(&path).await.expect("init");
+            pool.close().await;
+        }
+        assert_eq!(pending_migrations(&path).await.expect("applied all"), 0);
+
+        // Simulate an older database by forgetting the newest migration.
+        {
+            let pool = connect(&path).await.expect("connect");
+            sqlx::query("DELETE FROM _sqlx_migrations WHERE version = (SELECT MAX(version) FROM _sqlx_migrations)")
+                .execute(&pool)
+                .await
+                .expect("forget latest migration");
+            pool.close().await;
+        }
+        assert_eq!(
+            pending_migrations(&path).await.expect("one pending"),
+            1,
+            "the forgotten migration is pending again"
+        );
         cleanup_files(&path);
     }
 

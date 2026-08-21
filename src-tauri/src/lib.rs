@@ -32,6 +32,18 @@ pub fn run() {
             infrastructure::logging::init(&data_dir.join("logs"));
 
             let db_path = data_dir.join("mylore.db");
+
+            // Pre-migration safety backup (MISSION-087): when the schema is
+            // about to move forward, snapshot the old database first. Best
+            // effort — a failed backup logs a warning and startup continues.
+            match tauri::async_runtime::block_on(BackupService::pre_migration_backup(&db_path)) {
+                Ok(Some(report)) => {
+                    tracing::info!(path = %report.path, "pre-migration backup created")
+                }
+                Ok(None) => {}
+                Err(error) => tracing::warn!(%error, "pre-migration backup failed; continuing"),
+            }
+
             let pool = tauri::async_runtime::block_on(infrastructure::db::init(&db_path))?;
             tracing::info!(db = %db_path.display(), "database opened");
             app.manage(pool.clone());

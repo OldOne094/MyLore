@@ -395,7 +395,10 @@ defaults (off / 24h / 10). Every `create()` applies the retention policy afterwa
 `rotate(keep)` keeps the newest N archives plus the newest of each older month ("N + monthly"),
 sorting by the stamp embedded in the file name and never touching foreign files. At startup the
 app checks ~20s in whether an automatic backup is due (enabled + newest archive older than the
-interval) and creates one directly — logged, not routed through the task list.
+interval) and creates one directly — logged, not routed through the task list. Before pending
+migrations are applied at startup (MISSION-087), `pre_migration_backup` snapshots the old
+database through its own short-lived pool — best effort: a failed backup logs a warning and
+startup continues, since sqlx already wraps each migration in its own transaction.
 (Full design: `DATABASE.md §7`.)
 
 ## 8. Background tasks

@@ -335,6 +335,30 @@ impl BackupService {
         Ok(Some(self.create().await?))
     }
 
+    /// Safety backup taken right before pending migrations are applied
+    /// (MISSION-087). No-op on a fresh install (no database file) or when
+    /// every migration is already applied — there is no old data to protect.
+    /// Opens its own short-lived pool because the app's pool does not exist
+    /// yet at that point in startup; the caller decides whether a failure
+    /// blocks startup (the app logs a warning and continues).
+    pub async fn pre_migration_backup(db_path: &Path) -> Result<Option<BackupReport>, AppError> {
+        let pending = db::pending_migrations(db_path).await?;
+        if pending == 0 {
+            return Ok(None);
+        }
+        let data_dir = db_path
+            .parent()
+            .ok_or_else(|| AppError::internal("database path has no parent directory"))?;
+        let pool = db::connect(db_path).await?;
+        let result = async {
+            let service = BackupService::new(pool.clone(), data_dir);
+            Ok::<_, AppError>(Some(service.create().await?))
+        }
+        .await;
+        pool.close().await;
+        result
+    }
+
     /// Restore a `.mylore` archive (MISSION-085): validate, stage the
     /// archive's contents, close the live pool (the DB files are locked on
     /// Windows while open), quarantine the current database + images, swap
@@ -1025,6 +1049,56 @@ mod tests {
             .is_none());
 
         h.cleanup().await;
+    }
+
+    #[tokio::test]
+    async fn pre_migration_backup_runs_only_when_a_migration_is_pending() {
+        let h = harness("pre_migration.db").await;
+        seed_media(&h.pool, "m-1").await;
+
+        // Fully migrated database (and a missing file): nothing to protect.
+        assert!(BackupService::pre_migration_backup(&h.db_path)
+            .await
+            .expect("fully migrated")
+            .is_none());
+        let missing = h.data_dir.join("does-not-exist.db");
+        assert!(BackupService::pre_migration_backup(&missing)
+            .await
+            .expect("fresh install")
+            .is_none());
+
+        // Simulate an older schema by forgetting the newest migration: the
+        // hook must now snapshot the pre-migration database.
+        sqlx::query(
+            "DELETE FROM _sqlx_migrations \
+             WHERE version = (SELECT MAX(version) FROM _sqlx_migrations)",
+        )
+        .execute(&h.pool)
+        .await
+        .expect("forget latest migration");
+
+        let report = BackupService::pre_migration_backup(&h.db_path)
+            .await
+            .expect("pending migration")
+            .expect("backup created");
+        assert_eq!(report.media_count, 1);
+        assert!(h.service.validate(Path::new(&report.path)).await.is_ok());
+
+        h.cleanup().await;
+    }
+
+    #[tokio::test]
+    async fn pre_migration_backup_surfaces_corrupt_databases() {
+        let dir = std::env::temp_dir().join(format!("mylore-premig-{}", Uuid::new_v4()));
+        std::fs::create_dir_all(&dir).expect("data dir");
+        let corrupt = dir.join("mylore.db");
+        std::fs::write(&corrupt, b"garbage".repeat(512)).expect("write corrupt db");
+
+        // A corrupt database cannot be snapshotted; the error surfaces so
+        // startup can log it and decide to continue.
+        assert!(BackupService::pre_migration_backup(&corrupt).await.is_err());
+
+        let _ = std::fs::remove_dir_all(&dir);
     }
 
     #[tokio::test]
