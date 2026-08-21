@@ -284,6 +284,12 @@ export interface BackupReport {
   media_count: number;
   asset_count: number;
 }
+export interface RestoreReport {
+  media_count: number;
+  asset_count: number;
+  quarantined_to: string;
+  restart_required: boolean;
+}
 export interface TaskSnapshot {
   id: string;
   kind: string;
@@ -608,6 +614,11 @@ export function backup_create(): Promise<TaskSnapshot> {
 /** Validate a `.mylore` backup archive without restoring it (MISSION-084): the manifest must parse at the current format version, the embedded database snapshot must pass SQLite's integrity_check, and its media count must match the manifest. Resolves with the BackupMeta or rejects with an AppError string. */
 export function backup_validate(args: { path: string }): Promise<BackupMeta> {
   return invoke<BackupMeta>("backup_validate", args);
+}
+
+/** Restore a `.mylore` backup archive as a background task (MISSION-085): validates the archive, quarantines the current database + cached images under `{data_dir}/quarantine-…`, swaps the restored data into place, repoints asset paths at the restored files, and verifies the result - rolling back the previous data on any failure. The live pool is closed to unlock the files, so the app MUST restart after success (`restart_required` in the RestoreReport). Not cancelable mid-restore by design. Resolves with the initial (queued) snapshot; progress + terminal state stream as `task_changed` events. */
+export function backup_restore(args: { path: string }): Promise<TaskSnapshot> {
+  return invoke<TaskSnapshot>("backup_restore", args);
 }
 
 /** Read the header row of a CSV file for the mapping UI's column pickers. Resolves with the trimmed column names or rejects with an AppError string. */

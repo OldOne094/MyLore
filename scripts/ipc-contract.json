@@ -151,6 +151,10 @@
       "shape": "path: string; size_bytes: number; media_count: number; asset_count: number"
     },
     {
+      "name": "RestoreReport",
+      "shape": "media_count: number; asset_count: number; quarantined_to: string; restart_required: boolean"
+    },
+    {
       "name": "TaskSnapshot",
       "shape": "id: string; kind: string; title: string; state: string; progress: number | null; message: string | null; error: string | null; result: unknown | null; created_at: string; updated_at: string"
     },
@@ -393,6 +397,12 @@
       "args": { "path": "string" },
       "returns": "BackupMeta",
       "doc": "Validate a `.mylore` backup archive without restoring it (MISSION-084): the manifest must parse at the current format version, the embedded database snapshot must pass SQLite's integrity_check, and its media count must match the manifest. Resolves with the BackupMeta or rejects with an AppError string."
+    },
+    {
+      "name": "backup_restore",
+      "args": { "path": "string" },
+      "returns": "TaskSnapshot",
+      "doc": "Restore a `.mylore` backup archive as a background task (MISSION-085): validates the archive, quarantines the current database + cached images under `{data_dir}/quarantine-…`, swaps the restored data into place, repoints asset paths at the restored files, and verifies the result - rolling back the previous data on any failure. The live pool is closed to unlock the files, so the app MUST restart after success (`restart_required` in the RestoreReport). Not cancelable mid-restore by design. Resolves with the initial (queued) snapshot; progress + terminal state stream as `task_changed` events."
     },
     {
       "name": "import_csv_headers",

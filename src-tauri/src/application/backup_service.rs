@@ -60,6 +60,18 @@ pub struct BackupReport {
     pub asset_count: u32,
 }
 
+/// What a finished restore reports (the task's typed result). The running
+/// app's pool was closed to unlock the database files, so the UI must restart
+/// the app after a successful restore.
+#[derive(Debug, Clone, Serialize)]
+pub struct RestoreReport {
+    pub media_count: u32,
+    pub asset_count: u32,
+    /// Where the replaced data was parked (`{data_dir}/quarantine-…`).
+    pub quarantined_to: String,
+    pub restart_required: bool,
+}
+
 /// Removes its paths on drop unless disarmed — the `.partial` archive and the
 /// temporary `VACUUM INTO` snapshot never outlive a failed/cancelled backup.
 struct PartialGuard {
@@ -75,7 +87,11 @@ impl PartialGuard {
 impl Drop for PartialGuard {
     fn drop(&mut self) {
         for path in &self.paths {
-            let _ = std::fs::remove_file(path);
+            if path.is_dir() {
+                let _ = std::fs::remove_dir_all(path);
+            } else {
+                let _ = std::fs::remove_file(path);
+            }
         }
     }
 }
@@ -182,6 +198,123 @@ impl BackupService {
         })
     }
 
+    /// Restore a `.mylore` archive (MISSION-085): validate, stage the
+    /// archive's contents, close the live pool (the DB files are locked on
+    /// Windows while open), quarantine the current database + images, swap
+    /// the restored data into place, repoint `asset.local_path` at the
+    /// restored files, and verify the result. Any failure after quarantine
+    /// rolls the previous data back before the error is returned.
+    ///
+    /// There is deliberately **no cancellation checkpoint** after validation:
+    /// a dropped future mid-swap would skip the rollback, and the whole file
+    /// dance is short. The caller must restart the app afterwards — the
+    /// managed pool is closed by this call.
+    pub async fn restore(&self, path: &Path) -> Result<RestoreReport, AppError> {
+        // 1. Validate with zero side effects first.
+        let meta = self.validate(path).await?;
+
+        // 2. Stage the archive's contents under `{data_dir}/.restore-<uid>`.
+        let staging = self.data_dir.join(format!(".restore-{}", Uuid::new_v4()));
+        std::fs::create_dir_all(&staging)?;
+        // Armed until success: the guard deletes the staging dir on drop
+        // (including the early-return error paths below).
+        let _guard = PartialGuard {
+            paths: vec![staging.clone()],
+        };
+        let staged_db = extract_archive(path, &meta, &staging)?;
+
+        // 3. Unlock the live database files.
+        self.pool.close().await;
+
+        // 4. Quarantine current data, swap, verify — rolling back on error.
+        let stamp = Utc::now().format("%Y%m%d-%H%M%S");
+        let uid = &Uuid::new_v4().simple().to_string()[..6];
+        let quarantine = self.data_dir.join(format!("quarantine-{stamp}-{uid}"));
+        match self.swap_in(&staged_db, &meta, &quarantine).await {
+            // Staging is cleaned up by the guard on drop.
+            Ok(()) => Ok(RestoreReport {
+                media_count: meta.media_count,
+                asset_count: meta.asset_count,
+                quarantined_to: quarantine.display().to_string(),
+                restart_required: true,
+            }),
+            Err(error) => {
+                rollback(&self.data_dir, &quarantine);
+                Err(error)
+            }
+        }
+    }
+
+    /// The guarded part of restore: everything here either succeeds or is
+    /// undone by [`rollback`] before the error escapes.
+    async fn swap_in(
+        &self,
+        staged_db: &Path,
+        meta: &BackupMeta,
+        quarantine: &Path,
+    ) -> Result<(), AppError> {
+        let db_path = self.data_dir.join("mylore.db");
+        let images_dir = self.data_dir.join("images");
+
+        // Quarantine: park the current database (+ WAL sidecars) and images
+        // under `{data_dir}/quarantine-…` using their original names so a
+        // rollback is a plain move back.
+        std::fs::create_dir_all(quarantine)?;
+        for sidecar in ["-wal", "-shm"] {
+            let source = PathBuf::from(format!("{}{sidecar}", db_path.display()));
+            if source.is_file() {
+                std::fs::rename(&source, quarantine.join(source.file_name().expect("name")))?;
+            }
+        }
+        std::fs::rename(&db_path, quarantine.join("mylore.db"))?;
+        if images_dir.exists() {
+            std::fs::rename(&images_dir, quarantine.join("images"))?;
+        }
+
+        // Swap in: copy the staged snapshot over the live path, then place
+        // every manifest asset at `images/<id><ext>`.
+        std::fs::copy(staged_db, &db_path)?;
+        std::fs::create_dir_all(&images_dir)?;
+        for entry in &meta.assets {
+            let file_name =
+                entry.file.rsplit('/').next().ok_or_else(|| {
+                    AppError::validation("backup manifest has an invalid asset path")
+                })?;
+            std::fs::copy(
+                staged_asset_path(staged_db, entry),
+                images_dir.join(file_name),
+            )?;
+        }
+
+        // Repoint asset rows at the restored files, then verify the swapped
+        // database for real.
+        let pool = db::connect(&db_path).await?;
+        let result = async {
+            db::integrity_check(&pool).await?;
+            for entry in &meta.assets {
+                let file_name = entry.file.rsplit('/').next().unwrap_or_default();
+                let absolute = images_dir.join(file_name);
+                sqlx::query("UPDATE asset SET local_path = ? WHERE id = ?")
+                    .bind(absolute.display().to_string())
+                    .bind(&entry.id)
+                    .execute(&pool)
+                    .await?;
+            }
+            let (count,): (i64,) = sqlx::query_as("SELECT COUNT(*) FROM media")
+                .fetch_one(&pool)
+                .await?;
+            if count != meta.media_count as i64 {
+                return Err(AppError::validation(
+                    "restored database does not match its manifest",
+                ));
+            }
+            Ok(())
+        }
+        .await;
+        pool.close().await;
+        result
+    }
+
     /// Validate an archive: the manifest parses at the current format
     /// version, the snapshot entry exists, opens as a healthy SQLite
     /// database, and its media count matches the manifest.
@@ -274,10 +407,79 @@ fn write_archive(
     Ok(())
 }
 
+/// Extract a validated archive's database snapshot and manifest assets into
+/// `staging`; returns the staged snapshot path. Asset files land at
+/// `staging/<manifest file>` (e.g. `staging/assets/a-1.jpg`).
+fn extract_archive(
+    archive_path: &Path,
+    meta: &BackupMeta,
+    staging: &Path,
+) -> Result<PathBuf, AppError> {
+    let invalid = |message: &'static str| AppError::validation(message);
+    let file =
+        std::fs::File::open(archive_path).map_err(|_| invalid("backup file cannot be opened"))?;
+    let mut archive =
+        ZipArchive::new(file).map_err(|_| invalid("not a valid MyLore backup archive"))?;
+
+    let staged_db = staging.join(DB_ENTRY);
+    {
+        let mut db_entry = archive
+            .by_name(DB_ENTRY)
+            .map_err(|_| invalid("backup archive has no database snapshot"))?;
+        let mut out = std::fs::File::create(&staged_db)?;
+        io::copy(&mut db_entry, &mut out)?;
+    }
+    std::fs::create_dir_all(staging.join(ASSETS_PREFIX))?;
+    for entry in &meta.assets {
+        let mut asset_entry = archive
+            .by_name(&entry.file)
+            .map_err(|_| invalid("backup archive is missing a manifest asset"))?;
+        let mut out = std::fs::File::create(staging.join(&entry.file))?;
+        io::copy(&mut asset_entry, &mut out)?;
+    }
+    Ok(staged_db)
+}
+
+/// The staged copy of a manifest asset (next to the staged snapshot).
+fn staged_asset_path(staged_db: &Path, entry: &AssetManifestEntry) -> PathBuf {
+    staged_db
+        .parent()
+        .unwrap_or_else(|| Path::new("."))
+        .join(&entry.file)
+}
+
+/// Best-effort undo of a failed swap: remove anything swapped in, then move
+/// every quarantined item back to its original place.
+fn rollback(data_dir: &Path, quarantine: &Path) {
+    tracing::warn!("restore failed, rolling back from quarantine");
+    remove_any(data_dir.join("mylore.db"));
+    for sidecar in ["-wal", "-shm"] {
+        remove_any(data_dir.join(format!("mylore.db{sidecar}")));
+    }
+    let _ = std::fs::remove_dir_all(data_dir.join("images"));
+    if let Ok(entries) = std::fs::read_dir(quarantine) {
+        for entry in entries.flatten() {
+            let dest = data_dir.join(entry.file_name());
+            remove_any(&dest);
+            let _ = std::fs::rename(entry.path(), dest);
+        }
+    }
+    let _ = std::fs::remove_dir(quarantine);
+}
+
+/// Remove a file or directory, whichever it happens to be.
+fn remove_any(path: impl AsRef<Path>) {
+    let path = path.as_ref();
+    if path.is_dir() {
+        let _ = std::fs::remove_dir_all(path);
+    } else {
+        let _ = std::fs::remove_file(path);
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::infrastructure::test_support::{cleanup_files, migrated_pool};
 
     struct Harness {
         service: BackupService,
@@ -287,10 +489,15 @@ mod tests {
     }
 
     async fn harness(name: &str) -> Harness {
-        let (pool, db_path) = migrated_pool(name).await;
+        // Production layout: `{data_dir}/mylore.db`, so restore's file dance
+        // runs against the real paths.
         let data_dir =
             std::env::temp_dir().join(format!("mylore-backup-{name}-{}", Uuid::new_v4()));
-        std::fs::create_dir_all(data_dir.join("images")).expect("images dir");
+        std::fs::create_dir_all(&data_dir).expect("data dir");
+        let db_path = data_dir.join("mylore.db");
+        let pool = crate::infrastructure::db::init(&db_path)
+            .await
+            .expect("init");
         let service = BackupService::new(pool.clone(), &data_dir);
         Harness {
             service,
@@ -302,9 +509,8 @@ mod tests {
 
     impl Harness {
         async fn cleanup(self) {
-            let _ = std::fs::remove_dir_all(&self.data_dir);
             self.pool.close().await;
-            cleanup_files(&self.db_path);
+            let _ = std::fs::remove_dir_all(&self.data_dir);
         }
     }
 
@@ -406,6 +612,137 @@ mod tests {
         assert_eq!(report.media_count, 1);
         assert_eq!(report.asset_count, 0, "the missing file is skipped");
         assert!(h.service.validate(Path::new(&report.path)).await.is_ok());
+
+        h.cleanup().await;
+    }
+
+    /// A fresh pool over the (possibly swapped) live database.
+    async fn reopened(db_path: &Path) -> SqlitePool {
+        crate::infrastructure::db::connect(db_path)
+            .await
+            .expect("reopen")
+    }
+
+    #[tokio::test]
+    async fn restore_roundtrip_replaces_live_data_and_repoints_assets() {
+        let h = harness("restore_roundtrip.db").await;
+        seed_media(&h.pool, "m-1").await;
+        let cache = h.data_dir.join("images").join("cache");
+        std::fs::create_dir_all(&cache).expect("cache dir");
+        let image_path = cache.join("a-1.jpg");
+        std::fs::write(&image_path, b"jpeg-bytes").expect("write image");
+        seed_cached_asset(&h.pool, "a-1", &image_path.display().to_string()).await;
+
+        let backup = h.service.create().await.expect("create backup");
+
+        // Mutate the live library after the backup: an extra title and a
+        // deleted asset row must both disappear on restore.
+        seed_media(&h.pool, "m-2").await;
+        sqlx::query("DELETE FROM asset WHERE id = 'a-1'")
+            .execute(&h.pool)
+            .await
+            .expect("delete asset");
+
+        let report = h
+            .service
+            .restore(Path::new(&backup.path))
+            .await
+            .expect("restore");
+        assert_eq!(report.media_count, 1);
+        assert_eq!(report.asset_count, 1);
+        assert!(report.restart_required);
+        assert!(
+            Path::new(&report.quarantined_to).is_dir(),
+            "old data parked"
+        );
+
+        // The restored database holds exactly the backed-up state, and the
+        // asset row points at the restored file under `images/`.
+        let pool = reopened(&h.db_path).await;
+        let (media,): (i64,) = sqlx::query_as("SELECT COUNT(*) FROM media")
+            .fetch_one(&pool)
+            .await
+            .unwrap();
+        assert_eq!(media, 1, "the post-backup m-2 is gone");
+        let (local_path,): (String,) =
+            sqlx::query_as("SELECT local_path FROM asset WHERE id = 'a-1'")
+                .fetch_one(&pool)
+                .await
+                .unwrap();
+        pool.close().await;
+        assert!(
+            Path::new(&local_path).is_file(),
+            "asset repointed at {local_path}"
+        );
+        assert!(local_path.contains("images"));
+
+        h.cleanup().await;
+    }
+
+    #[tokio::test]
+    async fn restore_rejects_invalid_archives_without_touching_live_data() {
+        let h = harness("restore_invalid.db").await;
+        seed_media(&h.pool, "m-1").await;
+
+        let garbage = h.service.backups_dir().join("garbage.mylore");
+        std::fs::create_dir_all(h.service.backups_dir()).expect("backups dir");
+        std::fs::write(&garbage, b"not a zip").expect("write garbage");
+
+        assert!(h.service.restore(&garbage).await.is_err());
+
+        let pool = reopened(&h.db_path).await;
+        let (media,): (i64,) = sqlx::query_as("SELECT COUNT(*) FROM media")
+            .fetch_one(&pool)
+            .await
+            .unwrap();
+        pool.close().await;
+        assert_eq!(media, 1, "live data untouched");
+        let quarantines: Vec<_> = std::fs::read_dir(&h.data_dir)
+            .expect("data dir")
+            .flatten()
+            .filter(|e| e.file_name().to_string_lossy().starts_with("quarantine-"))
+            .collect();
+        assert!(
+            quarantines.is_empty(),
+            "no quarantine created on early failure"
+        );
+
+        h.cleanup().await;
+    }
+
+    #[tokio::test]
+    async fn restore_rolls_back_when_the_swap_fails() {
+        let h = harness("restore_rollback.db").await;
+        seed_media(&h.pool, "m-1").await;
+        let backup = h.service.create().await.expect("create backup");
+        seed_media(&h.pool, "m-2").await;
+
+        // Sabotage: a directory squatting on the WAL sidecar path makes the
+        // post-swap verification fail *after* quarantine — the dangerous
+        // window where live data has already been moved away.
+        h.pool.close().await;
+        std::fs::create_dir_all(h.data_dir.join("mylore.db-wal")).expect("plant directory");
+
+        assert!(h.service.restore(Path::new(&backup.path)).await.is_err());
+
+        assert!(
+            !h.data_dir.join("mylore.db-wal").exists(),
+            "the planted directory was removed"
+        );
+        let quarantines: Vec<_> = std::fs::read_dir(&h.data_dir)
+            .expect("data dir")
+            .flatten()
+            .filter(|e| e.file_name().to_string_lossy().starts_with("quarantine-"))
+            .collect();
+        assert!(quarantines.is_empty(), "quarantine moved back");
+
+        let pool = reopened(&h.db_path).await;
+        let (media,): (i64,) = sqlx::query_as("SELECT COUNT(*) FROM media")
+            .fetch_one(&pool)
+            .await
+            .unwrap();
+        pool.close().await;
+        assert_eq!(media, 2, "the mutated live data survived intact");
 
         h.cleanup().await;
     }

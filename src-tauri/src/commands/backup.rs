@@ -59,3 +59,40 @@ pub async fn backup_validate(
     info!("backup_validate invoked");
     backups.inner().validate(&PathBuf::from(&path)).await
 }
+
+/// Restore a `.mylore` archive as a background task (MISSION-085). The
+/// current database + images are quarantined and swapped back in on failure;
+/// the live pool is closed to unlock the files, so **the app must restart
+/// after success** (`restart_required` in the report). The task is not
+/// cancelable mid-restore by design — a dropped future would skip rollback.
+#[command]
+pub async fn backup_restore(
+    tasks: State<'_, Arc<TaskManager>>,
+    backups: State<'_, Arc<BackupService>>,
+    path: String,
+) -> Result<TaskSnapshot, AppError> {
+    info!("backup_restore invoked");
+    let service = backups.inner().clone();
+    let source = PathBuf::from(&path);
+
+    let id = tasks.spawn(
+        TaskKind::Restore,
+        "Restore library backup".to_string(),
+        move |reporter| async move {
+            reporter.progress(5, Some("Validating backup…".to_string()));
+            let report = service.restore(&source).await;
+            match report {
+                Ok(report) => {
+                    reporter.progress(100, Some("Restore finished".to_string()));
+                    serde_json::to_value(&report)
+                        .map_err(|error| TaskError::failed(error.to_string()))
+                }
+                Err(error) => Err(TaskError::failed(error.to_string())),
+            }
+        },
+    );
+
+    tasks
+        .get(&id)
+        .ok_or_else(|| AppError::internal("restore task vanished"))
+}

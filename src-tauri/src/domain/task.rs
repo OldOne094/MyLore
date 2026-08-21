@@ -19,6 +19,8 @@ pub enum TaskKind {
     ExportFile,
     /// `.mylore` library backup (result: `BackupReport`).
     Backup,
+    /// `.mylore` library restore (result: `RestoreReport`).
+    Restore,
 }
 
 impl TaskKind {
@@ -27,6 +29,7 @@ impl TaskKind {
             Self::ImportFile => "import_file",
             Self::ExportFile => "export_file",
             Self::Backup => "backup",
+            Self::Restore => "restore",
         }
     }
 }

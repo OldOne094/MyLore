@@ -369,7 +369,7 @@ has no type column. `delimiter` is the CSV field delimiter, `separator` splits m
 `BackupService` in Rust: snapshot (VACUUM INTO) + assets manifest + meta.json → `.mylore` zip.
 Restore validates, quarantines current data, swaps, verifies. Automatic scheduling + rotation.
 
-**Shipped (MISSION-084):** `BackupService::create` packs a consistent `VACUUM INTO` snapshot of
+**Shipped (MISSION-084/085):** `BackupService::create` packs a consistent `VACUUM INTO` snapshot of
 the live WAL database, every cached asset file, and a `meta.json` manifest (format version,
 counts, asset id → archive-path map) into `{data_dir}/backups/mylore-<stamp>-<id>.mylore` — a
 plain deflate zip. Writes go to a `.partial` sibling renamed into place on success; a drop guard
@@ -378,7 +378,16 @@ re-opened and validated before success is reported: manifest parses at the curre
 version, the embedded snapshot passes `PRAGMA integrity_check`, and its media count matches the
 manifest. `backup_create` runs as a cancelable `TaskKind::Backup` task on the TaskManager
 (`BackupReport` as the typed result); `backup_validate(path)` validates any archive on demand.
-Restore (085), scheduling + rotation (086) and the UI (088) build on this format.
+
+**Restore (MISSION-085):** `BackupService::restore(path)` validates with zero side effects,
+stages the archive's contents, closes the live pool (the DB files are locked on Windows while
+open), quarantines the current database + images under `{data_dir}/quarantine-…` (original
+names, so rollback is a plain move back), swaps the restored data into place, repoints each
+manifest asset's `local_path` at its restored file, and verifies the result — rolling back on
+any failure. There is no cancellation checkpoint after validation (a dropped future mid-swap
+would skip the rollback). The restore closes the managed pool, so it reports
+`restart_required: true` and the UI restarts the app (`TaskKind::Restore`, not cancelable by
+design). Scheduling + rotation (086) and the UI (088) build on this format.
 (Full design: `DATABASE.md §7`.)
 
 ## 8. Background tasks

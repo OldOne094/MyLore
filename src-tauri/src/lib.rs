@@ -85,6 +85,7 @@ pub fn run() {
             commands::export::export_media,
             commands::backup::backup_create,
             commands::backup::backup_validate,
+            commands::backup::backup_restore,
             commands::providers::providers_list,
             commands::providers::provider_set_enabled,
             commands::providers::provider_set_key,
