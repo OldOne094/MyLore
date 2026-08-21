@@ -150,7 +150,7 @@ async fn restore_brings_back_the_exact_pre_mutation_world() {
         .execute(&library.pool)
         .await
         .expect("delete node");
-    let survivor: String =
+    let (survivor,): (String,) =
         sqlx::query_as("SELECT id FROM media WHERE title_main = 'Integration Target'")
             .fetch_one(&library.pool)
             .await
@@ -167,22 +167,28 @@ async fn restore_brings_back_the_exact_pre_mutation_world() {
         .expect("drop membership");
 
     // 3. Restore — the mutated world is replaced by the archived one.
-    let restore = backups.restore(Path::new(&report.path)).await.expect("restore");
+    let restore = backups
+        .restore(Path::new(&report.path))
+        .await
+        .expect("restore");
     assert!(restore.restart_required);
     assert!(Path::new(&restore.quarantined_to).is_dir());
 
-    let check = db::connect(&data_dir.join("mylore.db")).await.expect("reopen");
-    let (media_count,): (i64,) =
-        sqlx::query_as("SELECT COUNT(*) FROM media").fetch_one(&check).await.unwrap();
+    let check = db::connect(&data_dir.join("mylore.db"))
+        .await
+        .expect("reopen");
+    let (media_count,): (i64,) = sqlx::query_as("SELECT COUNT(*) FROM media")
+        .fetch_one(&check)
+        .await
+        .unwrap();
     assert_eq!(media_count, 1, "the post-backup addition is gone");
 
-    let (nodes,): (i64,) = sqlx::query_as(
-        "SELECT COUNT(*) FROM content_node WHERE media_id = ? AND id = 'n-1'",
-    )
-    .bind(&survivor)
-    .fetch_one(&check)
-    .await
-    .unwrap();
+    let (nodes,): (i64,) =
+        sqlx::query_as("SELECT COUNT(*) FROM content_node WHERE media_id = ? AND id = 'n-1'")
+            .bind(&survivor)
+            .fetch_one(&check)
+            .await
+            .unwrap();
     assert_eq!(nodes, 1, "the node came back on the survivor");
 
     let (rating,): (i64,) = sqlx::query_as("SELECT rating FROM review WHERE media_id = ?")
