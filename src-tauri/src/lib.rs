@@ -14,6 +14,7 @@ use std::sync::Arc;
 use tauri::Emitter;
 use tauri::Manager;
 
+use crate::application::app_health::AppHealth;
 use crate::application::backup_service::BackupService;
 use crate::application::image_service::ImageService;
 use crate::application::providers::settings::ProviderSettingsService;
@@ -44,9 +45,26 @@ pub fn run() {
                 Err(error) => tracing::warn!(%error, "pre-migration backup failed; continuing"),
             }
 
-            let pool = tauri::async_runtime::block_on(infrastructure::db::init(&db_path))?;
+            let pool = tauri::async_runtime::block_on(infrastructure::db::connect(&db_path))?;
             tracing::info!(db = %db_path.display(), "database opened");
+
+            // MISSION-088: verify integrity before migrating. On corruption
+            // the app still launches — in recovery mode — so the recovery
+            // screen can offer a restore or a fresh start instead of the
+            // process dying before any window shows.
+            let database_ok =
+                tauri::async_runtime::block_on(infrastructure::db::integrity_check(&pool)).is_ok();
+            if database_ok {
+                if let Err(error) =
+                    tauri::async_runtime::block_on(infrastructure::db::migrate(&pool))
+                {
+                    return Err(error.into());
+                }
+            } else {
+                tracing::error!("database failed its integrity check; starting in recovery mode");
+            }
             app.manage(pool.clone());
+            app.manage(Arc::new(AppHealth::new(database_ok)));
 
             // Provider set: default configs, layered with persisted enabled
             // flags + keyring keys. Rebuilt on settings changes (MISSION-063).
@@ -116,6 +134,11 @@ pub fn run() {
             commands::backup::backup_restore,
             commands::backup::backup_prefs_get,
             commands::backup::backup_prefs_set,
+            commands::backup::backup_list,
+            commands::backup::backup_delete,
+            commands::recovery::app_health,
+            commands::recovery::recover_start_fresh,
+            commands::recovery::recover_restore,
             commands::providers::providers_list,
             commands::providers::provider_set_enabled,
             commands::providers::provider_set_key,

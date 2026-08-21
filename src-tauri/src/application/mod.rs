@@ -6,6 +6,7 @@
 //! MISSION-076.
 
 pub mod activity_service;
+pub mod app_health;
 pub mod backup_service;
 pub mod bulk_service;
 pub mod calendar_service;

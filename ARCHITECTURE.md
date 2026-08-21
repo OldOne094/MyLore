@@ -399,6 +399,15 @@ interval) and creates one directly — logged, not routed through the task list.
 migrations are applied at startup (MISSION-087), `pre_migration_backup` snapshots the old
 database through its own short-lived pool — best effort: a failed backup logs a warning and
 startup continues, since sqlx already wraps each migration in its own transaction.
+
+**Backups UI + recovery (MISSION-088):** the Settings page gains a Backups section (preferences
+saved on change, "back up now" as a followed task, archive list with per-archive validate /
+restore / delete — deletes are re-derived server-side so only real archives in the backups
+folder can go). Startup connects first and checks integrity separately: on corruption the app
+launches in **recovery mode** (`AppHealth` flag) instead of dying in setup; a route-level
+HealthGate swaps the shell for the RecoveryScreen only when `database_ok === false`, offering
+restore-from-list / restore-via-file-dialog / two-step start-fresh. Every recovery action
+closes the pool to unlock files and ends with an explicit restart note.
 (Full design: `DATABASE.md §7`.)
 
 ## 8. Background tasks

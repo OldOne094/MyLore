@@ -11,7 +11,7 @@ use tauri::command;
 use tauri::State;
 use tracing::info;
 
-use crate::application::backup_service::{BackupMeta, BackupPrefs, BackupService};
+use crate::application::backup_service::{BackupEntry, BackupMeta, BackupPrefs, BackupService};
 use crate::application::task_service::TaskManager;
 use crate::domain::task::{TaskError, TaskKind, TaskSnapshot};
 use crate::error::AppError;
@@ -106,6 +106,26 @@ pub async fn backup_prefs_get(
 ) -> Result<BackupPrefs, AppError> {
     info!("backup_prefs_get invoked");
     backups.inner().prefs().await
+}
+
+/// List every archive in the backups folder, newest first (MISSION-088).
+#[command]
+pub async fn backup_list(
+    backups: State<'_, Arc<BackupService>>,
+) -> Result<Vec<BackupEntry>, AppError> {
+    info!("backup_list invoked");
+    backups.inner().list()
+}
+
+/// Delete one archive from the backups folder (MISSION-088). Only archives
+/// inside that folder can be deleted; the path is re-derived server-side.
+#[command]
+pub async fn backup_delete(
+    backups: State<'_, Arc<BackupService>>,
+    path: String,
+) -> Result<(), AppError> {
+    info!("backup_delete invoked");
+    backups.inner().delete_archive(&path)
 }
 
 /// Validate and persist the backup preferences (MISSION-086). The interval

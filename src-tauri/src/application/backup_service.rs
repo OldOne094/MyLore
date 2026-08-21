@@ -60,6 +60,16 @@ pub struct BackupReport {
     pub asset_count: u32,
 }
 
+/// One archive in the backups folder, newest first in listings.
+#[derive(Debug, Clone, Serialize)]
+pub struct BackupEntry {
+    pub file_name: String,
+    pub path: String,
+    pub size_bytes: u64,
+    /// Zero-padded `YYYYMMDDHHMMSS` parsed from the file name.
+    pub created_at: String,
+}
+
 /// What a finished restore reports (the task's typed result). The running
 /// app's pool was closed to unlock the database files, so the UI must restart
 /// the app after a successful restore.
@@ -137,6 +147,78 @@ impl BackupService {
     /// Where archives are written: `{data_dir}/backups`.
     pub fn backups_dir(&self) -> PathBuf {
         self.data_dir.join("backups")
+    }
+
+    /// Every archive in the backups folder, newest first. Foreign files are
+    /// ignored; entries are listed without validating their contents
+    /// (`validate` is an explicit per-archive action).
+    pub fn list(&self) -> Result<Vec<BackupEntry>, AppError> {
+        let dir = self.backups_dir();
+        if !dir.is_dir() {
+            return Ok(Vec::new());
+        }
+        let mut entries: Vec<BackupEntry> = std::fs::read_dir(&dir)?
+            .flatten()
+            .filter_map(|entry| {
+                let file_name = entry.file_name().to_string_lossy().to_string();
+                let created_at = archive_stamp(&file_name)?;
+                Some(BackupEntry {
+                    file_name,
+                    path: entry.path().display().to_string(),
+                    size_bytes: entry.metadata().ok()?.len(),
+                    created_at,
+                })
+            })
+            .collect();
+        entries.sort_by(|a, b| b.created_at.cmp(&a.created_at));
+        Ok(entries)
+    }
+
+    /// Delete one archive. Only files inside the backups folder whose names
+    /// match the archive pattern can be deleted — the request is re-derived
+    /// from the file name so `..` tricks and foreign paths are rejected.
+    pub fn delete_archive(&self, path: &str) -> Result<(), AppError> {
+        let requested = PathBuf::from(path);
+        let name = requested
+            .file_name()
+            .map(|n| n.to_string_lossy().to_string())
+            .ok_or_else(|| AppError::validation("invalid archive path"))?;
+        if archive_stamp(&name).is_none() {
+            return Err(AppError::validation("not a MyLore backup archive"));
+        }
+        let target = self.backups_dir().join(&name);
+        let target_canonical = target
+            .canonicalize()
+            .map_err(|_| AppError::validation("archive not found"))?;
+        let dir_canonical = self.backups_dir().canonicalize()?;
+        if !target_canonical.starts_with(dir_canonical) {
+            return Err(AppError::validation(
+                "archive is outside the backups folder",
+            ));
+        }
+        std::fs::remove_file(target_canonical)?;
+        Ok(())
+    }
+
+    /// Move a corrupt database aside so the next startup creates a fresh one
+    /// (MISSION-088 recovery). Returns the quarantine location. Closes the
+    /// pool to unlock the files — the caller must restart the app after.
+    pub async fn start_fresh(&self) -> Result<String, AppError> {
+        self.pool.close().await;
+        let stamp = Utc::now().format("%Y%m%d-%H%M%S");
+        let uid = &Uuid::new_v4().simple().to_string()[..6];
+        let quarantine = self
+            .data_dir
+            .join(format!("quarantine-corrupt-{stamp}-{uid}"));
+        std::fs::create_dir_all(&quarantine)?;
+        for suffix in ["", "-wal", "-shm"] {
+            let source = self.data_dir.join(format!("mylore.db{suffix}"));
+            if source.is_file() {
+                rename_with_retry(&source, &quarantine.join(source.file_name().expect("name")))
+                    .await?;
+            }
+        }
+        Ok(quarantine.display().to_string())
     }
 
     /// Create a validated `.mylore` archive of the whole library.
@@ -352,7 +434,7 @@ impl BackupService {
         let pool = db::connect(db_path).await?;
         let result = async {
             let service = BackupService::new(pool.clone(), data_dir);
-            Ok::<_, AppError>(Some(service.create().await?))
+            service.create().await.map(Some)
         }
         .await;
         pool.close().await;
@@ -636,6 +718,23 @@ fn remove_any(path: impl AsRef<Path>) {
     } else {
         let _ = std::fs::remove_file(path);
     }
+}
+
+/// Rename with a short retry loop — on Windows, SQLite's WAL/SHM handles can
+/// linger briefly after a pool closes, and an immediate rename fails with
+/// "file in use".
+async fn rename_with_retry(source: &Path, dest: &Path) -> Result<(), AppError> {
+    let mut last_error = None;
+    for _ in 0..20 {
+        match std::fs::rename(source, dest) {
+            Ok(()) => return Ok(()),
+            Err(error) => {
+                last_error = Some(error);
+                tokio::time::sleep(std::time::Duration::from_millis(50)).await;
+            }
+        }
+    }
+    Err(AppError::Io(last_error.expect("at least one attempt")))
 }
 
 /// The zero-padded `YYYYMMDDHHMMSS` stamp embedded in an archive file name
@@ -1099,6 +1198,83 @@ mod tests {
         assert!(BackupService::pre_migration_backup(&corrupt).await.is_err());
 
         let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[tokio::test]
+    async fn list_returns_archives_newest_first_and_delete_is_path_safe() {
+        let h = harness("list_delete.db").await;
+        let dir = h.service.backups_dir();
+        std::fs::create_dir_all(&dir).expect("backups dir");
+        for name in [
+            "mylore-20260801-100000-aaaaaa.mylore",
+            "mylore-20260802-100000-bbbbbb.mylore",
+            "not-an-archive.mylore",
+        ] {
+            std::fs::write(dir.join(name), b"x").expect("write stub");
+        }
+
+        let entries = h.service.list().expect("list");
+        assert_eq!(
+            entries
+                .iter()
+                .map(|e| e.file_name.as_str())
+                .collect::<Vec<_>>(),
+            vec![
+                "mylore-20260802-100000-bbbbbb.mylore",
+                "mylore-20260801-100000-aaaaaa.mylore",
+            ],
+            "newest first, foreign names ignored"
+        );
+        assert_eq!(entries[0].created_at, "20260802100000");
+
+        // Deleting re-derives the path from the file name: a matching name
+        // inside the backups folder works…
+        let target = dir.join("mylore-20260801-100000-aaaaaa.mylore");
+        h.service
+            .delete_archive(&target.display().to_string())
+            .expect("delete archive");
+        assert!(!target.exists(), "archive removed");
+
+        // …but the request is re-derived from the file name: deleting via any
+        // other path removes the archive inside the backups folder and never
+        // touches the outside copy…
+        let outside = h.data_dir.join("mylore-20260802-100000-bbbbbb.mylore");
+        std::fs::write(&outside, b"x").expect("write outside copy");
+        h.service
+            .delete_archive(&outside.display().to_string())
+            .expect("re-derived delete");
+        assert!(outside.exists(), "the outside file was not touched");
+        assert!(!dir.join("mylore-20260802-100000-bbbbbb.mylore").exists());
+
+        // …and names that are not archives are rejected outright.
+        let foreign = h.data_dir.join("notes.txt");
+        std::fs::write(&foreign, b"x").expect("write foreign");
+        assert!(h
+            .service
+            .delete_archive(&foreign.display().to_string())
+            .is_err());
+
+        h.cleanup().await;
+    }
+
+    #[tokio::test]
+    async fn start_fresh_quarantines_the_database() {
+        let h = harness("start_fresh.db").await;
+        seed_media(&h.pool, "m-1").await;
+
+        let quarantined_to = h.service.start_fresh().await.expect("start fresh");
+        let quarantine = PathBuf::from(&quarantined_to);
+        assert!(quarantine.is_dir());
+        assert!(
+            quarantine.join("mylore.db").is_file(),
+            "the database was parked"
+        );
+        assert!(
+            !h.db_path.exists(),
+            "the live path is free for a fresh start"
+        );
+
+        h.cleanup().await;
     }
 
     #[tokio::test]

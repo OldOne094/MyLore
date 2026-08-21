@@ -106,6 +106,18 @@ export const queryKeys = {
     preferences: () => ["settings", "preferences"] as const,
     /** Provider settings rows (MISSION-063). */
     providers: () => ["settings", "providers"] as const,
+    /** Backup preferences (MISSION-086). */
+    backupPrefs: () => ["settings", "backupPrefs"] as const,
+  },
+  backups: {
+    all: () => ["backups"] as const,
+    /** Archive listing, newest first (MISSION-088). */
+    list: () => ["backups", "list"] as const,
+  },
+  health: {
+    all: () => ["health"] as const,
+    /** Startup database health — gates the recovery screen (MISSION-088). */
+    app: () => ["health", "app"] as const,
   },
   task: {
     all: () => ["task"] as const,

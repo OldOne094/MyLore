@@ -295,6 +295,19 @@ export interface BackupPrefs {
   interval_hours: number;
   keep_count: number;
 }
+export interface BackupEntry {
+  file_name: string;
+  path: string;
+  size_bytes: number;
+  created_at: string;
+}
+export interface HealthStatus {
+  database_ok: boolean;
+}
+export interface RecoveryOutcome {
+  quarantined_to: string;
+  restart_required: boolean;
+}
 export interface TaskSnapshot {
   id: string;
   kind: string;
@@ -638,6 +651,31 @@ export function backup_prefs_set(args: {
   keep_count: number;
 }): Promise<BackupPrefs> {
   return invoke<BackupPrefs>("backup_prefs_set", args);
+}
+
+/** List every `.mylore` archive in the backups folder, newest first (MISSION-088). Entries carry file name, full path, size and the creation stamp parsed from the name; contents are not validated - use backup_validate per archive. Resolves with the list or rejects with an AppError string. */
+export function backup_list(): Promise<BackupEntry[]> {
+  return invoke<BackupEntry[]>("backup_list");
+}
+
+/** Delete one archive from the backups folder (MISSION-088). Only files inside that folder whose names match the archive pattern can be deleted - the path is re-derived server-side, so foreign paths are rejected. Resolves when deleted or rejects with an AppError string. */
+export function backup_delete(args: { path: string }): Promise<void> {
+  return invoke<void>("backup_delete", args);
+}
+
+/** Startup health of the local database (MISSION-088). When integrity_check failed at startup the app launches in recovery mode with database_ok false and the UI shows the recovery screen instead of the normal shell. Resolves with the HealthStatus. */
+export function app_health(): Promise<HealthStatus> {
+  return invoke<HealthStatus>("app_health");
+}
+
+/** Move the corrupt database (and its WAL sidecars) aside into `{data_dir}/quarantine-corrupt-…` so the next startup creates a fresh one (MISSION-088 recovery). Closes the pool to unlock the files - restart the app afterwards. Resolves with the RecoveryOutcome or rejects with an AppError string. */
+export function recover_start_fresh(): Promise<RecoveryOutcome> {
+  return invoke<RecoveryOutcome>("recover_start_fresh");
+}
+
+/** Validate and restore a `.mylore` archive over the corrupt database (MISSION-088 recovery) - the same rollback-safe quarantine/swap/verify flow as backup_restore. Closes the pool to unlock the files - restart the app afterwards. Resolves with the RecoveryOutcome or rejects with an AppError string. */
+export function recover_restore(args: { path: string }): Promise<RecoveryOutcome> {
+  return invoke<RecoveryOutcome>("recover_restore", args);
 }
 
 /** Read the header row of a CSV file for the mapping UI's column pickers. Resolves with the trimmed column names or rejects with an AppError string. */

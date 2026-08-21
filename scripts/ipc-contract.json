@@ -159,6 +159,18 @@
       "shape": "auto_enabled: boolean; interval_hours: number; keep_count: number"
     },
     {
+      "name": "BackupEntry",
+      "shape": "file_name: string; path: string; size_bytes: number; created_at: string"
+    },
+    {
+      "name": "HealthStatus",
+      "shape": "database_ok: boolean"
+    },
+    {
+      "name": "RecoveryOutcome",
+      "shape": "quarantined_to: string; restart_required: boolean"
+    },
+    {
       "name": "TaskSnapshot",
       "shape": "id: string; kind: string; title: string; state: string; progress: number | null; message: string | null; error: string | null; result: unknown | null; created_at: string; updated_at: string"
     },
@@ -419,6 +431,36 @@
       "args": { "auto_enabled": "boolean", "interval_hours": "number", "keep_count": "number" },
       "returns": "BackupPrefs",
       "doc": "Validate and persist the backup preferences (MISSION-086): the interval must be 1-8760 hours and the keep count 1-100. Every backup (manual or automatic) applies the retention policy afterwards - keeping the newest N archives plus the newest of every older month. Resolves with the stored BackupPrefs or rejects with an AppError string."
+    },
+    {
+      "name": "backup_list",
+      "args": {},
+      "returns": "BackupEntry[]",
+      "doc": "List every `.mylore` archive in the backups folder, newest first (MISSION-088). Entries carry file name, full path, size and the creation stamp parsed from the name; contents are not validated - use backup_validate per archive. Resolves with the list or rejects with an AppError string."
+    },
+    {
+      "name": "backup_delete",
+      "args": { "path": "string" },
+      "returns": "void",
+      "doc": "Delete one archive from the backups folder (MISSION-088). Only files inside that folder whose names match the archive pattern can be deleted - the path is re-derived server-side, so foreign paths are rejected. Resolves when deleted or rejects with an AppError string."
+    },
+    {
+      "name": "app_health",
+      "args": {},
+      "returns": "HealthStatus",
+      "doc": "Startup health of the local database (MISSION-088). When integrity_check failed at startup the app launches in recovery mode with database_ok false and the UI shows the recovery screen instead of the normal shell. Resolves with the HealthStatus."
+    },
+    {
+      "name": "recover_start_fresh",
+      "args": {},
+      "returns": "RecoveryOutcome",
+      "doc": "Move the corrupt database (and its WAL sidecars) aside into `{data_dir}/quarantine-corrupt-…` so the next startup creates a fresh one (MISSION-088 recovery). Closes the pool to unlock the files - restart the app afterwards. Resolves with the RecoveryOutcome or rejects with an AppError string."
+    },
+    {
+      "name": "recover_restore",
+      "args": { "path": "string" },
+      "returns": "RecoveryOutcome",
+      "doc": "Validate and restore a `.mylore` archive over the corrupt database (MISSION-088 recovery) - the same rollback-safe quarantine/swap/verify flow as backup_restore. Closes the pool to unlock the files - restart the app afterwards. Resolves with the RecoveryOutcome or rejects with an AppError string."
     },
     {
       "name": "import_csv_headers",
