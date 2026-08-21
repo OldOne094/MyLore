@@ -290,6 +290,11 @@ export interface RestoreReport {
   quarantined_to: string;
   restart_required: boolean;
 }
+export interface BackupPrefs {
+  auto_enabled: boolean;
+  interval_hours: number;
+  keep_count: number;
+}
 export interface TaskSnapshot {
   id: string;
   kind: string;
@@ -619,6 +624,20 @@ export function backup_validate(args: { path: string }): Promise<BackupMeta> {
 /** Restore a `.mylore` backup archive as a background task (MISSION-085): validates the archive, quarantines the current database + cached images under `{data_dir}/quarantine-…`, swaps the restored data into place, repoints asset paths at the restored files, and verifies the result - rolling back the previous data on any failure. The live pool is closed to unlock the files, so the app MUST restart after success (`restart_required` in the RestoreReport). Not cancelable mid-restore by design. Resolves with the initial (queued) snapshot; progress + terminal state stream as `task_changed` events. */
 export function backup_restore(args: { path: string }): Promise<TaskSnapshot> {
   return invoke<TaskSnapshot>("backup_restore", args);
+}
+
+/** Load the backup preferences (MISSION-086): automatic backups on/off, the interval in hours, and how many recent archives to keep (plus one per older month). Resolves with the BackupPrefs or rejects with an AppError string. */
+export function backup_prefs_get(): Promise<BackupPrefs> {
+  return invoke<BackupPrefs>("backup_prefs_get");
+}
+
+/** Validate and persist the backup preferences (MISSION-086): the interval must be 1-8760 hours and the keep count 1-100. Every backup (manual or automatic) applies the retention policy afterwards - keeping the newest N archives plus the newest of every older month. Resolves with the stored BackupPrefs or rejects with an AppError string. */
+export function backup_prefs_set(args: {
+  auto_enabled: boolean;
+  interval_hours: number;
+  keep_count: number;
+}): Promise<BackupPrefs> {
+  return invoke<BackupPrefs>("backup_prefs_set", args);
 }
 
 /** Read the header row of a CSV file for the mapping UI's column pickers. Resolves with the trimmed column names or rejects with an AppError string. */

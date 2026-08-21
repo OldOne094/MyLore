@@ -54,7 +54,23 @@ pub fn run() {
 
             // Backup service (MISSION-084): archives under
             // `{data_dir}/backups`, cached assets from `{data_dir}/images`.
-            app.manage(Arc::new(BackupService::new(pool, &data_dir)));
+            let backups = Arc::new(BackupService::new(pool, &data_dir));
+
+            // Automatic backup check (MISSION-086): shortly after startup,
+            // create a backup when the preference is on and the newest
+            // archive is older than the configured interval.
+            let auto_backups = backups.clone();
+            tauri::async_runtime::spawn(async move {
+                tokio::time::sleep(std::time::Duration::from_secs(20)).await;
+                match auto_backups.auto_backup_if_due().await {
+                    Ok(Some(report)) => {
+                        tracing::info!(path = %report.path, "automatic backup created")
+                    }
+                    Ok(None) => {}
+                    Err(error) => tracing::warn!(%error, "automatic backup failed"),
+                }
+            });
+            app.manage(backups);
 
             // Background task manager (MISSION-070): every long operation runs
             // as a cancelable task; changes stream to the UI as `task_changed`.
@@ -86,6 +102,8 @@ pub fn run() {
             commands::backup::backup_create,
             commands::backup::backup_validate,
             commands::backup::backup_restore,
+            commands::backup::backup_prefs_get,
+            commands::backup::backup_prefs_set,
             commands::providers::providers_list,
             commands::providers::provider_set_enabled,
             commands::providers::provider_set_key,

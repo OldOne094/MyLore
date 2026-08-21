@@ -11,7 +11,7 @@ use tauri::command;
 use tauri::State;
 use tracing::info;
 
-use crate::application::backup_service::{BackupMeta, BackupService};
+use crate::application::backup_service::{BackupMeta, BackupPrefs, BackupService};
 use crate::application::task_service::TaskManager;
 use crate::domain::task::{TaskError, TaskKind, TaskSnapshot};
 use crate::error::AppError;
@@ -95,4 +95,35 @@ pub async fn backup_restore(
     tasks
         .get(&id)
         .ok_or_else(|| AppError::internal("restore task vanished"))
+}
+
+/// Load the backup preferences (MISSION-086): automatic backups on/off,
+/// interval in hours, and how many recent archives to keep (plus one per
+/// older month).
+#[command]
+pub async fn backup_prefs_get(
+    backups: State<'_, Arc<BackupService>>,
+) -> Result<BackupPrefs, AppError> {
+    info!("backup_prefs_get invoked");
+    backups.inner().prefs().await
+}
+
+/// Validate and persist the backup preferences (MISSION-086). The interval
+/// must be 1–8760 hours and the keep count 1–100.
+#[command]
+pub async fn backup_prefs_set(
+    backups: State<'_, Arc<BackupService>>,
+    auto_enabled: bool,
+    interval_hours: u32,
+    keep_count: u32,
+) -> Result<BackupPrefs, AppError> {
+    info!("backup_prefs_set invoked");
+    backups
+        .inner()
+        .set_prefs(BackupPrefs {
+            auto_enabled,
+            interval_hours,
+            keep_count,
+        })
+        .await
 }

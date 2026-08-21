@@ -388,6 +388,14 @@ any failure. There is no cancellation checkpoint after validation (a dropped fut
 would skip the rollback). The restore closes the managed pool, so it reports
 `restart_required: true` and the UI restarts the app (`TaskKind::Restore`, not cancelable by
 design). Scheduling + rotation (086) and the UI (088) build on this format.
+
+**Schedule + rotation (MISSION-086):** backup preferences (`BackupPrefs` — auto on/off,
+interval hours, keep count) live in the `settings` table under `backup.*` keys with safe
+defaults (off / 24h / 10). Every `create()` applies the retention policy afterwards:
+`rotate(keep)` keeps the newest N archives plus the newest of each older month ("N + monthly"),
+sorting by the stamp embedded in the file name and never touching foreign files. At startup the
+app checks ~20s in whether an automatic backup is due (enabled + newest archive older than the
+interval) and creates one directly — logged, not routed through the task list.
 (Full design: `DATABASE.md §7`.)
 
 ## 8. Background tasks

@@ -155,6 +155,10 @@
       "shape": "media_count: number; asset_count: number; quarantined_to: string; restart_required: boolean"
     },
     {
+      "name": "BackupPrefs",
+      "shape": "auto_enabled: boolean; interval_hours: number; keep_count: number"
+    },
+    {
       "name": "TaskSnapshot",
       "shape": "id: string; kind: string; title: string; state: string; progress: number | null; message: string | null; error: string | null; result: unknown | null; created_at: string; updated_at: string"
     },
@@ -403,6 +407,18 @@
       "args": { "path": "string" },
       "returns": "TaskSnapshot",
       "doc": "Restore a `.mylore` backup archive as a background task (MISSION-085): validates the archive, quarantines the current database + cached images under `{data_dir}/quarantine-…`, swaps the restored data into place, repoints asset paths at the restored files, and verifies the result - rolling back the previous data on any failure. The live pool is closed to unlock the files, so the app MUST restart after success (`restart_required` in the RestoreReport). Not cancelable mid-restore by design. Resolves with the initial (queued) snapshot; progress + terminal state stream as `task_changed` events."
+    },
+    {
+      "name": "backup_prefs_get",
+      "args": {},
+      "returns": "BackupPrefs",
+      "doc": "Load the backup preferences (MISSION-086): automatic backups on/off, the interval in hours, and how many recent archives to keep (plus one per older month). Resolves with the BackupPrefs or rejects with an AppError string."
+    },
+    {
+      "name": "backup_prefs_set",
+      "args": { "auto_enabled": "boolean", "interval_hours": "number", "keep_count": "number" },
+      "returns": "BackupPrefs",
+      "doc": "Validate and persist the backup preferences (MISSION-086): the interval must be 1-8760 hours and the keep count 1-100. Every backup (manual or automatic) applies the retention policy afterwards - keeping the newest N archives plus the newest of every older month. Resolves with the stored BackupPrefs or rejects with an AppError string."
     },
     {
       "name": "import_csv_headers",

@@ -72,6 +72,30 @@ pub struct RestoreReport {
     pub restart_required: bool,
 }
 
+/// Backup preferences (MISSION-086), persisted in the `settings` table.
+/// Defaults are conservative: automatic backups off, daily interval, ten
+/// archives kept (plus one per older month).
+#[derive(Debug, Clone, Serialize, serde::Deserialize)]
+pub struct BackupPrefs {
+    pub auto_enabled: bool,
+    pub interval_hours: u32,
+    pub keep_count: u32,
+}
+
+impl Default for BackupPrefs {
+    fn default() -> Self {
+        Self {
+            auto_enabled: false,
+            interval_hours: 24,
+            keep_count: 10,
+        }
+    }
+}
+
+const KEY_AUTO: &str = "backup.auto_enabled";
+const KEY_INTERVAL: &str = "backup.interval_hours";
+const KEY_KEEP: &str = "backup.keep_count";
+
 /// Removes its paths on drop unless disarmed — the `.partial` archive and the
 /// temporary `VACUUM INTO` snapshot never outlive a failed/cancelled backup.
 struct PartialGuard {
@@ -189,6 +213,10 @@ impl BackupService {
             return Err(error);
         }
 
+        // 5. Apply the retention policy (newest N + one per older month).
+        let prefs = self.prefs().await?;
+        self.rotate(prefs.keep_count)?;
+
         let size_bytes = std::fs::metadata(&dest)?.len();
         Ok(BackupReport {
             path: dest.display().to_string(),
@@ -196,6 +224,115 @@ impl BackupService {
             media_count: meta.media_count,
             asset_count: meta.asset_count,
         })
+    }
+
+    /// Load backup preferences (defaults for missing keys).
+    pub async fn prefs(&self) -> Result<BackupPrefs, AppError> {
+        let rows: Vec<(String, String)> =
+            sqlx::query_as("SELECT key, value FROM settings WHERE key IN (?, ?, ?)")
+                .bind(KEY_AUTO)
+                .bind(KEY_INTERVAL)
+                .bind(KEY_KEEP)
+                .fetch_all(&self.pool)
+                .await?;
+        let mut prefs = BackupPrefs::default();
+        for (key, value) in rows {
+            match key.as_str() {
+                KEY_AUTO => prefs.auto_enabled = value == "true",
+                KEY_INTERVAL => {
+                    if let Ok(hours) = value.parse() {
+                        prefs.interval_hours = hours;
+                    }
+                }
+                KEY_KEEP => {
+                    if let Ok(count) = value.parse() {
+                        prefs.keep_count = count;
+                    }
+                }
+                _ => {}
+            }
+        }
+        Ok(prefs)
+    }
+
+    /// Validate and persist backup preferences.
+    pub async fn set_prefs(&self, prefs: BackupPrefs) -> Result<BackupPrefs, AppError> {
+        if !(1..=8760).contains(&prefs.interval_hours) {
+            return Err(AppError::validation(
+                "backup interval must be between 1 and 8760 hours",
+            ));
+        }
+        if !(1..=100).contains(&prefs.keep_count) {
+            return Err(AppError::validation(
+                "backup keep count must be between 1 and 100",
+            ));
+        }
+        for (key, value) in [
+            (KEY_AUTO, prefs.auto_enabled.to_string()),
+            (KEY_INTERVAL, prefs.interval_hours.to_string()),
+            (KEY_KEEP, prefs.keep_count.to_string()),
+        ] {
+            sqlx::query(
+                "INSERT INTO settings (key, value) VALUES (?, ?) \
+                 ON CONFLICT(key) DO UPDATE SET value = excluded.value",
+            )
+            .bind(key)
+            .bind(value)
+            .execute(&self.pool)
+            .await?;
+        }
+        Ok(prefs)
+    }
+
+    /// Enforce the retention policy over `{data_dir}/backups`: keep the
+    /// newest `keep` archives plus the newest of every older month ("N +
+    /// monthly"). Files whose names don't match the archive pattern are
+    /// never touched. Returns how many archives were deleted.
+    pub fn rotate(&self, keep: u32) -> Result<u32, AppError> {
+        let dir = self.backups_dir();
+        if !dir.is_dir() {
+            return Ok(0);
+        }
+        let mut archives: Vec<(String, PathBuf)> = std::fs::read_dir(&dir)?
+            .flatten()
+            .filter_map(|entry| {
+                let name = entry.file_name().to_string_lossy().to_string();
+                let stamp = archive_stamp(&name)?;
+                Some((stamp, entry.path()))
+            })
+            .collect();
+        // Stamps are zero-padded `YYYYMMDDHHMMSS`, so descending string
+        // order is chronological.
+        archives.sort_by(|a, b| b.0.cmp(&a.0));
+
+        let mut seen_months = std::collections::HashSet::new();
+        let mut deleted = 0u32;
+        for (index, (stamp, path)) in archives.iter().enumerate() {
+            let is_newest_n = index < keep as usize;
+            let opens_a_month = seen_months.insert(&stamp[..6]);
+            if is_newest_n || opens_a_month {
+                continue;
+            }
+            let _ = std::fs::remove_file(path);
+            deleted += 1;
+        }
+        Ok(deleted)
+    }
+
+    /// Run the automatic backup when it is due (MISSION-086): enabled by
+    /// preference, and the newest archive older than the interval (or no
+    /// archive at all). Returns the report when a backup was created.
+    pub async fn auto_backup_if_due(&self) -> Result<Option<BackupReport>, AppError> {
+        let prefs = self.prefs().await?;
+        if !prefs.auto_enabled {
+            return Ok(None);
+        }
+        if let Some(age_hours) = newest_backup_age_hours(&self.backups_dir())? {
+            if age_hours < f64::from(prefs.interval_hours) {
+                return Ok(None);
+            }
+        }
+        Ok(Some(self.create().await?))
     }
 
     /// Restore a `.mylore` archive (MISSION-085): validate, stage the
@@ -477,6 +614,50 @@ fn remove_any(path: impl AsRef<Path>) {
     }
 }
 
+/// The zero-padded `YYYYMMDDHHMMSS` stamp embedded in an archive file name
+/// (`mylore-<stamp>-<uid>.mylore`), or `None` for foreign names.
+fn archive_stamp(file_name: &str) -> Option<String> {
+    let rest = file_name.strip_prefix("mylore-")?.strip_suffix(".mylore")?;
+    let mut parts = rest.split('-');
+    let date = parts.next()?;
+    let time = parts.next()?;
+    if date.len() == 8
+        && time.len() == 6
+        && date.chars().all(|c| c.is_ascii_digit())
+        && time.chars().all(|c| c.is_ascii_digit())
+    {
+        Some(format!("{date}{time}"))
+    } else {
+        None
+    }
+}
+
+/// Age in hours of the newest archive in `dir`, or `None` when there is none
+/// (including when the directory does not exist yet).
+fn newest_backup_age_hours(dir: &Path) -> Result<Option<f64>, AppError> {
+    if !dir.is_dir() {
+        return Ok(None);
+    }
+    let mut newest: Option<std::time::SystemTime> = None;
+    for entry in std::fs::read_dir(dir)?.flatten() {
+        let name = entry.file_name().to_string_lossy().to_string();
+        if !name.ends_with(".mylore") {
+            continue;
+        }
+        let modified = entry.metadata()?.modified()?;
+        newest = Some(match newest {
+            Some(current) if current >= modified => current,
+            _ => modified,
+        });
+    }
+    Ok(newest.map(|modified| {
+        let age = std::time::SystemTime::now()
+            .duration_since(modified)
+            .unwrap_or_default();
+        age.as_secs_f64() / 3600.0
+    }))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -711,30 +892,180 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn rotate_keeps_newest_n_plus_one_per_older_month() {
+        let h = harness("rotate.db").await;
+        let dir = h.service.backups_dir();
+        std::fs::create_dir_all(&dir).expect("backups dir");
+        for name in [
+            "mylore-20260810-120000-aaaaaa.mylore",
+            "mylore-20260805-120000-bbbbbb.mylore",
+            "mylore-20260801-120000-cccccc.mylore",
+            "mylore-20260715-120000-dddddd.mylore",
+            "mylore-20260701-120000-eeeeee.mylore",
+            "mylore-20260620-120000-ffffff.mylore",
+            "foreign-file.mylore",
+        ] {
+            std::fs::write(dir.join(name), b"x").expect("write archive stub");
+        }
+
+        let deleted = h.service.rotate(2).expect("rotate");
+        assert_eq!(deleted, 2, "the older August + the older July");
+
+        let remaining: Vec<String> = std::fs::read_dir(&dir)
+            .expect("read dir")
+            .flatten()
+            .map(|e| e.file_name().to_string_lossy().to_string())
+            .collect();
+        assert!(remaining.contains(&"mylore-20260810-120000-aaaaaa.mylore".to_string()));
+        assert!(remaining.contains(&"mylore-20260805-120000-bbbbbb.mylore".to_string()));
+        assert!(remaining.contains(&"mylore-20260715-120000-dddddd.mylore".to_string()));
+        assert!(remaining.contains(&"mylore-20260620-120000-ffffff.mylore".to_string()));
+        assert_eq!(
+            remaining.len(),
+            5,
+            "4 kept archives + the untouched foreign file"
+        );
+
+        h.cleanup().await;
+    }
+
+    #[tokio::test]
+    async fn prefs_default_roundtrip_and_validation() {
+        let h = harness("prefs.db").await;
+
+        let defaults = h.service.prefs().await.expect("default prefs");
+        assert!(!defaults.auto_enabled);
+        assert_eq!(defaults.interval_hours, 24);
+        assert_eq!(defaults.keep_count, 10);
+
+        let stored = h
+            .service
+            .set_prefs(BackupPrefs {
+                auto_enabled: true,
+                interval_hours: 12,
+                keep_count: 3,
+            })
+            .await
+            .expect("set prefs");
+        let loaded = h.service.prefs().await.expect("reload prefs");
+        assert_eq!(loaded.auto_enabled, stored.auto_enabled);
+        assert_eq!(loaded.interval_hours, 12);
+        assert_eq!(loaded.keep_count, 3);
+
+        for bad in [
+            BackupPrefs {
+                auto_enabled: true,
+                interval_hours: 0,
+                keep_count: 3,
+            },
+            BackupPrefs {
+                auto_enabled: true,
+                interval_hours: 9000,
+                keep_count: 3,
+            },
+            BackupPrefs {
+                auto_enabled: true,
+                interval_hours: 12,
+                keep_count: 0,
+            },
+            BackupPrefs {
+                auto_enabled: true,
+                interval_hours: 12,
+                keep_count: 101,
+            },
+        ] {
+            assert!(
+                h.service.set_prefs(bad).await.is_err(),
+                "must reject out of range"
+            );
+        }
+        let unchanged = h.service.prefs().await.expect("prefs after rejects");
+        assert_eq!(unchanged.interval_hours, 12);
+        assert_eq!(unchanged.keep_count, 3);
+
+        h.cleanup().await;
+    }
+
+    #[tokio::test]
+    async fn auto_backup_runs_only_when_due() {
+        let h = harness("auto_backup.db").await;
+
+        // Disabled by default: never runs.
+        assert!(h
+            .service
+            .auto_backup_if_due()
+            .await
+            .expect("check")
+            .is_none());
+
+        // Enabled with no archives at all: due immediately.
+        h.service
+            .set_prefs(BackupPrefs {
+                auto_enabled: true,
+                interval_hours: 24,
+                keep_count: 5,
+            })
+            .await
+            .expect("enable");
+        let report = h
+            .service
+            .auto_backup_if_due()
+            .await
+            .expect("run")
+            .expect("created");
+        assert_eq!(report.media_count, 0);
+        assert!(Path::new(&report.path).is_file());
+
+        // A fresh archive means not due for another interval.
+        assert!(h
+            .service
+            .auto_backup_if_due()
+            .await
+            .expect("check again")
+            .is_none());
+
+        h.cleanup().await;
+    }
+
+    #[tokio::test]
     async fn restore_rolls_back_when_the_swap_fails() {
         let h = harness("restore_rollback.db").await;
         seed_media(&h.pool, "m-1").await;
+        let cache = h.data_dir.join("images");
+        std::fs::create_dir_all(&cache).expect("images dir");
+        let image_path = cache.join("a-1.jpg");
+        std::fs::write(&image_path, b"jpeg-bytes").expect("write image");
+        seed_cached_asset(&h.pool, "a-1", &image_path.display().to_string()).await;
         let backup = h.service.create().await.expect("create backup");
         seed_media(&h.pool, "m-2").await;
 
-        // Sabotage: a directory squatting on the WAL sidecar path makes the
-        // post-swap verification fail *after* quarantine — the dangerous
-        // window where live data has already been moved away.
+        // Drive the guarded part of restore directly and sabotage it: the
+        // staged asset file vanishes, so the swap fails *after* quarantine —
+        // the dangerous window where live data has already been moved away.
+        let meta = h
+            .service
+            .validate(Path::new(&backup.path))
+            .await
+            .expect("validate");
+        let staging = h.data_dir.join(".restore-sabotage");
+        std::fs::create_dir_all(&staging).expect("staging");
+        let staged_db = extract_archive(Path::new(&backup.path), &meta, &staging).expect("extract");
+        std::fs::remove_file(staging.join(&meta.assets[0].file)).expect("sabotage staged asset");
+
         h.pool.close().await;
-        std::fs::create_dir_all(h.data_dir.join("mylore.db-wal")).expect("plant directory");
-
-        assert!(h.service.restore(Path::new(&backup.path)).await.is_err());
-
+        let quarantine = h.data_dir.join("quarantine-test");
+        let result = h.service.swap_in(&staged_db, &meta, &quarantine).await;
         assert!(
-            !h.data_dir.join("mylore.db-wal").exists(),
-            "the planted directory was removed"
+            result.is_err(),
+            "the missing staged asset must fail the swap"
         );
-        let quarantines: Vec<_> = std::fs::read_dir(&h.data_dir)
-            .expect("data dir")
-            .flatten()
-            .filter(|e| e.file_name().to_string_lossy().starts_with("quarantine-"))
-            .collect();
-        assert!(quarantines.is_empty(), "quarantine moved back");
+
+        // swap_in leaves the dangerous half-swapped state in place; restore()
+        // owns the rollback. Drive it and verify the undo.
+        rollback(&h.data_dir, &quarantine);
+
+        assert!(!quarantine.exists(), "quarantine moved back");
+        assert!(cache.join("a-1.jpg").is_file(), "original images restored");
 
         let pool = reopened(&h.db_path).await;
         let (media,): (i64,) = sqlx::query_as("SELECT COUNT(*) FROM media")
@@ -744,6 +1075,7 @@ mod tests {
         pool.close().await;
         assert_eq!(media, 2, "the mutated live data survived intact");
 
+        let _ = std::fs::remove_dir_all(&staging);
         h.cleanup().await;
     }
 }
