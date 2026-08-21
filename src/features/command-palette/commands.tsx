@@ -1,8 +1,9 @@
-import { Monitor, Moon, Sun, Zap, type LucideIcon } from "lucide-react";
+import { Keyboard, Monitor, Moon, Plus, Sun, Zap, type LucideIcon } from "lucide-react";
 import type { TFunction } from "i18next";
 import type { NavigateFunction } from "react-router";
 import { NAV_ITEMS } from "@/navigation";
 import { formatKeyCombo } from "@/shortcuts/keys";
+import { OPEN_ADD_MEDIA_EVENT, OPEN_SHORTCUTS_EVENT } from "@/shortcuts/map";
 import type { ThemePreference } from "@/themes/theme";
 
 /* MISSION-036 — Command registry for the palette. Commands are assembled with
@@ -48,6 +49,15 @@ export function buildPaletteCommands(deps: {
   }));
 
   const actions: PaletteCommand[] = [
+    {
+      id: "add:title",
+      group: "actions",
+      label: t("palette.addTitle"),
+      keywords: ["add", "new title", "create", "track"],
+      icon: Plus,
+      hint: formatKeyCombo("Mod+N"),
+      run: () => window.dispatchEvent(new Event(OPEN_ADD_MEDIA_EVENT)),
+    },
     ...(["light", "dark", "system"] as const).map((preference) => ({
       id: `theme:${preference}`,
       group: "actions" as const,
@@ -60,10 +70,19 @@ export function buildPaletteCommands(deps: {
       id: "quick:capture",
       group: "actions",
       label: t("quick.open"),
-      keywords: ["quick capture", "progress", "mark done", "catch up"],
+      keywords: ["quick capture", "progress", "mark done", "mark complete", "status", "catch up"],
       icon: Zap,
       hint: formatKeyCombo("Mod+Enter"),
       run: () => window.dispatchEvent(new Event("mylore:open-quick-capture")),
+    },
+    {
+      id: "help:shortcuts",
+      group: "actions",
+      label: t("palette.shortcuts"),
+      keywords: ["keyboard", "shortcut", "hotkey", "help"],
+      icon: Keyboard,
+      hint: formatKeyCombo("?"),
+      run: () => window.dispatchEvent(new Event(OPEN_SHORTCUTS_EVENT)),
     },
   ];
 

@@ -32,14 +32,26 @@ const SELECT_CLASSES =
   "transition-colors duration-150 ease-out hover:border-accent focus-visible:outline-none";
 
 export interface AddMediaDialogProps {
-  trigger: React.ReactNode;
+  trigger?: React.ReactNode;
+  /** Controlled open state — the global Mod+N / palette wiring (MISSION-090). */
+  open?: boolean;
+  onOpenChange?: (open: boolean) => void;
 }
 
-export function AddMediaDialog({ trigger }: AddMediaDialogProps) {
+export function AddMediaDialog({
+  trigger,
+  open: controlledOpen,
+  onOpenChange,
+}: AddMediaDialogProps) {
   const { t } = useTranslation();
   const toast = useToast();
   const addMedia = useAddMedia();
-  const [open, setOpen] = useState(false);
+  const [internalOpen, setOpen] = useState(false);
+  const open = controlledOpen ?? internalOpen;
+  const changeOpen = (next: boolean) => {
+    onOpenChange?.(next);
+    if (controlledOpen === undefined) setOpen(next);
+  };
 
   const {
     register,
@@ -69,7 +81,7 @@ export function AddMediaDialog({ trigger }: AddMediaDialogProps) {
     if (isSubmitting) return;
     addMedia.mutate(values, {
       onSuccess: () => {
-        setOpen(false);
+        changeOpen(false);
         toast.success({ title: t("library.addedSuccess") });
       },
       onError: () => {
@@ -82,8 +94,8 @@ export function AddMediaDialog({ trigger }: AddMediaDialogProps) {
     errors[key]?.message ? t(errors[key]!.message as string) : undefined;
 
   return (
-    <Dialog open={open} onOpenChange={setOpen}>
-      <DialogTrigger asChild>{trigger}</DialogTrigger>
+    <Dialog open={open} onOpenChange={changeOpen}>
+      {trigger ? <DialogTrigger asChild>{trigger}</DialogTrigger> : null}
       <DialogContent closeLabel={t("library.closeAria")}>
         <DialogTitle>{t("library.dialogTitle")}</DialogTitle>
         <DialogDescription>{t("library.dialogHint")}</DialogDescription>

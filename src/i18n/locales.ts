@@ -235,6 +235,16 @@ const en = {
     empty: "No matching commands.",
     group_navigation: "Navigation",
     group_actions: "Actions",
+    addTitle: "Add title",
+    shortcuts: "Keyboard shortcuts",
+  },
+  shortcuts: {
+    title: "Keyboard shortcuts",
+    hint: "The complete map. Every binding also lives in the command palette.",
+    palette: "Open command palette",
+    quickCapture: "Quick capture (mark progress)",
+    addTitle: "Add title",
+    help: "Show this help",
   },
   contentType: {
     book: "Book",
@@ -1094,6 +1104,16 @@ const ar = {
     empty: "لا توجد أوامر مطابقة.",
     group_navigation: "التنقل",
     group_actions: "إجراءات",
+    addTitle: "أضف عنواناً",
+    shortcuts: "اختصارات لوحة المفاتيح",
+  },
+  shortcuts: {
+    title: "اختصارات لوحة المفاتيح",
+    hint: "الخريطة الكاملة. كل اختصار متاح أيضاً من لوحة الأوامر.",
+    palette: "افتح لوحة الأوامر",
+    quickCapture: "الالتقاط السريع (تسجيل التقدّم)",
+    addTitle: "أضف عنواناً",
+    help: "اعرض هذه المساعدة",
   },
   contentType: {
     book: "كتاب",

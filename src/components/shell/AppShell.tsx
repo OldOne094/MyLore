@@ -3,12 +3,16 @@ import { NavRail } from "./NavRail";
 import { TopBar } from "./TopBar";
 import { StatusBar } from "./StatusBar";
 import { SkipLink } from "./SkipLink";
+import { ShortcutsDialog } from "./ShortcutsDialog";
 import { CommandPalette } from "@/features/command-palette/CommandPalette";
+import { GlobalAddMedia } from "@/features/library/GlobalAddMedia";
 import { QuickCapture } from "@/features/library/QuickCapture";
 
 /* App shell (MISSION-032): nav rail + top bar + status bar around the routed
    content. Layout uses logical flow so it mirrors in RTL for Arabic. The skip
-   link (MISSION-037) is the first tab stop and targets the content landmark. */
+   link (MISSION-037) is the first tab stop and targets the content landmark.
+   MISSION-090 mounts the global overlays: palette, quick capture, add-title
+   dialog (Mod+N) and the shortcuts help ("?"). */
 
 export function AppShell() {
   return (
@@ -29,6 +33,8 @@ export function AppShell() {
         </div>
         <CommandPalette />
         <QuickCapture />
+        <GlobalAddMedia />
+        <ShortcutsDialog />
       </div>
     </>
   );

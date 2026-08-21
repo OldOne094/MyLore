@@ -420,6 +420,13 @@ re-add additively. The UI entry is the bulk bar's Merge action on exactly two se
 pick survivor → conflict preview → apply.
 (Full design: `DATABASE.md §7`.)
 
+**Shortcuts & palette (MISSION-090):** the complete keyboard map lives in one shared source
+(`shortcuts/map.ts`: Mod+K palette, Mod+Enter quick capture, Mod+N add title, ? help) rendered
+by the shell's ShortcutsDialog so help and bindings can't drift. The shell mounts global
+overlays — palette, quick capture, GlobalAddMedia (controlled-mode AddMediaDialog opened by
+Mod+N or the palette's window-event protocol) — each mounted only while open so provider-less
+shells keep rendering.
+
 ## 8. Background tasks
 
 Unified `TaskManager` (**implemented**): every long operation (import, export, metadata sync, image
