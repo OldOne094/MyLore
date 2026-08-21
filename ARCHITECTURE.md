@@ -493,6 +493,11 @@ Cancellation propagates to Tokio tasks and HTTP requests (drop-based cancellatio
 
 ## 13. i18n & RTL
 
+- **Density tiers (MISSION-095):** a `UiDensity` preference reflected as `data-density` on the
+  root; compact mode overrides the `--control-height*` tokens so every consuming control
+  tightens globally. Micro-interactions stay restrained by design: uniform
+  `duration-150 ease-out` transitions clamped under `prefers-reduced-motion`.
+
 - `i18next` + ICU; locales `en` and `ar` in MVP, provider names/titles kept in original script.
 - Layout via **logical CSS properties** and Tailwind `rtl:` variants - mirrored navigation,
   sidebars, and text alignment work without separate stylesheets.

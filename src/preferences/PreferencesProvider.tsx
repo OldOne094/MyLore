@@ -16,6 +16,7 @@ export function PreferencesProvider({ children }: { children: ReactNode }) {
   const [preferences, setPreferences] = useState<Preferences>(() => ({
     theme: readPreference(),
     language: readLanguage(),
+    density: "comfortable",
   }));
   const repositoryRef = useRef(getPreferencesRepository());
 
@@ -58,9 +59,23 @@ export function PreferencesProvider({ children }: { children: ReactNode }) {
     });
   }, []);
 
+  const setDensity = useCallback((density: Preferences["density"]) => {
+    setPreferences((current) => {
+      const next = { ...current, density };
+      void repositoryRef.current.save(next);
+      return next;
+    });
+  }, []);
+
+  // Reflect the density tier on the root so the CSS variable overrides in
+  // tokens.css apply everywhere (MISSION-095).
+  useEffect(() => {
+    document.documentElement.dataset.density = preferences.density;
+  }, [preferences.density]);
+
   const value = useMemo(
-    () => ({ preferences, setTheme, setLanguage: setLocale }),
-    [preferences, setTheme, setLocale],
+    () => ({ preferences, setTheme, setLanguage: setLocale, setDensity }),
+    [preferences, setTheme, setLocale, setDensity],
   );
 
   return <PreferencesContext.Provider value={value}>{children}</PreferencesContext.Provider>;

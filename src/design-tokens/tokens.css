@@ -55,6 +55,13 @@
   --control-height-compact: 2rem;
 }
 
+/* Density tiers (MISSION-095): compact shrinks every control that consumes
+   the height tokens; components reading the variables resize automatically. */
+:root[data-density="compact"] {
+  --control-height: 2rem;
+  --control-height-compact: 1.75rem;
+}
+
 /* Light theme (default) — DESIGN_SYSTEM.md §2 */
 :root,
 :root[data-theme="light"] {

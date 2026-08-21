@@ -1,7 +1,7 @@
 import { Store } from "@tauri-apps/plugin-store";
 import { isAppLanguage } from "@/i18n";
 import { isThemePreference } from "@/themes/theme";
-import { DEFAULT_PREFERENCES, type Preferences } from "./types";
+import { DEFAULT_PREFERENCES, isUiDensity, type Preferences } from "./types";
 
 /* MISSION-034 — Preference persistence. Runtime backend: tauri-plugin-store
    (settings.json) in the desktop shell; fallback backend: localStorage so the
@@ -28,6 +28,7 @@ export function parsePreferences(value: unknown): Preferences | null {
   return {
     theme: isThemePreference(record.theme) ? record.theme : DEFAULT_PREFERENCES.theme,
     language: isAppLanguage(record.language) ? record.language : DEFAULT_PREFERENCES.language,
+    density: isUiDensity(record.density) ? record.density : DEFAULT_PREFERENCES.density,
   };
 }
 

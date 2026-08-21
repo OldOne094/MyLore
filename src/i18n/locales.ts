@@ -136,6 +136,10 @@ const en = {
     themeHint: "Light, dark, or follow the system appearance.",
     language: "Language",
     languageHint: "Interface language. Arabic switches the layout to RTL.",
+    density: "Density",
+    densityHint: "Comfortable spreads controls out; compact fits more on screen.",
+    density_comfortable: "Comfortable",
+    density_compact: "Compact",
     providers: "Providers",
     providersHint:
       "Enable metadata providers and manage their API keys. Keys are stored in your operating system's secure keyring.",
@@ -1003,6 +1007,10 @@ const ar = {
     themeHint: "فاتح، داكن، أو تتبُّع مظهر النظام.",
     language: "اللغة",
     languageHint: "لغة الواجهة. العربية تُحوِّل التخطيط إلى RTL.",
+    density: "الكثافة",
+    densityHint: "مريح يوسّع عناصر التحكم؛ ومضغوط يستوعب المزيد على الشاشة.",
+    density_comfortable: "مريح",
+    density_compact: "مضغوط",
     providers: "الموزِّعون",
     providersHint:
       "فعِّل مزوّدي البيانات وأدر مفاتيح API الخاصة بهم. تُخزَّن المفاتيح في نظام تشغيلك (سلسلة المفاتيح الآمنة).",

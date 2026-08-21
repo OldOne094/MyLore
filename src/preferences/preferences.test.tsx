@@ -41,6 +41,7 @@ beforeEach(() => {
   document.documentElement.removeAttribute("data-theme");
   document.documentElement.removeAttribute("dir");
   document.documentElement.removeAttribute("lang");
+  document.documentElement.removeAttribute("data-density");
   vi.mocked(invoke).mockResolvedValue([]);
 });
 
@@ -52,7 +53,7 @@ afterEach(async () => {
 describe("preferences repository", () => {
   it("round-trips preferences through the localStorage backend", async () => {
     const repo = getPreferencesRepository();
-    const input: Preferences = { theme: "dark", language: "ar" };
+    const input: Preferences = { theme: "dark", language: "ar", density: "compact" };
     await repo.save(input);
     await expect(repo.load()).resolves.toEqual(input);
     expect(JSON.parse(localStorage.getItem(PREFERENCES_KEY) ?? "{}")).toEqual(input);
@@ -70,10 +71,22 @@ describe("preferences repository", () => {
     expect(parsePreferences({ theme: "nope" })).toEqual({
       theme: "system",
       language: "en",
+      density: "comfortable",
     });
     expect(parsePreferences({ theme: "dark", language: "fr" })).toEqual({
       theme: "dark",
       language: "en",
+      density: "comfortable",
+    });
+    expect(parsePreferences({ density: "tiny" })).toEqual({
+      theme: "system",
+      language: "en",
+      density: "comfortable",
+    });
+    expect(parsePreferences({ density: "compact" })).toEqual({
+      theme: "system",
+      language: "en",
+      density: "compact",
     });
   });
 });
@@ -113,12 +126,32 @@ describe("settings page", () => {
     });
   });
 
+  it("switches the density tier, reflects it on the root and persists it (MISSION-095)", async () => {
+    const user = userEvent.setup();
+    renderSettings();
+    const densityGroup = await within(screen.getByRole("main")).findByRole("group", {
+      name: "Density",
+    });
+    await user.click(within(densityGroup).getByRole("button", { name: "Compact" }));
+    expect(document.documentElement.getAttribute("data-density")).toBe("compact");
+    await waitFor(() => {
+      expect(JSON.parse(localStorage.getItem(PREFERENCES_KEY) ?? "{}").density).toBe("compact");
+    });
+
+    await user.click(within(densityGroup).getByRole("button", { name: "Comfortable" }));
+    expect(document.documentElement.getAttribute("data-density")).toBe("comfortable");
+  });
+
   it("applies persisted preferences on mount", async () => {
-    localStorage.setItem(PREFERENCES_KEY, JSON.stringify({ theme: "dark", language: "ar" }));
+    localStorage.setItem(
+      PREFERENCES_KEY,
+      JSON.stringify({ theme: "dark", language: "ar", density: "compact" }),
+    );
     renderSettings();
     await waitFor(() => {
       expect(document.documentElement.getAttribute("data-theme")).toBe("dark");
       expect(document.documentElement.getAttribute("dir")).toBe("rtl");
+      expect(document.documentElement.getAttribute("data-density")).toBe("compact");
     });
     expect(await screen.findByRole("link", { name: "المكتبة" })).toBeInTheDocument();
   });

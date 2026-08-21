@@ -28,7 +28,7 @@ function Section({ title, hint, children }: SectionProps) {
 
 export function SettingsPage() {
   const { t } = useTranslation();
-  const { preferences, setTheme, setLanguage } = usePreferences();
+  const { preferences, setTheme, setLanguage, setDensity } = usePreferences();
 
   return (
     <div className="mx-auto flex w-full max-w-xl flex-col gap-6 p-6">
@@ -73,6 +73,29 @@ export function SettingsPage() {
               onClick={() => setLanguage(code)}
             >
               {LANGUAGE_SHORT_LABELS[code]}
+            </button>
+          ))}
+        </div>
+      </Section>
+
+      <Section title={t("settings.density")} hint={t("settings.densityHint")}>
+        <div
+          role="group"
+          aria-label={t("settings.density")}
+          className="inline-flex items-center gap-1 rounded-full border border-border-subtle bg-bg-raised p-1"
+        >
+          {(["comfortable", "compact"] as const).map((value) => (
+            <button
+              key={value}
+              type="button"
+              className={cn(
+                "rounded-full border-none bg-transparent px-3 py-1 text-sm text-text-secondary transition-colors duration-150 ease-out hover:bg-bg-hover hover:text-text-primary",
+                preferences.density === value && "bg-accent text-bg-surface hover:bg-accent",
+              )}
+              aria-pressed={preferences.density === value}
+              onClick={() => setDensity(value)}
+            >
+              {t(`settings.density_${value}`)}
             </button>
           ))}
         </div>
