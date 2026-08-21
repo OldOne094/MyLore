@@ -200,7 +200,9 @@ export function MediaDetailPage() {
           <div className="flex min-w-0 flex-1 flex-col gap-3">
             <div className="flex items-start justify-between gap-3">
               <div>
-                <h1 className="text-2xl font-semibold text-text-primary">{title}</h1>
+                <h1 dir="auto" className="text-2xl font-semibold text-text-primary">
+                  {title}
+                </h1>
                 {data.title_original ? (
                   <p className="mt-1 text-sm text-text-tertiary">{data.title_original}</p>
                 ) : null}

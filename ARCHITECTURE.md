@@ -491,8 +491,11 @@ Cancellation propagates to Tokio tasks and HTTP requests (drop-based cancellatio
 ## 13. i18n & RTL
 
 - `i18next` + ICU; locales `en` and `ar` in MVP, provider names/titles kept in original script.
-- Layout via **logical CSS properties** and Tailwind `rtl:` variants — mirrored navigation,
+- Layout via **logical CSS properties** and Tailwind `rtl:` variants - mirrored navigation,
   sidebars, and text alignment work without separate stylesheets.
+- Directional icons flip with `rtl:rotate-180`; horizontal keyboard navigation (tabs, tree
+  expand/collapse) inverts under RTL; media titles carry `dir="auto"` for mixed-direction
+  content (MISSION-092 pass).
 - Design tokens and components tested in both directions and with long CJK/Arabic titles
   (REQ-UX-003, NFR-I18N).
 

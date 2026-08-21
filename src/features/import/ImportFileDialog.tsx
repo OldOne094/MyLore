@@ -390,7 +390,7 @@ export function ImportFileDialog({ trigger }: ImportFileDialogProps) {
                 <p className="text-sm text-text-tertiary">{t("import.noColumns")}</p>
               ) : (
                 <div className="max-h-72 overflow-y-auto rounded-sm border border-border-subtle">
-                  <table className="w-full text-left text-sm">
+                  <table className="w-full text-start text-sm">
                     <thead className="sticky top-0 bg-bg-surface">
                       <tr>
                         <th className="px-3 py-2 font-medium text-text-secondary">
@@ -407,7 +407,7 @@ export function ImportFileDialog({ trigger }: ImportFileDialogProps) {
                           <td className="px-3 py-1.5 text-text-primary">
                             {t(row.labelKey)}
                             {row.hintKey ? (
-                              <span className="ml-1 text-xs text-text-tertiary">
+                              <span className="ms-1 text-xs text-text-tertiary">
                                 — {t(row.hintKey)}
                               </span>
                             ) : null}

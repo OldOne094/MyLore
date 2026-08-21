@@ -265,7 +265,7 @@ export function ReviewTab({ mediaId }: { mediaId: string }) {
             );
           })}
           {draft.rating ? (
-            <span className="ml-2 text-sm font-medium tabular-nums text-text-secondary">
+            <span className="ms-2 text-sm font-medium tabular-nums text-text-secondary">
               {draft.rating}/10
             </span>
           ) : null}
@@ -317,7 +317,7 @@ export function ReviewTab({ mediaId }: { mediaId: string }) {
         <SectionHeading title={t("review.tagsTitle")} hint={t("review.tagsHint")} />
         <div className="mt-3 flex flex-wrap items-center gap-2">
           {tagList.map((tag) => (
-            <Badge key={tag.id} variant="neutral" className="pr-1.5">
+            <Badge key={tag.id} variant="neutral" className="pe-1.5">
               {tag.name}
               <button
                 type="button"

@@ -123,7 +123,7 @@ function ExternalHitRow({ hit }: { hit: import("@/api").ExternalHit }) {
           variant="secondary"
           onClick={onImport}
           disabled={importProvider.isPending}
-          className="ml-auto shrink-0"
+          className="ms-auto shrink-0"
         >
           {importProvider.isPending ? t("discover.importing") : t("discover.import")}
         </Button>

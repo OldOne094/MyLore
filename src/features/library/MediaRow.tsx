@@ -68,6 +68,7 @@ export function MediaRow({
       </div>
 
       <h3
+        dir="auto"
         className={cn(
           "min-w-0 flex-1 truncate font-medium text-text-primary",
           dense ? "text-xs" : "text-sm",

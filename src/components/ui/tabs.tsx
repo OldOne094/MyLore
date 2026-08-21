@@ -61,14 +61,17 @@ export function TabsList({ children, ariaLabel, className }: TabsListProps) {
 
   const onKeyDown = (event: KeyboardEvent<HTMLDivElement>) => {
     const list = event.currentTarget;
+    // Horizontal tab navigation follows the reading direction: in RTL the
+    // arrows invert.
+    const rtl = document.documentElement.dir === "rtl";
     switch (event.key) {
       case "ArrowRight":
         event.preventDefault();
-        moveFocus(list, focusedIndex, 1);
+        moveFocus(list, focusedIndex, rtl ? -1 : 1);
         break;
       case "ArrowLeft":
         event.preventDefault();
-        moveFocus(list, focusedIndex, -1);
+        moveFocus(list, focusedIndex, rtl ? 1 : -1);
         break;
       case "Home":
         event.preventDefault();

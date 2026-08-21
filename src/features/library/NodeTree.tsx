@@ -87,7 +87,7 @@ export function NodeTree({
   mediaTitle: string;
   contentType: string;
 }) {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const { data, isPending, isError, refetch } = useMediaNodesQuery(mediaId);
   const { markNode, markRange } = useNodeProgress(mediaId);
   const nodes = data ?? EMPTY_NODES;
@@ -96,6 +96,7 @@ export function NodeTree({
   const [anchorId, setAnchorId] = useState<string | null>(null);
   const seeded = useRef(false);
   const itemRefs = useRef(new Map<string, HTMLElement | null>());
+  const isRtl = i18n.dir() === "rtl";
 
   const order = useMemo(() => preorderIds(nodes), [nodes]);
   const complete = consumingState(contentType);
@@ -193,14 +194,16 @@ export function NodeTree({
         setFocusId(rows[Math.max(index - 1, 0)].node.id);
         break;
       case "ArrowRight":
+      case "ArrowLeft": {
+        // In RTL the horizontal arrows invert: the start-side arrow expands,
+        // the end-side arrow collapses.
         event.preventDefault();
-        if (row.node.children.length > 0 && !row.expanded) {
-          setExpanded((prev) => new Set(prev).add(row.node.id));
-        }
-        break;
-      case "ArrowLeft":
-        event.preventDefault();
-        if (row.node.children.length > 0 && row.expanded) {
+        const towardEnd = (event.key === "ArrowRight") !== isRtl;
+        if (towardEnd) {
+          if (row.node.children.length > 0 && !row.expanded) {
+            setExpanded((prev) => new Set(prev).add(row.node.id));
+          }
+        } else if (row.node.children.length > 0 && row.expanded) {
           setExpanded((prev) => {
             const next = new Set(prev);
             next.delete(row.node.id);
@@ -208,6 +211,7 @@ export function NodeTree({
           });
         }
         break;
+      }
     }
   };
 
@@ -253,7 +257,7 @@ export function NodeTree({
                   activate(node, event.shiftKey);
                 }
               }}
-              className="group flex cursor-pointer items-center gap-2 rounded-md py-1.5 pr-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+              className="group flex cursor-pointer items-center gap-2 rounded-md py-1.5 pe-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
               style={{ paddingInlineStart: 8 + row.depth * 16 }}
             >
               {hasChildren ? (

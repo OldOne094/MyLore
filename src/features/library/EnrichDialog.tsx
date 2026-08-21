@@ -33,7 +33,7 @@ export function EnrichDialog({ view, open, onOpenChange }: EnrichDialogProps) {
           <div className="mt-4 max-h-80 overflow-y-auto rounded-lg border border-border-subtle">
             <table className="w-full text-sm">
               <thead>
-                <tr className="border-b border-border-subtle text-left text-xs uppercase tracking-wide text-text-tertiary">
+                <tr className="border-b border-border-subtle text-start text-xs uppercase tracking-wide text-text-tertiary">
                   <th className="px-4 py-2 font-medium">{t("enrich.fieldTitle")}</th>
                   <th className="px-4 py-2 font-medium">{t("enrich.fieldBefore")}</th>
                   <th className="px-4 py-2 font-medium">{t("enrich.fieldAfter")}</th>

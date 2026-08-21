@@ -30,9 +30,9 @@ export interface ToastData {
 }
 
 const KIND_CLASSES: Record<ToastKind, string> = {
-  success: "border-l-status-completed",
-  error: "border-l-status-dropped",
-  info: "border-l-status-inprogress",
+  success: "border-s-status-completed",
+  error: "border-s-status-dropped",
+  info: "border-s-status-inprogress",
 };
 
 interface ToastContextValue {
@@ -75,7 +75,7 @@ export function ToastProvider({ children, duration = 5000 }: ToastProviderProps)
               if (!open) dismiss(toast.id);
             }}
             className={cn(
-              "rounded-md border border-border-subtle border-l-4 bg-bg-raised p-4 shadow-lg",
+              "rounded-md border border-border-subtle border-s-4 bg-bg-raised p-4 shadow-lg",
               KIND_CLASSES[toast.kind],
             )}
           >
