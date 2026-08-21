@@ -85,14 +85,21 @@ impl Provider for NovelUpdatesProvider {
         query: &str,
         content_type: Option<ContentType>,
     ) -> Result<Vec<ProviderCandidate>, ProviderError> {
-        if content_type.is_some_and(|ct| !matches!(ct, ContentType::Novel | ContentType::WebNovel)) {
+        if content_type.is_some_and(|ct| !matches!(ct, ContentType::Novel | ContentType::WebNovel))
+        {
             return Ok(Vec::new());
         }
         let html = self
             .client
             .get(
                 "/series-finder/",
-                &[("sf", "1"), ("sh", query), ("sort", "srank"), ("order", "asc"), ("pg", "1")],
+                &[
+                    ("sf", "1"),
+                    ("sh", query),
+                    ("sort", "srank"),
+                    ("order", "asc"),
+                    ("pg", "1"),
+                ],
             )
             .await?;
         Ok(response::parse_search_rows(&html)
@@ -181,7 +188,10 @@ mod tests {
         let provider = provider_with(&server);
         let hits = provider.search("dungeon", None).await.unwrap();
         assert_eq!(hits.len(), 2);
-        let hit = hits.iter().find(|h| h.provider_id == DUNGEON_DEFENDER).unwrap();
+        let hit = hits
+            .iter()
+            .find(|h| h.provider_id == DUNGEON_DEFENDER)
+            .unwrap();
         assert_eq!(hit.title, "Dungeon Defender");
         assert_eq!(hit.content_type, ContentType::Novel);
         assert!(hit.cover_url.is_some());
@@ -219,8 +229,12 @@ mod tests {
     #[tokio::test]
     async fn get_details_normalizes() {
         let server = MockServer::start().await;
-        mount(&server, &format!("/series/{DUNGEON_DEFENDER}/"), "series_dungeon_defender.html")
-            .await;
+        mount(
+            &server,
+            &format!("/series/{DUNGEON_DEFENDER}/"),
+            "series_dungeon_defender.html",
+        )
+        .await;
         let provider = provider_with(&server);
         let media = provider.get_details(DUNGEON_DEFENDER).await.unwrap();
         assert_eq!(media.provider_id, DUNGEON_DEFENDER);
@@ -234,7 +248,12 @@ mod tests {
     #[tokio::test]
     async fn get_details_maps_missing_page_to_not_found() {
         let server = MockServer::start().await;
-        mount(&server, &format!("/series/{DUNGEON_DEFENDER}/"), "captcha.html").await;
+        mount(
+            &server,
+            &format!("/series/{DUNGEON_DEFENDER}/"),
+            "captcha.html",
+        )
+        .await;
         let provider = provider_with(&server);
         // captcha is caught by the client before parsing
         let err = provider.get_details(DUNGEON_DEFENDER).await.unwrap_err();
@@ -253,11 +272,17 @@ mod tests {
     #[tokio::test]
     async fn get_nodes_resolves_post_id_and_builds_tree() {
         let server = MockServer::start().await;
-        mount(&server, &format!("/series/{DUNGEON_DEFENDER}/"), "series_dungeon_defender.html")
-            .await;
+        mount(
+            &server,
+            &format!("/series/{DUNGEON_DEFENDER}/"),
+            "series_dungeon_defender.html",
+        )
+        .await;
         Mock::given(method("POST"))
             .and(path("/wp-admin/admin-ajax.php"))
-            .and(wiremock::matchers::body_string("action=nd_getchapters&mygrr=0&mypostid=42817"))
+            .and(wiremock::matchers::body_string(
+                "action=nd_getchapters&mygrr=0&mypostid=42817",
+            ))
             .respond_with(
                 ResponseTemplate::new(200)
                     .set_body_string(novelupdates_fixture("chapters_dungeon_defender.html")),
@@ -277,7 +302,10 @@ mod tests {
         let server = MockServer::start().await;
         mount(&server, "/series-finder/", "search_series.html").await;
         let provider = provider_with(&server);
-        let entry = (novelupdates_config(), Arc::new(provider) as Arc<dyn Provider>);
+        let entry = (
+            novelupdates_config(),
+            Arc::new(provider) as Arc<dyn Provider>,
+        );
         let coordinator = ProviderCoordinator::new(vec![entry]).unwrap();
         let outcome = coordinator
             .search_all("dungeon", Some(ContentType::WebNovel), &coordinator.token())

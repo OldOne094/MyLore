@@ -66,7 +66,10 @@ impl SecretStore for InMemoryKeyring {
     }
 
     fn set(&self, user: &str, secret: &str) -> Result<(), String> {
-        self.inner.lock().unwrap().insert(user.to_string(), secret.to_string());
+        self.inner
+            .lock()
+            .unwrap()
+            .insert(user.to_string(), secret.to_string());
         Ok(())
     }
 

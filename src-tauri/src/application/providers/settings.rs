@@ -11,8 +11,8 @@ use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use std::sync::RwLock;
 
-use crate::application::providers::coordinator::{ProviderCoordinator, ProviderInfo};
 use crate::application::providers::config::ProviderConfig;
+use crate::application::providers::coordinator::{ProviderCoordinator, ProviderInfo};
 use crate::domain::provider::capabilities::AuthKind;
 use crate::domain::provider::Provider;
 use crate::error::AppError;
@@ -99,7 +99,10 @@ impl ProviderSettingsService {
             settings_file,
             store,
             builder,
-            state: RwLock::new(SettingsState { configs, coordinator }),
+            state: RwLock::new(SettingsState {
+                configs,
+                coordinator,
+            }),
         })
     }
 
@@ -131,7 +134,11 @@ impl ProviderSettingsService {
 
     /// Toggle one provider on/off. Persists the flag and rebuilds the
     /// coordinator so routing honors it immediately.
-    pub fn set_enabled(&self, provider: &str, enabled: bool) -> Result<ProviderSettingsView, AppError> {
+    pub fn set_enabled(
+        &self,
+        provider: &str,
+        enabled: bool,
+    ) -> Result<ProviderSettingsView, AppError> {
         {
             let mut state = self.state.write().unwrap();
             let config = state
@@ -186,7 +193,9 @@ impl ProviderSettingsService {
                 self.store.delete(provider).map_err(AppError::internal)?;
                 config.api_key = None;
             } else {
-                self.store.set(provider, trimmed).map_err(AppError::internal)?;
+                self.store
+                    .set(provider, trimmed)
+                    .map_err(AppError::internal)?;
                 config.api_key = Some(trimmed.to_string());
             }
             state.coordinator = rebuild(&self.builder, &state.configs)?;
@@ -399,7 +408,10 @@ mod tests {
 
     impl FakeBuilder {
         fn with(self, id: &str, behavior: Behavior) -> Self {
-            self.behaviors.lock().unwrap().insert(id.to_string(), behavior);
+            self.behaviors
+                .lock()
+                .unwrap()
+                .insert(id.to_string(), behavior);
             self
         }
         fn recorded_keys(&self) -> Vec<(String, Option<String>)> {
@@ -465,11 +477,7 @@ mod tests {
     #[test]
     fn load_applies_persisted_enabled_and_keyring_keys() {
         let (dir, file) = temp_settings_file("load.db.json");
-        std::fs::write(
-            &file,
-            r#"{ "enabled": { "tmdb": false } }"#,
-        )
-        .unwrap();
+        std::fs::write(&file, r#"{ "enabled": { "tmdb": false } }"#).unwrap();
         let store = InMemoryKeyring::new();
         store.set("tmdb", "sekret").unwrap();
         let service = ProviderSettingsService::load(
@@ -484,7 +492,10 @@ mod tests {
         assert!(!tmdb.enabled, "persisted disabled flag wins");
         assert!(tmdb.requires_key);
         assert!(tmdb.has_key, "keyring key surfaces as has_key");
-        assert!(service.view("openlibrary").unwrap().enabled, "defaults stay on");
+        assert!(
+            service.view("openlibrary").unwrap().enabled,
+            "defaults stay on"
+        );
 
         // The coordinator must reflect the persisted disabled flag.
         let providers = service.coordinator().providers();
@@ -503,7 +514,13 @@ mod tests {
         let view = service.view("tmdb").unwrap();
         assert!(!view.enabled);
         assert!(
-            !service.coordinator().providers().iter().find(|p| p.id == "tmdb").unwrap().enabled
+            !service
+                .coordinator()
+                .providers()
+                .iter()
+                .find(|p| p.id == "tmdb")
+                .unwrap()
+                .enabled
         );
 
         let persisted =
@@ -525,13 +542,9 @@ mod tests {
         let store = InMemoryKeyring::new();
         let builder = Arc::new(FakeBuilder::default());
         let (dir, file) = temp_settings_file("set_key.db.json");
-        let service = ProviderSettingsService::load(
-            defaults(),
-            file,
-            Box::new(store),
-            builder.clone(),
-        )
-        .expect("service loads");
+        let service =
+            ProviderSettingsService::load(defaults(), file, Box::new(store), builder.clone())
+                .expect("service loads");
 
         let view = service.set_key("tmdb", "abc-123").expect("set key");
         assert!(view.has_key);
@@ -552,13 +565,9 @@ mod tests {
         let store = InMemoryKeyring::new();
         let builder = Arc::new(FakeBuilder::default());
         let (dir, file) = temp_settings_file("clear_key.db.json");
-        let service = ProviderSettingsService::load(
-            defaults(),
-            file,
-            Box::new(store),
-            builder.clone(),
-        )
-        .expect("service loads");
+        let service =
+            ProviderSettingsService::load(defaults(), file, Box::new(store), builder.clone())
+                .expect("service loads");
 
         service.set_key("tmdb", "abc").expect("set");
         let view = service.set_key("tmdb", "   ").expect("clear");

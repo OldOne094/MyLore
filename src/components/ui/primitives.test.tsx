@@ -177,4 +177,31 @@ describe("Tabs", () => {
     await userEvent.keyboard("{ArrowLeft}");
     expect(screen.getByRole("tab", { name: "Overview" })).toHaveFocus();
   });
+
+  it("inverts the arrow direction while in RTL (MISSION-092)", async () => {
+    document.documentElement.dir = "rtl";
+    try {
+      const onValueChange = vi.fn();
+      render(
+        <Tabs value="a" onValueChange={onValueChange}>
+          <TabsList ariaLabel="Sections">
+            <TabsTrigger value="a">A</TabsTrigger>
+            <TabsTrigger value="b">B</TabsTrigger>
+            <TabsTrigger value="c">C</TabsTrigger>
+          </TabsList>
+        </Tabs>,
+      );
+      // In RTL ArrowRight reads toward the start of the row. The list's
+      // internal focus index starts at the first tab.
+      screen.getByRole("tab", { name: "A" }).focus();
+      await userEvent.keyboard("{ArrowRight}");
+      expect(screen.getByRole("tab", { name: "C" })).toHaveFocus();
+
+      await userEvent.keyboard("{ArrowLeft}");
+      expect(screen.getByRole("tab", { name: "A" })).toHaveFocus();
+      expect(onValueChange).not.toHaveBeenCalled();
+    } finally {
+      document.documentElement.dir = "";
+    }
+  });
 });

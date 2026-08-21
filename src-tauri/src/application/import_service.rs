@@ -368,10 +368,7 @@ mod tests {
         ) -> Result<Vec<ProviderCandidate>, ProviderError> {
             Ok(Vec::new())
         }
-        async fn get_details(
-            &self,
-            _provider_id: &str,
-        ) -> Result<ProviderMedia, ProviderError> {
+        async fn get_details(&self, _provider_id: &str) -> Result<ProviderMedia, ProviderError> {
             match self.behavior.lock().unwrap().clone() {
                 Behavior::Ok(details, _) => Ok(details),
                 Behavior::DetailsFail(error) => Err(error),
@@ -381,10 +378,7 @@ mod tests {
                 }),
             }
         }
-        async fn get_nodes(
-            &self,
-            _provider_id: &str,
-        ) -> Result<Vec<ProviderNode>, ProviderError> {
+        async fn get_nodes(&self, _provider_id: &str) -> Result<Vec<ProviderNode>, ProviderError> {
             match self.behavior.lock().unwrap().clone() {
                 Behavior::Ok(_, nodes) => Ok(nodes),
                 Behavior::DetailsFail(_) => Err(ProviderError::Unsupported {

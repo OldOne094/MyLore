@@ -4,8 +4,8 @@
 
 use std::sync::Arc;
 
-use tauri::State;
 use tauri::command;
+use tauri::State;
 use tracing::info;
 
 use crate::application::providers::settings::{
@@ -45,7 +45,11 @@ pub fn provider_set_key(
     provider: String,
     api_key: String,
 ) -> Result<ProviderSettingsView, AppError> {
-    info!(provider, has_key = !api_key.trim().is_empty(), "provider_set_key invoked");
+    info!(
+        provider,
+        has_key = !api_key.trim().is_empty(),
+        "provider_set_key invoked"
+    );
     settings.set_key(&provider, &api_key)
 }
 

@@ -2,8 +2,8 @@
 //! flow lives in `application::enrich_service`.
 
 use sqlx::SqlitePool;
-use tauri::State;
 use tauri::command;
+use tauri::State;
 use tracing::info;
 
 use std::sync::Arc;

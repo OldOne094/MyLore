@@ -152,7 +152,9 @@ pub(crate) fn parse_series_page(html: &str) -> Option<SeriesPage> {
         genres,
         status: text_of("#editstatus").unwrap_or_default(),
         show_type: text_of("#showtype").unwrap_or_default(),
-        synopsis: text_of("#editdescription").map(|s| strip_html(&s)).filter(|s| !s.is_empty()),
+        synopsis: text_of("#editdescription")
+            .map(|s| strip_html(&s))
+            .filter(|s| !s.is_empty()),
         post_id,
     })
 }
@@ -200,7 +202,11 @@ mod tests {
         assert_eq!(rows.len(), 2);
         assert_eq!(rows[0].title, "Dungeon Defender");
         assert_eq!(rows[0].slug, "dungeon-defender");
-        assert!(rows[0].cover.as_deref().unwrap().contains("cdn.novelupdates.com"));
+        assert!(rows[0]
+            .cover
+            .as_deref()
+            .unwrap()
+            .contains("cdn.novelupdates.com"));
         assert_eq!(rows[1].title, "The Second Coming of Gluttony");
         assert_eq!(rows[1].slug, "the-second-coming-of-gluttony");
     }
@@ -210,7 +216,11 @@ mod tests {
         let page = parse_series_page(&novelupdates_fixture("series_dungeon_defender.html"))
             .expect("series page present");
         assert_eq!(page.title, "Dungeon Defender");
-        assert!(page.cover.as_deref().unwrap().contains("cdn.novelupdates.com"));
+        assert!(page
+            .cover
+            .as_deref()
+            .unwrap()
+            .contains("cdn.novelupdates.com"));
         assert_eq!(page.authors, vec!["Golam"]);
         assert!(page.genres.iter().any(|g| g == "Action"));
         assert!(page.genres.iter().any(|g| g == "Fantasy"));
@@ -241,6 +251,8 @@ mod tests {
             "<html><head><title>Just a moment...</title></head></html>"
         ));
         assert!(is_captcha_page(&novelupdates_fixture("captcha.html")));
-        assert!(!is_captcha_page(&novelupdates_fixture("search_series.html")));
+        assert!(!is_captcha_page(&novelupdates_fixture(
+            "search_series.html"
+        )));
     }
 }

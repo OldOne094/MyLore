@@ -151,7 +151,11 @@ impl ReviewService {
             notes: domain.notes,
             favorite: domain.favorite,
             is_spoiler: domain.is_spoiler,
-            moods: domain.moods.iter().map(|m| m.as_str().to_string()).collect(),
+            moods: domain
+                .moods
+                .iter()
+                .map(|m| m.as_str().to_string())
+                .collect(),
             pace: domain.pace.map(|p| p.as_str().to_string()),
             content_warnings: domain
                 .content_warnings
@@ -177,9 +181,7 @@ impl ReviewService {
             .await?
             .ok_or_else(|| AppError::validation("no review to acknowledge warnings for"))?;
         if existing.content_warnings.is_empty() {
-            return Err(AppError::validation(
-                "no content warnings to acknowledge",
-            ));
+            return Err(AppError::validation("no content warnings to acknowledge"));
         }
 
         let now = Utc::now().to_rfc3339();
@@ -245,7 +247,10 @@ fn preserved_acknowledgment(
     if content_warnings.is_empty() {
         return None;
     }
-    let new_keys: Vec<String> = content_warnings.iter().map(|w| w.as_str().to_string()).collect();
+    let new_keys: Vec<String> = content_warnings
+        .iter()
+        .map(|w| w.as_str().to_string())
+        .collect();
     match existing {
         Some(row) if row.warnings_acknowledged_at.is_some() && row.content_warnings == new_keys => {
             row.warnings_acknowledged_at.clone()
@@ -278,9 +283,7 @@ fn normalize_pace(value: Option<&str>) -> Result<Option<Pace>, AppError> {
 fn normalize_warnings(values: &[String]) -> Result<Vec<ContentWarning>, AppError> {
     let mut warnings: BTreeSet<ContentWarning> = BTreeSet::new();
     for value in values {
-        warnings.insert(
-            ContentWarning::from_str(value.trim()).map_err(AppError::from)?,
-        );
+        warnings.insert(ContentWarning::from_str(value.trim()).map_err(AppError::from)?);
     }
     Ok(warnings.into_iter().collect())
 }
@@ -572,7 +575,10 @@ mod tests {
         seed_media(&pool, "m-1").await;
 
         service.save(metadata_input("m-1")).await.expect("save");
-        service.acknowledge_warnings("m-1").await.expect("acknowledge");
+        service
+            .acknowledge_warnings("m-1")
+            .await
+            .expect("acknowledge");
         let acknowledged = review::get(&pool, "m-1").await.expect("get").unwrap();
         assert!(acknowledged.warnings_acknowledged_at.is_some());
         let stamp = acknowledged.warnings_acknowledged_at.clone();

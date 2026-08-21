@@ -56,6 +56,12 @@ beforeEach(() => {
     if (cmd === "stats_summary") {
       return Promise.resolve(EMPTY_STATS);
     }
+    if (cmd === "app_health") {
+      return Promise.resolve({ database_ok: true });
+    }
+    if (cmd === "backup_list") {
+      return Promise.resolve([]);
+    }
     if (cmd === "reading_recap") {
       return Promise.resolve({
         year: new Date().getFullYear(),

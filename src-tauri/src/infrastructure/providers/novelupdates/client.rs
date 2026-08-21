@@ -99,10 +99,7 @@ impl NovelUpdatesClient {
     }
 
     /// Shared status→error mapping + captcha detection for any response.
-    async fn read_html(
-        &self,
-        response: reqwest::Response,
-    ) -> Result<String, ProviderError> {
+    async fn read_html(&self, response: reqwest::Response) -> Result<String, ProviderError> {
         let status = response.status();
         if !status.is_success() {
             return Err(ProviderError::from_http_status(
@@ -155,9 +152,10 @@ mod tests {
             .and(path("/series-finder/"))
             .and(query_param("sh", "dungeon"))
             .and(header("user-agent", APP_USER_AGENT))
-            .respond_with(ResponseTemplate::new(200).set_body_string(
-                novelupdates_fixture("search_series.html"),
-            ))
+            .respond_with(
+                ResponseTemplate::new(200)
+                    .set_body_string(novelupdates_fixture("search_series.html")),
+            )
             .mount(&server)
             .await;
 
@@ -174,16 +172,21 @@ mod tests {
         Mock::given(method("POST"))
             .and(path("/wp-admin/admin-ajax.php"))
             .and(body_string("action=nd_getchapters&mygrr=0&mypostid=42817"))
-            .respond_with(ResponseTemplate::new(200).set_body_string(
-                novelupdates_fixture("chapters_dungeon_defender.html"),
-            ))
+            .respond_with(
+                ResponseTemplate::new(200)
+                    .set_body_string(novelupdates_fixture("chapters_dungeon_defender.html")),
+            )
             .mount(&server)
             .await;
 
         let html = client_with(&server)
             .post_form(
                 "/wp-admin/admin-ajax.php",
-                &[("action", "nd_getchapters"), ("mygrr", "0"), ("mypostid", "42817")],
+                &[
+                    ("action", "nd_getchapters"),
+                    ("mygrr", "0"),
+                    ("mypostid", "42817"),
+                ],
             )
             .await
             .unwrap();

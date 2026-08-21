@@ -34,7 +34,9 @@ fn now_rfc3339() -> String {
 }
 
 fn parse_timestamp(raw: &str) -> Option<DateTime<Utc>> {
-    DateTime::parse_from_rfc3339(raw).ok().map(|dt| dt.with_timezone(&Utc))
+    DateTime::parse_from_rfc3339(raw)
+        .ok()
+        .map(|dt| dt.with_timezone(&Utc))
 }
 
 /// IPC-facing asset snapshot.
@@ -92,10 +94,7 @@ impl ImageService {
     /// so the batch never fails on a stale media reference.
     pub async fn resolve_many(&self, ids: &[String]) -> Result<Vec<AssetView>, AppError> {
         let mut seen = std::collections::HashSet::new();
-        let unique: Vec<&String> = ids
-            .iter()
-            .filter(|id| seen.insert(id.as_str()))
-            .collect();
+        let unique: Vec<&String> = ids.iter().filter(|id| seen.insert(id.as_str())).collect();
         let mut views = Vec::with_capacity(unique.len());
         for id in unique {
             if let Ok(view) = self.resolve(id).await {
@@ -123,7 +122,10 @@ impl ImageService {
                     .last_fetched_at
                     .as_deref()
                     .and_then(parse_timestamp)
-                    .map(|last| last + chrono::Duration::from_std(FAILED_RETRY_COOLDOWN).expect("cooldown") < Utc::now())
+                    .map(|last| {
+                        last + chrono::Duration::from_std(FAILED_RETRY_COOLDOWN).expect("cooldown")
+                            < Utc::now()
+                    })
                     .unwrap_or(true);
                 if cooled_off {
                     self.download(asset).await
@@ -187,7 +189,16 @@ impl ImageService {
         mime_type: Option<&str>,
         etag: Option<&str>,
     ) -> Result<(), AppError> {
-        asset_repo::update_fetch(&self.pool, id, status, local_path, mime_type, etag, Some(&now_rfc3339())).await
+        asset_repo::update_fetch(
+            &self.pool,
+            id,
+            status,
+            local_path,
+            mime_type,
+            etag,
+            Some(&now_rfc3339()),
+        )
+        .await
     }
 
     /// Re-read an asset after a state change.
@@ -277,8 +288,12 @@ mod tests {
             )
             .mount(&server)
             .await;
-        h.insert("a-1", "remote", Some(&format!("{}/cover.jpg", server.uri())))
-            .await;
+        h.insert(
+            "a-1",
+            "remote",
+            Some(&format!("{}/cover.jpg", server.uri())),
+        )
+        .await;
 
         let view = h.resolve_ok("a-1").await;
         assert_eq!(view.status, "cached");
@@ -423,8 +438,10 @@ mod tests {
         drop(mount); // verifies `.expect(1)`: cooldown held back the second fetch
 
         // Once the cooldown passes, a resolve retries.
-        let old = (Utc::now() - chrono::Duration::from_std(FAILED_RETRY_COOLDOWN).unwrap() - chrono::Duration::hours(1))
-            .to_rfc3339();
+        let old = (Utc::now()
+            - chrono::Duration::from_std(FAILED_RETRY_COOLDOWN).unwrap()
+            - chrono::Duration::hours(1))
+        .to_rfc3339();
         asset_repo::update_fetch(&h.pool, "a-1", "failed", None, None, None, Some(&old))
             .await
             .expect("age the failure");
@@ -468,8 +485,12 @@ mod tests {
             )
             .mount(&server)
             .await;
-        h.insert("a-1", "remote", Some(&format!("{}/cover.jpg", server.uri())))
-            .await;
+        h.insert(
+            "a-1",
+            "remote",
+            Some(&format!("{}/cover.jpg", server.uri())),
+        )
+        .await;
 
         let views = h
             .service
@@ -490,5 +511,4 @@ mod tests {
         h.pool.close().await;
         cleanup_files(&h.db_path);
     }
-
 }

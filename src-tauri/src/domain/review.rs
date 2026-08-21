@@ -334,7 +334,10 @@ mod tests {
             assert_eq!(Pace::from_str(pace.as_str()).unwrap(), *pace);
         }
         for warning in ContentWarning::ALL {
-            assert_eq!(ContentWarning::from_str(warning.as_str()).unwrap(), *warning);
+            assert_eq!(
+                ContentWarning::from_str(warning.as_str()).unwrap(),
+                *warning
+            );
         }
         assert!(Mood::from_str("nope").is_err());
         assert!(Pace::from_str("brisk").is_err());

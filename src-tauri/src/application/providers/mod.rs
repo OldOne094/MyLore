@@ -16,6 +16,4 @@ pub use coordinator::{
     CancellationToken, ProviderCoordinator, ProviderInfo, SearchFailure, SearchHit, SearchOutcome,
 };
 pub use rate_limiter::RateLimiter;
-pub use settings::{
-    EntryBuilder, ProviderSettingsService, ProviderSettingsView, ProviderTestView,
-};
+pub use settings::{EntryBuilder, ProviderSettingsService, ProviderSettingsView, ProviderTestView};

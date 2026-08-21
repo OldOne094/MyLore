@@ -12,7 +12,7 @@ use crate::domain::provider::types::{
 };
 
 use super::response::{SearchRow, SeriesPage};
-use super::{PROVIDER_ID, page_url};
+use super::{page_url, PROVIDER_ID};
 
 /// Map the `#showtype` text ("Web Novel", "Light Novel", "Published Novel")
 /// to a domain content type. Anything that isn't explicitly a web novel is a
@@ -272,13 +272,18 @@ mod tests {
     use crate::infrastructure::providers::test_support::novelupdates_fixture;
 
     fn search_row() -> SearchRow {
-        let page = super::super::response::parse_search_rows(&novelupdates_fixture("search_series.html"));
-        page.into_iter().find(|r| r.slug == "dungeon-defender").unwrap()
+        let page =
+            super::super::response::parse_search_rows(&novelupdates_fixture("search_series.html"));
+        page.into_iter()
+            .find(|r| r.slug == "dungeon-defender")
+            .unwrap()
     }
 
     fn series_page() -> SeriesPage {
-        super::super::response::parse_series_page(&novelupdates_fixture("series_dungeon_defender.html"))
-            .expect("series page present")
+        super::super::response::parse_series_page(&novelupdates_fixture(
+            "series_dungeon_defender.html",
+        ))
+        .expect("series page present")
     }
 
     #[test]
@@ -306,7 +311,11 @@ mod tests {
         assert_eq!(c.provider_id, "dungeon-defender");
         assert_eq!(c.title, "Dungeon Defender");
         assert_eq!(c.content_type, ContentType::Novel);
-        assert!(c.cover_url.as_deref().unwrap().contains("cdn.novelupdates.com"));
+        assert!(c
+            .cover_url
+            .as_deref()
+            .unwrap()
+            .contains("cdn.novelupdates.com"));
         assert_eq!(
             c.url.as_deref(),
             Some("https://www.novelupdates.com/series/dungeon-defender/")
@@ -315,7 +324,12 @@ mod tests {
 
     #[test]
     fn candidate_drops_empty_slugs() {
-        assert!(candidate(&SearchRow { title: "X".into(), slug: String::new(), cover: None }).is_none());
+        assert!(candidate(&SearchRow {
+            title: "X".into(),
+            slug: String::new(),
+            cover: None
+        })
+        .is_none());
     }
 
     #[test]
@@ -326,10 +340,17 @@ mod tests {
         assert_eq!(m.content_type, ContentType::WebNovel);
         assert_eq!(m.format.as_deref(), Some("Web Novel"));
         assert_eq!(m.pub_status, MediaStatus::Ongoing);
-        assert!(m.people.iter().any(|p| p.role == PersonRole::Author && p.name == "Golam"));
+        assert!(m
+            .people
+            .iter()
+            .any(|p| p.role == PersonRole::Author && p.name == "Golam"));
         assert!(m.genres.iter().any(|g| g == "Action"));
         assert!(m.synopsis.as_deref().unwrap().contains("Lester"));
-        assert!(m.cover_url.as_deref().unwrap().contains("cdn.novelupdates.com"));
+        assert!(m
+            .cover_url
+            .as_deref()
+            .unwrap()
+            .contains("cdn.novelupdates.com"));
     }
 
     #[test]
@@ -360,14 +381,19 @@ mod tests {
 
     #[test]
     fn chapter_title_humanizes() {
-        assert_eq!(chapter_title(&parse_label("v1c1part1")), "Volume 1 Chapter 1 Part 1");
+        assert_eq!(
+            chapter_title(&parse_label("v1c1part1")),
+            "Volume 1 Chapter 1 Part 1"
+        );
         assert_eq!(chapter_title(&parse_label("c3")), "Chapter 3");
         assert_eq!(chapter_title(&parse_label("ss1")), "Special 1");
     }
 
     #[test]
     fn feed_builds_volume_and_loose_chapters_chronological() {
-        let page = super::super::response::parse_chapter_labels(&novelupdates_fixture("chapters_dungeon_defender.html"));
+        let page = super::super::response::parse_chapter_labels(&novelupdates_fixture(
+            "chapters_dungeon_defender.html",
+        ));
         let tree = nodes(&page, "dungeon-defender");
         assert_eq!(tree.len(), 2, "volume 1 + loose special");
         let vol1 = &tree[0];
@@ -384,7 +410,11 @@ mod tests {
             vol1.children[2].title.as_deref(),
             Some("Volume 1 Chapter 4 Part 3")
         );
-        assert_eq!(tree[1].kind, NodeKind::Chapter, "volume-less special is top-level");
+        assert_eq!(
+            tree[1].kind,
+            NodeKind::Chapter,
+            "volume-less special is top-level"
+        );
         assert!(tree[1].is_special);
     }
 }

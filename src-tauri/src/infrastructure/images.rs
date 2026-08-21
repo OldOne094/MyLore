@@ -130,7 +130,8 @@ impl ImageCache {
 
     /// The local file for an asset id with the given mime type.
     pub fn path_for(&self, asset_id: &str, mime_type: &str) -> PathBuf {
-        self.dir.join(format!("{asset_id}.{}", ext_for_mime(mime_type)))
+        self.dir
+            .join(format!("{asset_id}.{}", ext_for_mime(mime_type)))
     }
 
     /// Save bytes to the cache atomically (temp file + rename), resolving with
@@ -223,7 +224,9 @@ mod tests {
                 .respond_with(ResponseTemplate::new(status))
                 .mount(&server)
                 .await;
-            let result = client_with(&server).fetch(&format!("{}/gone", server.uri())).await;
+            let result = client_with(&server)
+                .fetch(&format!("{}/gone", server.uri()))
+                .await;
             assert!(
                 matches!(result, Err(ImageError::NotFound)),
                 "HTTP {status} must be a broken URL"
@@ -238,7 +241,9 @@ mod tests {
             .respond_with(ResponseTemplate::new(503))
             .mount(&server)
             .await;
-        let result = client_with(&server).fetch(&format!("{}/down", server.uri())).await;
+        let result = client_with(&server)
+            .fetch(&format!("{}/down", server.uri()))
+            .await;
         assert!(
             matches!(result, Err(ImageError::Transient(_))),
             "5xx must be transient"
@@ -261,9 +266,7 @@ mod tests {
     #[tokio::test]
     async fn fetch_maps_transport_failure_to_transient() {
         let client = ImageClient::new();
-        let result = client
-            .fetch("http://127.0.0.1:1/never-reachable")
-            .await;
+        let result = client.fetch("http://127.0.0.1:1/never-reachable").await;
         assert!(
             matches!(result, Err(ImageError::Transient(_))),
             "connection failure must be transient"
@@ -289,9 +292,7 @@ mod tests {
         let cache = ImageCache::new(&dir);
         let _ = std::fs::remove_dir_all(&dir);
 
-        let path = cache
-            .save("a-1", "image/jpeg", b"jpeg")
-            .expect("save");
+        let path = cache.save("a-1", "image/jpeg", b"jpeg").expect("save");
         assert_eq!(path.file_name().unwrap(), "a-1.jpg");
         assert_eq!(std::fs::read(&path).unwrap(), b"jpeg");
 

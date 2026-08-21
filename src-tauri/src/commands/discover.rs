@@ -31,9 +31,6 @@ pub async fn search_external(
         .as_deref()
         .map(ContentType::from_str)
         .transpose()?;
-    let service = SearchService::new(
-        state.inner().clone(),
-        settings.coordinator(),
-    );
+    let service = SearchService::new(state.inner().clone(), settings.coordinator());
     service.search_external(&query, content_type).await
 }
