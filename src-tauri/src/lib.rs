@@ -14,6 +14,7 @@ use std::sync::Arc;
 use tauri::Emitter;
 use tauri::Manager;
 
+use crate::application::backup_service::BackupService;
 use crate::application::image_service::ImageService;
 use crate::application::providers::settings::ProviderSettingsService;
 use crate::application::task_service::TaskManager;
@@ -49,7 +50,11 @@ pub fn run() {
             app.manage(settings);
 
             let images_dir = data_dir.join("images");
-            app.manage(Arc::new(ImageService::new(pool, &images_dir)));
+            app.manage(Arc::new(ImageService::new(pool.clone(), &images_dir)));
+
+            // Backup service (MISSION-084): archives under
+            // `{data_dir}/backups`, cached assets from `{data_dir}/images`.
+            app.manage(Arc::new(BackupService::new(pool, &data_dir)));
 
             // Background task manager (MISSION-070): every long operation runs
             // as a cancelable task; changes stream to the UI as `task_changed`.
@@ -78,6 +83,8 @@ pub fn run() {
             commands::import::import_csv_headers,
             commands::enrich::media_enrich,
             commands::export::export_media,
+            commands::backup::backup_create,
+            commands::backup::backup_validate,
             commands::providers::providers_list,
             commands::providers::provider_set_enabled,
             commands::providers::provider_set_key,

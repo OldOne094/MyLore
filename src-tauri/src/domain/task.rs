@@ -17,6 +17,8 @@ pub enum TaskKind {
     ImportFile,
     /// JSON/CSV/Markdown library export (result: `ExportReport`).
     ExportFile,
+    /// `.mylore` library backup (result: `BackupReport`).
+    Backup,
 }
 
 impl TaskKind {
@@ -24,6 +26,7 @@ impl TaskKind {
         match self {
             Self::ImportFile => "import_file",
             Self::ExportFile => "export_file",
+            Self::Backup => "backup",
         }
     }
 }

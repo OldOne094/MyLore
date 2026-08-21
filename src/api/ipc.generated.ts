@@ -266,6 +266,24 @@ export interface ExportReport {
   total: number;
   path: string;
 }
+export interface AssetManifestEntry {
+  id: string;
+  file: string;
+}
+export interface BackupMeta {
+  format_version: number;
+  app_version: string;
+  created_at: string;
+  media_count: number;
+  asset_count: number;
+  assets: AssetManifestEntry[];
+}
+export interface BackupReport {
+  path: string;
+  size_bytes: number;
+  media_count: number;
+  asset_count: number;
+}
 export interface TaskSnapshot {
   id: string;
   kind: string;
@@ -580,6 +598,16 @@ export function import_commit(args: {
 /** Export the whole library as a background task (MISSION-071): streams rows to `path` as json / csv / markdown (`format`) and resolves with the initial (queued) snapshot; progress + terminal state stream as `task_changed` events and the task can be cancelled (a cancelled export drops its partial file). The file is written to a `*.partial` sibling and renamed into place on success. On success the task's `result` is the `ExportReport` (`{ format, total, path }`). */
 export function export_media(args: { format: string; path: string }): Promise<TaskSnapshot> {
   return invoke<TaskSnapshot>("export_media", args);
+}
+
+/** Create a validated `.mylore` backup of the whole library as a background task (MISSION-084): a consistent `VACUUM INTO` database snapshot, every cached asset file, and a meta.json manifest zipped under `{data_dir}/backups`. Resolves with the initial (queued) snapshot; progress + terminal state stream as `task_changed` events and the task can be cancelled (a cancelled backup leaves no `.partial` archive). The archive is re-opened and validated before success. On success the task's `result` is the `BackupReport` (`{ path, size_bytes, media_count, asset_count }`). */
+export function backup_create(): Promise<TaskSnapshot> {
+  return invoke<TaskSnapshot>("backup_create");
+}
+
+/** Validate a `.mylore` backup archive without restoring it (MISSION-084): the manifest must parse at the current format version, the embedded database snapshot must pass SQLite's integrity_check, and its media count must match the manifest. Resolves with the BackupMeta or rejects with an AppError string. */
+export function backup_validate(args: { path: string }): Promise<BackupMeta> {
+  return invoke<BackupMeta>("backup_validate", args);
 }
 
 /** Read the header row of a CSV file for the mapping UI's column pickers. Resolves with the trimmed column names or rejects with an AppError string. */
