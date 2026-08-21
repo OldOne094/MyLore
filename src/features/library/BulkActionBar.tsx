@@ -25,6 +25,8 @@ import {
   useBulkSetStatus,
   useCollectionListQuery,
 } from "./bulk";
+import { GitMerge } from "lucide-react";
+import { MergeDialog } from "./MergeDialog";
 import type { LibraryFilters } from "./filters";
 
 /* MISSION-045 — Library action bar. Appears in bulk-select mode with one or
@@ -63,6 +65,7 @@ export function BulkActionBar({ ids, filter, matchingCount, onDone }: BulkAction
   const [tagOpen, setTagOpen] = useState(false);
   const [tag, setTag] = useState("");
   const [scope, setScope] = useState<"selected" | "filtered">("selected");
+  const [mergeOpen, setMergeOpen] = useState(false);
 
   const setStatus = useBulkSetStatus();
   const addTag = useBulkAddTag();
@@ -328,6 +331,28 @@ export function BulkActionBar({ ids, filter, matchingCount, onDone }: BulkAction
           <Trash2 size={14} aria-hidden="true" />
           {t("bulk.delete")}
         </Button>
+
+        {ids.length === 2 && (
+          <>
+            <Button
+              variant="secondary"
+              size="sm"
+              disabled={busy}
+              onClick={() => setMergeOpen(true)}
+              aria-label={t("merge.action")}
+              className="h-[var(--control-height-compact)] px-3 text-sm"
+            >
+              <GitMerge size={14} aria-hidden="true" />
+              {t("merge.action")}
+            </Button>
+            <MergeDialog
+              ids={[ids[0], ids[1]]}
+              open={mergeOpen}
+              onClose={() => setMergeOpen(false)}
+              onMerged={onDone}
+            />
+          </>
+        )}
 
         <span title={t("bulk.exportSoon")}>
           <Button

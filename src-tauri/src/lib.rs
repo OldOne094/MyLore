@@ -183,7 +183,9 @@ pub fn run() {
             commands::reading::reading_recap,
             commands::media::media_tags,
             commands::media::media_add_tag,
-            commands::media::media_remove_tag
+            commands::media::media_remove_tag,
+            commands::merge::merge_plan,
+            commands::merge::merge_apply
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

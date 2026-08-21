@@ -408,6 +408,16 @@ launches in **recovery mode** (`AppHealth` flag) instead of dying in setup; a ro
 HealthGate swaps the shell for the RecoveryScreen only when `database_ok === false`, offering
 restore-from-list / restore-via-file-dialog / two-step start-fresh. Every recovery action
 closes the pool to unlock files and ends with an explicit restart note.
+
+**Merge (MISSION-089):** `MergeService` wires MISSION-028's merge policy to the database at the
+repository-`MediaRecord` level (survivor-preferred scalars, unioned sets, duplicate main title →
+alternative, provider-unique external ids). `merge_plan` previews field conflicts and what will
+move; `merge_apply` snapshots the duplicate into trash as a rich undo image (kind `merge`: full
+record + node ids + moved flags + collection ids) before folding metadata, re-keying
+nodes/review/tracking/collections onto the survivor and deleting it. Restoring that trash entry
+reverses the whole merge — nodes pull back, a borrowed review/tracking goes home, memberships
+re-add additively. The UI entry is the bulk bar's Merge action on exactly two selected titles:
+pick survivor → conflict preview → apply.
 (Full design: `DATABASE.md §7`.)
 
 ## 8. Background tasks

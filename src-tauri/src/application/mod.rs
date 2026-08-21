@@ -19,6 +19,7 @@ pub mod import_file_service;
 pub mod import_pipeline;
 pub mod import_service;
 pub mod media_service;
+pub mod merge_service;
 pub mod node_service;
 pub mod progress_service;
 pub mod providers;

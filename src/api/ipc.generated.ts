@@ -308,6 +308,26 @@ export interface RecoveryOutcome {
   quarantined_to: string;
   restart_required: boolean;
 }
+export interface MergeConflict {
+  field: string;
+  survivor: string;
+  duplicate: string;
+}
+export interface MergePreview {
+  survivor_id: string;
+  duplicate_id: string;
+  survivor_title: string;
+  duplicate_title: string;
+  merged_title: string;
+  conflicts: MergeConflict[];
+  nodes_to_move: number;
+  move_review: boolean;
+  move_tracking: boolean;
+  collections_to_move: number;
+}
+export interface MergeResult {
+  trash_id: string;
+}
 export interface TaskSnapshot {
   id: string;
   kind: string;
@@ -789,9 +809,25 @@ export function trash_list(): Promise<
   return invoke<{ id: string; kind: string; title: string; deleted_at: string }[]>("trash_list");
 }
 
-/** Restore a soft-deleted aggregate from its trash before-image. Resolves or rejects with an AppError string. */
+/** Restore a soft-deleted aggregate from its trash before-image - a plain media entry, or a merge entry, which reverses the whole merge (re-creates the duplicate, pulls its nodes back, moves a borrowed review/tracking home and re-adds its collection memberships). Resolves or rejects with an AppError string. */
 export function trash_restore(args: { id: string }): Promise<void> {
   return invoke<void>("trash_restore", args);
+}
+
+/** Preview what merging the duplicate into the survivor would change (MISSION-089): field-level conflicts (different non-empty values), the merged title, and what will move - content nodes, review/tracking when the survivor lacks one, collection memberships. Resolves with the MergePreview or rejects with an AppError string. */
+export function merge_plan(args: {
+  survivor_id: string;
+  duplicate_id: string;
+}): Promise<MergePreview> {
+  return invoke<MergePreview>("merge_plan", args);
+}
+
+/** Apply a merge (MISSION-089): snapshots the duplicate into trash (kind `merge`, restorable from the Trash page), folds its metadata into the survivor per the MISSION-028 policy, re-keys its nodes / review / tracking / collections onto the survivor and deletes it. Resolves with the trash id for undo or rejects with an AppError string. */
+export function merge_apply(args: {
+  survivor_id: string;
+  duplicate_id: string;
+}): Promise<MergeResult> {
+  return invoke<MergeResult>("merge_apply", args);
 }
 
 /** Permanently forget a trash entry. Resolves or rejects with an AppError string. */

@@ -171,6 +171,18 @@
       "shape": "quarantined_to: string; restart_required: boolean"
     },
     {
+      "name": "MergeConflict",
+      "shape": "field: string; survivor: string; duplicate: string"
+    },
+    {
+      "name": "MergePreview",
+      "shape": "survivor_id: string; duplicate_id: string; survivor_title: string; duplicate_title: string; merged_title: string; conflicts: MergeConflict[]; nodes_to_move: number; move_review: boolean; move_tracking: boolean; collections_to_move: number"
+    },
+    {
+      "name": "MergeResult",
+      "shape": "trash_id: string"
+    },
+    {
       "name": "TaskSnapshot",
       "shape": "id: string; kind: string; title: string; state: string; progress: number | null; message: string | null; error: string | null; result: unknown | null; created_at: string; updated_at: string"
     },
@@ -601,7 +613,19 @@
       "name": "trash_restore",
       "args": { "id": "string" },
       "returns": "void",
-      "doc": "Restore a soft-deleted aggregate from its trash before-image. Resolves or rejects with an AppError string."
+      "doc": "Restore a soft-deleted aggregate from its trash before-image - a plain media entry, or a merge entry, which reverses the whole merge (re-creates the duplicate, pulls its nodes back, moves a borrowed review/tracking home and re-adds its collection memberships). Resolves or rejects with an AppError string."
+    },
+    {
+      "name": "merge_plan",
+      "args": { "survivor_id": "string", "duplicate_id": "string" },
+      "returns": "MergePreview",
+      "doc": "Preview what merging the duplicate into the survivor would change (MISSION-089): field-level conflicts (different non-empty values), the merged title, and what will move - content nodes, review/tracking when the survivor lacks one, collection memberships. Resolves with the MergePreview or rejects with an AppError string."
+    },
+    {
+      "name": "merge_apply",
+      "args": { "survivor_id": "string", "duplicate_id": "string" },
+      "returns": "MergeResult",
+      "doc": "Apply a merge (MISSION-089): snapshots the duplicate into trash (kind `merge`, restorable from the Trash page), folds its metadata into the survivor per the MISSION-028 policy, re-keys its nodes / review / tracking / collections onto the survivor and deletes it. Resolves with the trash id for undo or rejects with an AppError string."
     },
     {
       "name": "trash_purge",
