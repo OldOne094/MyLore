@@ -54,6 +54,13 @@ describe("semantic shell", () => {
     expect(screen.getByRole("contentinfo")).toBeInTheDocument();
   });
 
+  it("marks the active nav link with aria-current (MISSION-093)", () => {
+    renderApp("/library");
+    const active = screen.getByRole("link", { name: "Library" });
+    expect(active).toHaveAttribute("aria-current", "page");
+    expect(screen.getByRole("link", { name: "Stats" })).not.toHaveAttribute("aria-current");
+  });
+
   it("provides a skip-to-content link as the first tab stop", async () => {
     const user = userEvent.setup();
     renderApp();

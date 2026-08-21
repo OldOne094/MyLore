@@ -66,7 +66,8 @@
   --border-strong: #d4d3ce;
   --text-primary: #1c1b1a;
   --text-secondary: #57564f;
-  --text-tertiary: #85847c;
+  /* ≥ 4.5:1 on bg-base/bg-surface (WCAG AA normal text, MISSION-093). */
+  --text-tertiary: #6f6e66;
   --accent: #b4541f;
   --accent-hover: #9c4719;
   --accent-soft: #f7e7dc;
@@ -89,7 +90,8 @@
   --border-strong: #3a3a44;
   --text-primary: #f2f1ef;
   --text-secondary: #a8a7a0;
-  --text-tertiary: #71716c;
+  /* ≥ 4.5:1 on bg-base/bg-surface (WCAG AA normal text, MISSION-093). */
+  --text-tertiary: #8a8a84;
   --accent: #e08a4c;
   --accent-hover: #eea060;
   --accent-soft: #3a2a1f;

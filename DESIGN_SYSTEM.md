@@ -25,7 +25,7 @@
 | `border-strong` | `#D4D3CE` | `#3A3A44` | inputs, focus ring base |
 | `text-primary` | `#1C1B1A` | `#F2F1EF` | body |
 | `text-secondary` | `#57564F` | `#A8A7A0` | secondary |
-| `text-tertiary` | `#85847C` | `#71716C` | captions |
+| `text-tertiary` | `#6F6E66` | `#8A8A84` | captions (≥ 4.5:1 on both backgrounds, WCAG AA) |
 | `accent` | `#B4541F` | `#E08A4C` | primary actions, progress |
 | `accent-hover` | `#9C4719` | `#EEA060` | hover accent |
 | `accent-soft` | `#F7E7DC` | `#3A2A1F` | selected/active bg |

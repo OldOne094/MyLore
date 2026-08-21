@@ -501,5 +501,10 @@ Cancellation propagates to Tokio tasks and HTTP requests (drop-based cancellatio
 
 ## 14. Accessibility
 
+- WCAG AA verified (MISSION-093): a contrast regression test parses the design tokens and
+  asserts every text tier ≥ 4.5:1 on both backgrounds in both themes; `--text-tertiary` was
+  retuned to meet it. Focus ring, skip link, reduced-motion clamping, dialog labels and
+  aria-current navigation are pinned by the shell a11y suite.
+
 Keyboard-first, focus management per route, ARIA via Radix, WCAG 2.1 AA contrast in both themes,
 `prefers-reduced-motion` support, screen-reader labels on all icons/actions (REQ-UX-004).
