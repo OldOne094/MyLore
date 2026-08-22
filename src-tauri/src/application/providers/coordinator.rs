@@ -1075,6 +1075,17 @@ mod tests {
 
     #[test]
     fn backoff_delay_grows_exponentially_and_is_capped() {
+        // MISSION-126: verify that all ten real provider configs declare at
+        // least one content type (a config with zero content types never
+        // serves any query).
+        for config in crate::infrastructure::providers::default_provider_configs() {
+            assert!(
+                !config.content_types.is_empty(),
+                "{} has no content types",
+                config.id
+            );
+        }
+
         let mut config = base_config("x");
         config.backoff_base = Duration::from_millis(100);
         config.backoff_max = Duration::from_millis(1000);
