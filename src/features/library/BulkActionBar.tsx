@@ -37,8 +37,8 @@ import type { LibraryFilters } from "./filters";
    selected titles to the whole filtered selection (resolved server-side), and
    every action surfaces a per-item change summary. */
 
-/** Order matches `CoreStatus::ALL` in the Rust domain. */
-export const CORE_STATUSES = [
+/** Order matches CoreStatus::ALL in the Rust domain. Module-local: nothing imports it. */
+const CORE_STATUSES = [
   "planned",
   "in_progress",
   "completed",

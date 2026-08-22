@@ -235,6 +235,7 @@ export function ImportFileDialog({ trigger }: ImportFileDialogProps) {
   const preview = previewQuery.data;
 
   const items = preview?.items ?? [];
+  // eslint-disable-next-line react-hooks/incompatible-library -- TanStack Virtual is inherently non-memoizable; compiler skipping it is expected.
   const rowVirtualizer = useVirtualizer({
     count: items.length,
     getScrollElement: () => scrollRef.current,

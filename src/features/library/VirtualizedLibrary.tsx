@@ -113,6 +113,7 @@ export function VirtualizedLibrary({
     });
   }, []);
 
+  // eslint-disable-next-line react-hooks/incompatible-library -- TanStack Virtual is inherently non-memoizable; compiler skipping it is expected.
   const virtualizer = useVirtualizer({
     count: rows.length,
     getScrollElement: () => scrollRef.current,

@@ -8,7 +8,7 @@ import { cn } from "@/lib/cn";
 
 export type LibraryView = "grid" | "list" | "compact";
 
-export const LIBRARY_VIEWS: LibraryView[] = ["grid", "list", "compact"];
+const LIBRARY_VIEWS: LibraryView[] = ["grid", "list", "compact"];
 
 const VIEW_ICONS: Record<LibraryView, LucideIcon> = {
   grid: LayoutGrid,

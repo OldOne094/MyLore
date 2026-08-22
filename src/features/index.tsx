@@ -1,3 +1,5 @@
+/* Barrel file: mixed component + placeholder-page exports are the point. */
+/* eslint-disable react-refresh/only-export-components */
 import { useTranslation } from "react-i18next";
 import { EmptyState } from "@/components/ui";
 import { NAV_ITEMS } from "@/navigation";
