@@ -43,7 +43,8 @@ Milestones are the phases. We never build ahead of a milestone's exit criteria (
 | M13 | Testing & Release | Integration/E2E suites, benchmarks, packaging, Alpha → Beta → Stable. | all |
 | FX | Future Scope | Post-Stable, behind designed seams: cloud sync, plugins, AI (opt-in), mobile, more importers/content types. | M13 |
 
-**Dependency spine:** M1 → M2 → M3 → M4 → M5 → M6 → M7 → M8 → M9 → M10 → M11 → M12 → M13.
+**Dependency spine:** M1 → M2 → M3 → M4 → M5 → M6 → M7 → M8 → M9 → M10 → M11 → M12 → M13
+→ **M14 (Alpha hardening, gates Beta)**.
 **Parallel tracks after M3:** (M4 UI shell) ‖ (M5 library) ‖ (M7 provider work once M2+M3 land).
 
 ---
@@ -326,6 +327,20 @@ Legend — **Pri:** Core (must ship) · Important (should ship) · Optional (if 
 | MISSION-098 | Provider mock harness + fixtures committed (offline CI). | 053..057 | Core | M | **DONE** — see log |
 | MISSION-099 | Release pipeline: build installers (Win/mac/Linux), signing (Win/mac), versioning, changelog. | 007 | Core | L | **DONE** — see log |
 | MISSION-100 | Alpha → Beta → Stable gates + `MILESTONE-REPORT.md` per milestone. | all | Core | M | **DONE** — see log |
+
+### M14 · Alpha Hardening — dogfood defects (MISSION-120…125, gates Beta)
+
+Filed from the first real dogfood run of 0.1.0-alpha.1. **All six gate Beta** — FX numbering
+(101–119) predates this batch and stays reserved for Future Scope.
+
+| Mission | Description | Deps | Pri | Cplx |
+|---------|-------------|------|-----|------|
+| MISSION-120 | Search relevance overhaul: unicode61 prefix-only matching misses substrings/typos ("بعض الحروف" fails); extend trigram indexing to Latin titles (substring), add typo-tolerant fallback pass, rank by relevance not just FTS rank; test Arabic + partial input. | 043 | Core | M |
+| MISSION-121 | Search honors the content-type facet: `media_search({query})` has no filter arg — results ignore the selected type entirely. Add optional `content_type` to the contract + wire the UI selector. | 120 | Core | S |
+| MISSION-122 | Search results carry full data: the search path returns bare title links while MediaRow already renders year/status/favorite/progress — serve full `MediaListItem`s and render proper rows. | 043,122→121 | Important | S |
+| MISSION-123 | Covers don't display: audit the pipeline end-to-end (provider import → asset download → resolve → render in library/search/detail), fix the broken links, ship placeholder art when no asset exists. | 062 | Core | M |
+| MISSION-124 | Jikan + NovelUpdates live verification: both adapters are registered with fixtures but fail/blocked in real use (NU's Cloudflare caveat; Jikan fallback path unverified). Dogfood each through Discover/import, fix what breaks, confirm the UI actually reaches them. | 056..058 | Core | M |
+| MISSION-125 | Responsive resize pass: maximize/restore leaves black gutters and content at stale size. Fix the height chain (`#root` has no height rule), verify WebView2 repaint on resize, virtualizer re-measure on container growth, and audit every route from half-screen snap to 4K. | 040 | Core | M |
 
 ### FX · Future Scope (MISSION-101+)
 

@@ -61,6 +61,9 @@ end-to-end on every commit (CI) and every e2e run. Installers build unsigned fro
 pipeline. Known limitations are tracked as FX missions (cloud sync, plugins, AI, mobile).
 
 ### Beta — criteria (not yet)
+- **M14 Alpha-hardening batch (MISSION-120–125) shipped** — search relevance + type filter +
+  rich results, covers displaying, Jikan/NovelUpdates live-verified, responsive resize pass.
+  (Filed from the first dogfood run of this alpha.)
 - Signing certificates provisioned → installers signed/notarized on Windows + macOS.
 - Benchmarks wired into CI enforcing NFR-PERF budgets (startup ≈1s window, search <150ms
   @100k, 10k-item library without jank).
