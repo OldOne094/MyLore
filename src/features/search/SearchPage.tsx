@@ -3,12 +3,14 @@ import { useTranslation } from "react-i18next";
 import { useSearchParams } from "react-router";
 import { Button, EmptyState, Skeleton } from "@/components/ui";
 import { MediaRow } from "@/features/library/MediaRow";
+import { useAssetViews } from "@/features/library/api";
 import { useMediaSearchQuery } from "./api";
 
 /* MISSION-043 — Local search results page. Reads `q` from the URL
    (`/search?q=...`), runs it against the FTS backend, and lists the matching
-   titles as rows. The search input lives in the TopBar (single source of
-   truth); this page only renders results for the query it was handed. */
+   titles as full MediaRow cards (cover art batch-resolved via useAssetViews).
+   The search input lives in the TopBar (single source of truth); this page
+   only renders results for the query it was handed. */
 
 function SearchSkeleton() {
   return (
@@ -30,6 +32,11 @@ export function SearchPage() {
   const query = searchParams.get("q") ?? "";
   const trimmed = query.trim();
   const { data, isLoading, isError, refetch } = useMediaSearchQuery(trimmed);
+
+  const items = data ?? [];
+  const coverIds = items.map((item) => item.cover_asset_id ?? "").filter(Boolean);
+  const { data: assetViews } = useAssetViews(coverIds);
+  const coverById = new Map((assetViews ?? []).map((a) => [a.id, a]));
 
   if (trimmed === "") {
     return (
@@ -54,7 +61,6 @@ export function SearchPage() {
     );
   }
 
-  const items = data ?? [];
   if (items.length === 0) {
     return (
       <EmptyState
@@ -72,7 +78,11 @@ export function SearchPage() {
       </div>
       <div className="flex-1 space-y-2 overflow-y-auto px-6 py-5">
         {items.map((item) => (
-          <MediaRow key={item.id} item={item} />
+          <MediaRow
+            key={item.id}
+            item={item}
+            cover={item.cover_asset_id ? coverById.get(item.cover_asset_id) : null}
+          />
         ))}
       </div>
     </section>
