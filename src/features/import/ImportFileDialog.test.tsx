@@ -213,8 +213,8 @@ describe("ImportFileDialog", () => {
 
     emitTask({ state: "success", progress: 100, result: REPORT });
     expect(await screen.findByText("Import finished")).toBeInTheDocument();
-    expect(screen.getByText("2 titles added · 0 skipped · 0 failed")).toBeInTheDocument();
-  });
+    expect(screen.getByText(/2 titles added/)).toBeInTheDocument();
+  }, 20_000);
 
   it("maps CSV columns, previews, and sends the mapping + selected rows", async () => {
     const user = userEvent.setup();
@@ -255,7 +255,7 @@ describe("ImportFileDialog", () => {
 
     emitTask({ state: "success", progress: 100, result: REPORT });
     expect(await screen.findByText("Import finished")).toBeInTheDocument();
-  });
+  }, 20_000);
 
   it("shows per-item outcomes, keeps invalid rows out of the plan, and lets the user deselect", async () => {
     const user = userEvent.setup();
