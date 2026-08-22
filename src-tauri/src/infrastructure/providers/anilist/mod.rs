@@ -118,12 +118,18 @@ impl Provider for AniListProvider {
         query: &str,
         content_type: Option<ContentType>,
     ) -> Result<Vec<ProviderCandidate>, ProviderError> {
-        let variables = json!({
+        // AniList treats an explicitly-null `type` as a filter that matches
+        // nothing — the key must be OMITTED when no type is requested
+        // (dogfooded live: null → 0 results even for exact titles, omitted →
+        // 20).
+        let mut variables = json!({
             "q": query,
-            "type": Self::anilist_type(content_type),
             "page": 1,
             "perPage": 20,
         });
+        if let Some(media_type) = Self::anilist_type(content_type) {
+            variables["type"] = json!(media_type);
+        }
         let data: response::SearchData = self
             .client
             .graphql(graphql::SEARCH_QUERY, variables)
@@ -185,6 +191,39 @@ mod tests {
         assert_eq!(hits[0].provider_id, "1");
         assert_eq!(hits[0].title, "Cowboy Bebop");
         assert_eq!(hits[0].release_year, Some(1998));
+    }
+
+    /// Regression (MISSION-124, dogfooded live): serializing `"type": null`
+    /// explicitly makes AniList filter to nothing — the key must be OMITTED.
+    #[tokio::test]
+    async fn search_omits_type_filter_when_no_content_type() {
+        let server = MockServer::start().await;
+        let provider = provider_with_fixture(&server, "search_anime.json").await;
+
+        provider.search("berserk", None).await.unwrap();
+
+        let received = server.received_requests().await.expect("requests recorded");
+        assert_eq!(received.len(), 1);
+        let body = String::from_utf8(received[0].body.clone()).expect("utf-8 body");
+        assert!(
+            !body.contains(r#""type":"#),
+            "the type filter must be omitted entirely, got: {body}"
+        );
+    }
+
+    #[tokio::test]
+    async fn search_includes_the_type_filter_when_a_type_is_given() {
+        let server = MockServer::start().await;
+        let provider = provider_with_fixture(&server, "search_anime.json").await;
+
+        provider
+            .search("bebop", Some(ContentType::Anime))
+            .await
+            .unwrap();
+
+        let received = server.received_requests().await.expect("requests recorded");
+        let body = String::from_utf8(received[0].body.clone()).expect("utf-8 body");
+        assert!(body.contains(r#""type":"ANIME""#), "got: {body}");
     }
 
     #[tokio::test]
