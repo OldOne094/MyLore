@@ -75,7 +75,7 @@ describe("SearchPage", () => {
       "href",
       "/library/m-1",
     );
-    expect(invoke).toHaveBeenCalledWith("media_search", { query: "steins" });
+    expect(invoke).toHaveBeenCalledWith("media_search", { query: "steins", content_type: null });
     expect(screen.getByText("1 result for “steins”")).toBeInTheDocument();
   });
 
@@ -84,7 +84,7 @@ describe("SearchPage", () => {
     renderPage("zzz");
 
     expect(await screen.findByText("No matches")).toBeInTheDocument();
-    expect(invoke).toHaveBeenCalledWith("media_search", { query: "zzz" });
+    expect(invoke).toHaveBeenCalledWith("media_search", { query: "zzz", content_type: null });
   });
 
   it("renders every hit as a row", async () => {

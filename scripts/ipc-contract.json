@@ -295,9 +295,9 @@
     },
     {
       "name": "media_search",
-      "args": { "query": "string" },
+      "args": { "query": "string", "content_type": "string | null" },
       "returns": "MediaListItem[]",
-      "doc": "Local full-text search over the library. Resolves with summary rows (each carrying its progress summary) or rejects with an AppError string."
+      "doc": "Local full-text search over the library. When content_type is provided, only media of that type are returned. Resolves with summary rows (each carrying its progress summary) or rejects with an AppError string."
     },
     {
       "name": "media_tags",

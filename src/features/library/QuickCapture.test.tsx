@@ -106,7 +106,7 @@ describe("QuickCapture", () => {
 
     await user.type(input, "gate");
     expect(await screen.findByText("Steins;Gate")).toBeInTheDocument();
-    expect(invoke).toHaveBeenCalledWith("media_search", { query: "gate" });
+    expect(invoke).toHaveBeenCalledWith("media_search", { query: "gate", content_type: null });
 
     await user.click(screen.getByText("Steins;Gate"));
     expect(await screen.findByRole("button", { name: /Mark next done/ })).toBeInTheDocument();

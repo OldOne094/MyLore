@@ -203,7 +203,7 @@ async fn full_lifecycle_across_aggregates_cascades_on_delete() {
 
     // Everything is reachable before the delete, including through FTS.
     assert_eq!(
-        media::search(&pool, "sweeping")
+        media::search(&pool, "sweeping", None)
             .await
             .expect("search")
             .len(),
@@ -223,11 +223,11 @@ async fn full_lifecycle_across_aggregates_cascades_on_delete() {
 
     // The target aggregate is gone in every table.
     assert!(media::get(&pool, "m-1").await.expect("get m-1").is_none());
-    assert!(media::search(&pool, "sweeping")
+    assert!(media::search(&pool, "sweeping", None)
         .await
         .expect("search")
         .is_empty());
-    assert!(media::search(&pool, "sword")
+    assert!(media::search(&pool, "sword", None)
         .await
         .expect("search")
         .is_empty());
@@ -300,7 +300,7 @@ async fn manual_transaction_rolls_back_all_statements() {
     }
 
     assert!(media::get(&pool, "m-1").await.expect("get").is_none());
-    assert!(media::search(&pool, "rollback")
+    assert!(media::search(&pool, "rollback", None)
         .await
         .expect("search")
         .is_empty());
@@ -319,7 +319,7 @@ async fn manual_transaction_rolls_back_all_statements() {
     }
 
     assert!(media::get(&pool, "m-1").await.expect("get").is_some());
-    let hits = media::search(&pool, "forever").await.expect("search");
+    let hits = media::search(&pool, "forever", None).await.expect("search");
     assert_eq!(hits.len(), 1, "committed rows are indexed");
     assert_eq!(hits[0].id, "m-1");
 
@@ -351,7 +351,7 @@ async fn media_create_is_atomic_when_a_link_fails() {
         0
     );
     assert_eq!(count_rows(&pool, "SELECT COUNT(*) FROM media").await, 0);
-    assert!(media::search(&pool, "doomed")
+    assert!(media::search(&pool, "doomed", None)
         .await
         .expect("search")
         .is_empty());
@@ -424,7 +424,7 @@ async fn fts_index_follows_review_content_changes() {
     .await
     .expect("review");
 
-    let hits = media::search(&pool, "sorrow").await.expect("search");
+    let hits = media::search(&pool, "sorrow", None).await.expect("search");
     assert_eq!(hits.len(), 1, "review body is searchable");
     assert_eq!(hits[0].id, "m-1");
 
@@ -450,19 +450,19 @@ async fn fts_index_follows_review_content_changes() {
     .await
     .expect("review update");
 
-    assert!(media::search(&pool, "sorrow")
+    assert!(media::search(&pool, "sorrow", None)
         .await
         .expect("search")
         .is_empty());
     assert_eq!(
-        media::search(&pool, "ghost").await.expect("search").len(),
+        media::search(&pool, "ghost", None).await.expect("search").len(),
         1
     );
 
     // Deleting the review must not drop the media document.
     review::delete(&pool, "m-1").await.expect("delete review");
     assert_eq!(
-        media::search(&pool, "ghost").await.expect("search").len(),
+        media::search(&pool, "ghost", None).await.expect("search").len(),
         1
     );
 

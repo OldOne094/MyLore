@@ -545,8 +545,11 @@ export function media_get(args: { id: string }): Promise<{
   } | null>("media_get", args);
 }
 
-/** Local full-text search over the library. Resolves with summary rows (each carrying its progress summary) or rejects with an AppError string. */
-export function media_search(args: { query: string }): Promise<MediaListItem[]> {
+/** Local full-text search over the library. When content_type is provided, only media of that type are returned. Resolves with summary rows (each carrying its progress summary) or rejects with an AppError string. */
+export function media_search(args: {
+  query: string;
+  content_type: string | null;
+}): Promise<MediaListItem[]> {
   return invoke<MediaListItem[]>("media_search", args);
 }
 

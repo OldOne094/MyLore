@@ -197,11 +197,15 @@ impl MediaService {
 
     /// Local full-text search over titles/alt titles/people/genres/tags etc.
     /// (MISSION-043). Empty/whitespace queries resolve to no results.
-    pub async fn search_media(&self, query: &str) -> Result<Vec<MediaListItem>, AppError> {
+    pub async fn search_media(
+        &self,
+        query: &str,
+        content_type: Option<&str>,
+    ) -> Result<Vec<MediaListItem>, AppError> {
         if query.trim().is_empty() {
             return Ok(Vec::new());
         }
-        let rows = crate::infrastructure::repositories::media::search(&self.pool, query).await?;
+        let rows = crate::infrastructure::repositories::media::search(&self.pool, query, content_type).await?;
         self.to_list_items(rows).await
     }
 
@@ -622,7 +626,7 @@ mod tests {
         two.title = "Beneath the Iron Sky".into();
         service.add_media(two).await.expect("add two");
 
-        let hits = service.search_media("sword").await.expect("search");
+        let hits = service.search_media("sword", None).await.expect("search");
         assert_eq!(hits.len(), 1);
         assert_eq!(hits[0].title, "Sword of the Dawn");
     }
@@ -634,7 +638,7 @@ mod tests {
         service.add_media(input()).await.expect("add media");
 
         assert!(service
-            .search_media("   ")
+            .search_media("   ", None)
             .await
             .expect("search")
             .is_empty());

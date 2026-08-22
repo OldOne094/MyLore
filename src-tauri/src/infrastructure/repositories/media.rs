@@ -833,7 +833,11 @@ pub async fn remove_tag_from_media(
 /// The query is folded like the index (lowercase + Arabic normalization), then
 /// run against `media_fts` (unicode61, prefix terms) and `media_fts_cjk`
 /// (trigram, phrase). Results are deduped, unicode61 hits first.
-pub async fn search(pool: &SqlitePool, query: &str) -> Result<Vec<MediaSummary>, AppError> {
+pub async fn search(
+    pool: &SqlitePool,
+    query: &str,
+    content_type: Option<&str>,
+) -> Result<Vec<MediaSummary>, AppError> {
     let normalized = fts::normalize_query(query.trim());
     if normalized.is_empty() {
         return Ok(Vec::new());
@@ -842,13 +846,13 @@ pub async fn search(pool: &SqlitePool, query: &str) -> Result<Vec<MediaSummary>,
     let mut hits: Vec<MediaSummary> = Vec::new();
     let mut seen: std::collections::HashSet<String> = std::collections::HashSet::new();
 
-    for row in search_unicode61(pool, &normalized).await? {
+    for row in search_unicode61(pool, &normalized, content_type).await? {
         let summary = row_to_summary(row);
         seen.insert(summary.id.clone());
         hits.push(summary);
     }
 
-    for row in search_trigram(pool, &normalized).await? {
+    for row in search_trigram(pool, &normalized, content_type).await? {
         let summary = row_to_summary(row);
         if seen.insert(summary.id.clone()) {
             hits.push(summary);
@@ -858,7 +862,11 @@ pub async fn search(pool: &SqlitePool, query: &str) -> Result<Vec<MediaSummary>,
     Ok(hits)
 }
 
-async fn search_unicode61(pool: &SqlitePool, normalized: &str) -> Result<Vec<SqliteRow>, AppError> {
+async fn search_unicode61(
+    pool: &SqlitePool,
+    normalized: &str,
+    content_type: Option<&str>,
+) -> Result<Vec<SqliteRow>, AppError> {
     let terms: Vec<String> = normalized
         .split_whitespace()
         .map(|t| format!("\"{}\"*", t.replace('"', "")))
@@ -868,33 +876,61 @@ async fn search_unicode61(pool: &SqlitePool, normalized: &str) -> Result<Vec<Sql
     }
     let match_query = terms.join(" ");
 
-    let rows = sqlx::query(
-        "SELECT m.id, m.content_type, m.title_main, m.pub_status, m.release_year, \
-         m.cover_asset_id, COALESCE(r.favorite, 0) AS favorite, m.updated_at \
-         FROM media_fts JOIN media m ON m.rowid = media_fts.rowid \
-         LEFT JOIN review r ON r.media_id = m.id \
-         WHERE media_fts MATCH ? ORDER BY rank",
-    )
-    .bind(match_query)
-    .fetch_all(pool)
-    .await?;
+    let sql = match content_type {
+        Some(ct) => {
+            "SELECT m.id, m.content_type, m.title_main, m.pub_status, m.release_year, \
+             m.cover_asset_id, COALESCE(r.favorite, 0) AS favorite, m.updated_at \
+             FROM media_fts JOIN media m ON m.rowid = media_fts.rowid \
+             LEFT JOIN review r ON r.media_id = m.id \
+             WHERE media_fts MATCH ? AND m.content_type = ? ORDER BY rank"
+        }
+        None => {
+            "SELECT m.id, m.content_type, m.title_main, m.pub_status, m.release_year, \
+             m.cover_asset_id, COALESCE(r.favorite, 0) AS favorite, m.updated_at \
+             FROM media_fts JOIN media m ON m.rowid = media_fts.rowid \
+             LEFT JOIN review r ON r.media_id = m.id \
+             WHERE media_fts MATCH ? ORDER BY rank"
+        }
+    };
+
+    let mut q = sqlx::query(sql).bind(&match_query);
+    if let Some(ct) = content_type {
+        q = q.bind(ct);
+    }
+    let rows = q.fetch_all(pool).await?;
     Ok(rows)
 }
 
-async fn search_trigram(pool: &SqlitePool, normalized: &str) -> Result<Vec<SqliteRow>, AppError> {
+async fn search_trigram(
+    pool: &SqlitePool,
+    normalized: &str,
+    content_type: Option<&str>,
+) -> Result<Vec<SqliteRow>, AppError> {
     // trigram ignores query tokens shorter than 3 chars; the whole normalized
     // string is one phrase, giving substring-style matching.
     let phrase = format!("\"{}\"", normalized.replace('"', ""));
-    let rows = sqlx::query(
-        "SELECT m.id, m.content_type, m.title_main, m.pub_status, m.release_year, \
-         m.cover_asset_id, COALESCE(r.favorite, 0) AS favorite, m.updated_at \
-         FROM media_fts_cjk JOIN media m ON m.rowid = media_fts_cjk.rowid \
-         LEFT JOIN review r ON r.media_id = m.id \
-         WHERE media_fts_cjk MATCH ? ORDER BY rank",
-    )
-    .bind(phrase)
-    .fetch_all(pool)
-    .await?;
+    let sql = match content_type {
+        Some(_) => {
+            "SELECT m.id, m.content_type, m.title_main, m.pub_status, m.release_year, \
+             m.cover_asset_id, COALESCE(r.favorite, 0) AS favorite, m.updated_at \
+             FROM media_fts_cjk JOIN media m ON m.rowid = media_fts_cjk.rowid \
+             LEFT JOIN review r ON r.media_id = m.id \
+             WHERE media_fts_cjk MATCH ? AND m.content_type = ? ORDER BY rank"
+        }
+        None => {
+            "SELECT m.id, m.content_type, m.title_main, m.pub_status, m.release_year, \
+             m.cover_asset_id, COALESCE(r.favorite, 0) AS favorite, m.updated_at \
+             FROM media_fts_cjk JOIN media m ON m.rowid = media_fts_cjk.rowid \
+             LEFT JOIN review r ON r.media_id = m.id \
+             WHERE media_fts_cjk MATCH ? ORDER BY rank"
+        }
+    };
+
+    let mut q = sqlx::query(sql).bind(&phrase);
+    if let Some(ct) = content_type {
+        q = q.bind(ct);
+    }
+    let rows = q.fetch_all(pool).await?;
     Ok(rows)
 }
 
@@ -1151,7 +1187,7 @@ mod tests {
         assert_eq!(got.external_ids.len(), 1, "external ids kept");
 
         // The FTS index must follow the updated title.
-        let hits = search(&pool, "dawn").await.expect("search");
+        let hits = search(&pool, "dawn", None).await.expect("search");
         assert_eq!(hits.len(), 1);
         assert_eq!(hits[0].id, "m-1");
         pool.close().await;
@@ -1223,12 +1259,12 @@ mod tests {
         ensure_person(&pool).await;
         let media = with_links(sample_media("m-1", "Doomed"));
         create(&pool, &media).await.expect("create");
-        assert_eq!(search(&pool, "doomed").await.expect("search").len(), 1);
+        assert_eq!(search(&pool, "doomed", None).await.expect("search").len(), 1);
 
         delete(&pool, "m-1").await.expect("delete");
 
         assert!(get(&pool, "m-1").await.expect("get").is_none());
-        assert!(search(&pool, "doomed").await.expect("search").is_empty());
+        assert!(search(&pool, "doomed", None).await.expect("search").is_empty());
         for (sql, name) in [
             ("SELECT COUNT(*) FROM media_alt_title", "alt titles"),
             ("SELECT COUNT(*) FROM media_person", "media_person"),
@@ -1405,25 +1441,25 @@ mod tests {
             .expect("create");
 
         // unicode61 whole-word prefix.
-        let hits = search(&pool, "dawn").await.expect("search");
+        let hits = search(&pool, "dawn", None).await.expect("search");
         assert_eq!(hits.len(), 1);
         assert_eq!(hits[0].id, "m-latin");
 
         // trigram substring (3-char window) for CJK.
-        let hits = search(&pool, "???").await.expect("search cjk");
+        let hits = search(&pool, "???", None).await.expect("search cjk");
         assert!(
             hits.iter().any(|h| h.id == "m-cjk"),
             "CJK substring should match"
         );
 
         // Arabic query is folded to the index form '??????'.
-        let hits = search(&pool, "?????????????").await.expect("search arabic");
+        let hits = search(&pool, "?????????????", None).await.expect("search arabic");
         assert!(
             hits.iter().any(|h| h.id == "m-arabic"),
             "voweled Arabic query should match"
         );
 
-        assert!(search(&pool, "  ").await.expect("blank").is_empty());
+        assert!(search(&pool, "  ", None).await.expect("blank").is_empty());
         pool.close().await;
         cleanup_files(&path);
     }

@@ -101,7 +101,7 @@ impl SearchService {
         }
 
         let local = MediaService::new(self.pool.clone())
-            .search_media(query)
+            .search_media(query, None)
             .await?;
 
         let library = media_repo::identity_candidates(&self.pool).await?;

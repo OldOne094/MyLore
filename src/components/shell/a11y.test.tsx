@@ -122,7 +122,10 @@ describe("header search (MISSION-043)", () => {
     expect(await screen.findByRole("searchbox", { name: "Search your library" })).toHaveValue(
       "Steins;Gate",
     );
-    expect(invoke).toHaveBeenCalledWith("media_search", { query: "Steins;Gate" });
+    expect(invoke).toHaveBeenCalledWith("media_search", {
+      query: "Steins;Gate",
+      content_type: null,
+    });
   });
 
   it("does not navigate for a blank query", async () => {

@@ -80,7 +80,10 @@ export const queryKeys = {
   },
   search: {
     all: () => ["search"] as const,
-    local: (query: string) => ["search", "local", query] as const,
+    local: (query: string, contentType?: string) =>
+      contentType
+        ? (["search", "local", query, contentType] as const)
+        : (["search", "local", query] as const),
     external: (query: string, content_type: string | null) =>
       ["search", "external", query, content_type] as const,
   },

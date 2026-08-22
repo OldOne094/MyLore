@@ -119,10 +119,11 @@ pub async fn media_get(
 pub async fn media_search(
     state: State<'_, SqlitePool>,
     query: String,
+    content_type: Option<String>,
 ) -> Result<Vec<MediaListItem>, AppError> {
     info!(query, "media_search invoked");
     let service = MediaService::new(state.inner().clone());
-    service.search_media(&query).await
+    service.search_media(&query, content_type.as_deref()).await
 }
 
 /// The personal tags linked to one media (MISSION-074). Resolves with tag rows
