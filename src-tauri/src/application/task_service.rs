@@ -120,9 +120,12 @@ impl TaskReporter {
 
     /// Set the terminal state and result/error, then emit.
     fn finish(&self, state: TaskState, result: Option<Value>, error: Option<String>) {
-        *self.entry.state.write().unwrap() = state;
+        // Result and error land BEFORE the terminal state: the state write is
+        // the commit marker, so no observer can ever see a terminal snapshot
+        // whose payload has not landed yet.
         *self.entry.result.write().unwrap() = result;
         *self.entry.error.write().unwrap() = error;
+        *self.entry.state.write().unwrap() = state;
         self.emit();
     }
 
