@@ -906,9 +906,20 @@ async fn search_trigram(
     normalized: &str,
     content_type: Option<&str>,
 ) -> Result<Vec<SqliteRow>, AppError> {
-    // trigram ignores query tokens shorter than 3 chars; the whole normalized
-    // string is one phrase, giving substring-style matching.
-    let phrase = format!("\"{}\"", normalized.replace('"', ""));
+    // Trigram tokenizer splits text into 3-char sequences, enabling substring
+    // matching. Split the query into individual tokens (≥ 3 chars each) and
+    // OR them together so partial input matches any word in the title —
+    // much more useful than requiring the entire phrase as a contiguous
+    // substring.
+    let tokens: Vec<String> = normalized
+        .split_whitespace()
+        .filter(|t| t.len() >= 3)
+        .map(|t| format!("\"{}\"", t.replace('"', "")))
+        .collect();
+    if tokens.is_empty() {
+        return Ok(Vec::new());
+    }
+    let match_query = tokens.join(" OR ");
     let sql = match content_type {
         Some(_) => {
             "SELECT m.id, m.content_type, m.title_main, m.pub_status, m.release_year, \
@@ -926,7 +937,7 @@ async fn search_trigram(
         }
     };
 
-    let mut q = sqlx::query(sql).bind(&phrase);
+    let mut q = sqlx::query(sql).bind(&match_query);
     if let Some(ct) = content_type {
         q = q.bind(ct);
     }
@@ -1460,6 +1471,15 @@ mod tests {
         );
 
         assert!(search(&pool, "  ", None).await.expect("blank").is_empty());
+
+        // MISSION-120: trigram per-token OR catches mid-word Latin substrings
+        // that unicode61 prefix-only matching would miss.
+        let hits = search(&pool, "ord", None).await.expect("mid-word trigram");
+        assert!(
+            hits.iter().any(|h| h.id == "m-latin"),
+            "'ord' (inside 'Sword') should match via trigram substring"
+        );
+
         pool.close().await;
         cleanup_files(&path);
     }
