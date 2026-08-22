@@ -17,6 +17,12 @@ on:
     tags:
       - "v*"
 
+# The default GITHUB_TOKEN is read-only; creating the draft release needs
+# contents:write (first run failed with "Resource not accessible by
+# integration" after Linux had already built its bundles).
+permissions:
+  contents: write
+
 jobs:
   build:
     strategy:
@@ -24,8 +30,13 @@ jobs:
       matrix:
         include:
           - platform: ubuntu-22.04
+            args: ""
           - platform: macos-latest
+            args: ""
+          # MSI/WiX rejects non-numeric pre-release segments (alpha.1), so
+          # Windows ships NSIS-only until a stable tag.
           - platform: windows-latest
+            args: "--bundles nsis"
     runs-on: ${{ matrix.platform }}
 
     steps:
@@ -60,36 +71,17 @@ jobs:
       - name: Version sync gate
         run: node scripts/release.mjs check
 
-      - name: Import Windows signing certificate
-        if: matrix.platform == 'windows-latest' && env.WINDOWS_PFX != ''
-        env:
-          WINDOWS_PFX: ${{ secrets.WINDOWS_PFX }}
-          WINDOWS_PFX_PASSWORD: ${{ secrets.WINDOWS_PFX_PASSWORD }}
-        shell: pwsh
-        run: |
-          $pfxPath = Join-Path $env:RUNNER_TEMP "signing.pfx"
-          [IO.File]::WriteAllBytes("$pfxPath", [Convert]::FromBase64String($env:WINDOWS_PFX))
-          Import-PfxCertificate -FilePath $pfxPath -CertStoreLocation Cert:\CurrentUser\My -Password (ConvertTo-SecureString $env:WINDOWS_PFX_PASSWORD -AsPlainText -Force)
-
-      - name: Import macOS signing certificate
-        if: matrix.platform == 'macos-latest' && env.APPLE_CERTIFICATE != ''
-        env:
-          APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
-          APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
-        run: |
-          echo "$APPLE_CERTIFICATE" | base64 --decode > certificate.p12
-          security create-keychain -p mylore-build build.keychain
-          security import certificate.p12 -k build.keychain -P "$APPLE_CERTIFICATE_PASSWORD" -T /usr/bin/codesign
-          security default-keychain -s build.keychain
-          security unlock-keychain -p mylore-build build.keychain
-          security set-key-partition-list -S apple-tool:,apple: -s -k mylore-build build.keychain
-
+      # Signing is secrets-gated: with no certificates provisioned, macOS falls
+      # back to ad-hoc signing (identity "-") which bundles fine; Windows NSIS
+      # needs no signing at all. When real certs land as secrets, swap "-" for
+      # the real identity and add APPLE_CERTIFICATE / WINDOWS_PFX here.
       - name: Build installers
         uses: tauri-apps/tauri-action@v0
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          APPLE_SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}
+          APPLE_SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY != '' && secrets.APPLE_SIGNING_IDENTITY || '-' }}
         with:
+          args: ${{ matrix.args }}
           tagName: ${{ github.ref_name }}
           releaseName: "MyLore ${{ github.ref_name }}"
           releaseBody: "See CHANGELOG.md for the changes in this release."
