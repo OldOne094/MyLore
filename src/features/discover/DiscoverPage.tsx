@@ -6,6 +6,7 @@ import { Badge, Button, EmptyState, Skeleton } from "@/components/ui";
 import { useToast } from "@/components/ui";
 import { MediaRow } from "@/features/library/MediaRow";
 import { useDiscoverSearchQuery, useImportProvider } from "./api";
+import { ExternalHitDetailDialog } from "./ExternalHitDetailDialog";
 
 /* MISSION-059 — External search (Discover). Searches every enabled provider
    through the coordinator, groups hits by provider, and flags each hit as
@@ -66,6 +67,7 @@ function ExternalHitRow({ hit }: { hit: import("@/api").ExternalHit }) {
   const navigate = useNavigate();
   const toast = useToast();
   const importProvider = useImportProvider();
+  const [detailOpen, setDetailOpen] = useState(false);
 
   const title =
     hit.identity.kind === "in_library" && hit.identity.media_id ? (
@@ -77,7 +79,13 @@ function ExternalHitRow({ hit }: { hit: import("@/api").ExternalHit }) {
         <ArrowUpRight size={14} aria-hidden="true" />
       </Link>
     ) : (
-      <span className="truncate">{hit.title}</span>
+      <button
+        type="button"
+        onClick={() => setDetailOpen(true)}
+        className="truncate text-start text-text-primary transition-colors duration-150 ease-out hover:text-accent"
+      >
+        {hit.title}
+      </button>
     );
 
   const alreadyAdded = hit.identity.kind === "in_library";
@@ -127,6 +135,14 @@ function ExternalHitRow({ hit }: { hit: import("@/api").ExternalHit }) {
         >
           {importProvider.isPending ? t("discover.importing") : t("discover.import")}
         </Button>
+      ) : null}
+      {detailOpen ? (
+        <ExternalHitDetailDialog
+          hit={hit}
+          open={detailOpen}
+          onClose={() => setDetailOpen(false)}
+          onImported={() => setDetailOpen(false)}
+        />
       ) : null}
     </div>
   );

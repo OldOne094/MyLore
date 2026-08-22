@@ -610,6 +610,11 @@ export function search_external(args: {
   return invoke<ExternalSearchView>("search_external", args);
 }
 
+/** Fetch full details for one title from a specific provider (MISSION-127). Returns a JSON object with all normalized metadata (synopsis, cover_url, authors, genres, tags, status, dates, counts, external links) or rejects with an AppError string. */
+export function provider_get_details(args: { provider: string; id: string }): Promise<unknown> {
+  return invoke<unknown>("provider_get_details", args);
+}
+
 /** Import one provider title into the library (details → identity check → add). Resolves with the media that owns the title — newly created (created: true) or an existing library row the identity check matched (created: false), or rejects with an AppError string. */
 export function import_provider(args: {
   provider: string;

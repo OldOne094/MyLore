@@ -134,6 +134,7 @@ pub fn run() {
             commands::media::media_get,
             commands::media::media_search,
             commands::discover::search_external,
+            commands::discover::provider_get_details,
             commands::import::import_provider,
             commands::import::import_file_preview,
             commands::import::import_file_detect,

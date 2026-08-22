@@ -368,6 +368,12 @@
       "doc": "External (provider) search grouped by provider, with identity flags. `content_type` narrows the fan-out when provided; null searches every enabled provider (domain-agnostic). Resolves with local hits + provider groups + per-provider failures, or rejects with an AppError string."
     },
     {
+      "name": "provider_get_details",
+      "args": { "provider": "string", "id": "string" },
+      "returns": "unknown",
+      "doc": "Fetch full details for one title from a specific provider (MISSION-127). Returns a JSON object with all normalized metadata (synopsis, cover_url, authors, genres, tags, status, dates, counts, external links) or rejects with an AppError string."
+    },
+    {
       "name": "import_provider",
       "args": {
         "provider": "string",
