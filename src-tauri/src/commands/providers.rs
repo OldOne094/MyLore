@@ -16,7 +16,7 @@ use crate::error::AppError;
 /// Snapshot every registered provider for the settings UI. Resolves with the
 /// rows in registration order, or rejects with an AppError string.
 #[command]
-pub fn providers_list(
+pub async fn providers_list(
     settings: State<'_, Arc<ProviderSettingsService>>,
 ) -> Result<Vec<ProviderSettingsView>, AppError> {
     info!("providers_list invoked");
@@ -27,7 +27,7 @@ pub fn providers_list(
 /// (routing rebuilds the coordinator). Resolves with the updated row or
 /// rejects with an AppError string.
 #[command]
-pub fn provider_set_enabled(
+pub async fn provider_set_enabled(
     settings: State<'_, Arc<ProviderSettingsService>>,
     provider: String,
     enabled: bool,
@@ -40,7 +40,7 @@ pub fn provider_set_enabled(
 /// key is never persisted in settings files and never returned to the webview.
 /// Resolves with the updated row or rejects with an AppError string.
 #[command]
-pub fn provider_set_key(
+pub async fn provider_set_key(
     settings: State<'_, Arc<ProviderSettingsService>>,
     provider: String,
     api_key: String,

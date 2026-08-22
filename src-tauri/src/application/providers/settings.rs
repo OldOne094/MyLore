@@ -92,7 +92,16 @@ impl ProviderSettingsService {
             if let Some(flag) = enabled.get(&config.id) {
                 config.enabled = *flag;
             }
-            config.api_key = store.get(&config.id);
+            // A keyring read error must not look like "no key saved" — log it
+            // loudly and continue without the key so the app still boots.
+            match store.get(&config.id) {
+                Ok(key) => config.api_key = key,
+                Err(error) => tracing::error!(
+                    provider = %config.id,
+                    %error,
+                    "keyring read failed; provider will run without its API key"
+                ),
+            }
         }
         let coordinator = rebuild(&builder, &configs)?;
         Ok(Self {
@@ -545,7 +554,10 @@ mod tests {
 
         let view = service.set_key("tmdb", "abc-123").expect("set key");
         assert!(view.has_key);
-        assert_eq!(service.store.get("tmdb").as_deref(), Some("abc-123"));
+        assert_eq!(
+            service.store.get("tmdb").unwrap().as_deref(),
+            Some("abc-123")
+        );
         assert_eq!(
             builder.recorded_keys(),
             vec![
@@ -569,7 +581,7 @@ mod tests {
         service.set_key("tmdb", "abc").expect("set");
         let view = service.set_key("tmdb", "   ").expect("clear");
         assert!(!view.has_key);
-        assert_eq!(service.store.get("tmdb"), None);
+        assert_eq!(service.store.get("tmdb").unwrap(), None);
         assert_eq!(
             builder.recorded_keys(),
             vec![

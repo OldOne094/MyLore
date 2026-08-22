@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
-import { Check } from "lucide-react";
-import { Button } from "@/components/ui";
+import { Check, X } from "lucide-react";
+import { Button, useToast } from "@/components/ui";
 import { cn } from "@/lib/cn";
 import {
   useProvidersQuery,
@@ -12,20 +12,40 @@ import {
 } from "./providers";
 
 /* MISSION-063 — Provider settings. One row per registered provider: an
-   enable/disable switch, an API-key field for key-required providers (keys are
-   stored in the OS keyring by the backend and never returned) and a live
-   "test connection" probe. */
+   enable/disable switch, an API-key field for key-required providers (keys
+   are stored in a local file by the backend and never returned) and a live
+   "test connection" probe. MISSION-098: save success/failure surfaces as
+   inline feedback so silent keyring failures can't recur. */
 
 function ProviderRow({ row }: { row: ProviderSettingsRow }) {
   const { t } = useTranslation();
+  const toast = useToast();
   const toggle = useSetProviderEnabled();
   const setKey = useSetProviderKey();
   const test = useTestConnection();
   const [keyValue, setKeyValue] = useState("");
+  const [keyError, setKeyError] = useState(false);
 
   const hasKeyInput = keyValue.trim().length > 0;
   const keyBusy = setKey.isPending;
   const testResult = test.data;
+
+  const handleSaveKey = () => {
+    if (!hasKeyInput) return;
+    setKeyValue("");
+    setKey.mutate(
+      { provider: row.provider, apiKey: keyValue },
+      {
+        onSuccess: () => {
+          setKeyError(false);
+        },
+        onError: () => {
+          setKeyError(true);
+          toast.error({ title: t("settings.providersKeySaveFailed") });
+        },
+      },
+    );
+  };
 
   return (
     <li className="flex flex-col gap-3 border-t border-border-subtle py-4 first:border-t-0">
@@ -85,14 +105,16 @@ function ProviderRow({ row }: { row: ProviderSettingsRow }) {
             variant="secondary"
             size="sm"
             disabled={!hasKeyInput || keyBusy}
-            onClick={() => {
-              setKey.mutate({ provider: row.provider, apiKey: keyValue });
-              setKeyValue("");
-            }}
+            onClick={handleSaveKey}
           >
             {keyBusy ? t("settings.providersKeySaving") : t("settings.providersKeySave")}
           </Button>
-          {row.has_key ? (
+          {keyError ? (
+            <span className="inline-flex items-center gap-1 text-xs text-destructive">
+              <X size={12} aria-hidden="true" />
+              {t("settings.providersKeySaveFailed")}
+            </span>
+          ) : row.has_key ? (
             <span className="inline-flex items-center gap-1 text-xs text-status-completed">
               <Check size={12} aria-hidden="true" />
               {t("settings.providersKeySaved")}

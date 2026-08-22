@@ -19,7 +19,7 @@ use crate::application::backup_service::BackupService;
 use crate::application::image_service::ImageService;
 use crate::application::providers::settings::ProviderSettingsService;
 use crate::application::task_service::TaskManager;
-use crate::infrastructure::keyring::OsKeyring;
+use crate::infrastructure::keyring::FileSecretStore;
 use crate::infrastructure::providers::StdEntryBuilder;
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
@@ -79,7 +79,7 @@ pub fn run() {
                 ProviderSettingsService::load(
                     infrastructure::providers::default_provider_configs(),
                     data_dir.join("providers.json"),
-                    Box::new(OsKeyring),
+                    Box::new(FileSecretStore::load(data_dir.join("api_keys.json"))),
                     Arc::new(StdEntryBuilder),
                 )
                 .map_err(std::io::Error::other)?,
