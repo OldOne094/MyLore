@@ -35,7 +35,7 @@ function formatHours(hours: number): string {
 function StatsSkeleton() {
   const { t } = useTranslation();
   return (
-    <section aria-label={t("nav.stats")} role="status" className="px-5 py-5">
+    <section aria-label={t("nav.stats")} role="status" className="px-6 py-5">
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
         {Array.from({ length: 7 }, (_, index) => (
           <div key={index} className="rounded-md bg-bg-surface p-4">
@@ -109,7 +109,7 @@ export function StatsPage() {
   const avgRating = stats.avg_rating === null ? "—" : stats.avg_rating.toFixed(1);
 
   return (
-    <section aria-label={t("nav.stats")} className="px-5 py-5">
+    <section aria-label={t("nav.stats")} className="px-6 py-5">
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
         <StatCard label={t("stats.total")} value={String(stats.total)} />
         <StatCard label={t("stats.completed")} value={String(stats.completed_media)} />

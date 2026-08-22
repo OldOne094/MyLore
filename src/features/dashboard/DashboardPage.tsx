@@ -16,7 +16,7 @@ import { useDashboardSummaryQuery, type MediaListItem } from "./api";
 function DashboardSkeleton() {
   const { t } = useTranslation();
   return (
-    <section aria-label={t("nav.dashboard")} role="status" className="px-5 py-5">
+    <section aria-label={t("nav.dashboard")} role="status" className="px-6 py-5">
       <div className="grid gap-4 lg:grid-cols-2">
         <div className="flex flex-wrap gap-2">
           <Skeleton className="h-9 w-28" />
@@ -96,7 +96,7 @@ export function DashboardPage() {
   const summary = data ?? { continue_watching: [], recently_completed: [], recently_added: [] };
 
   return (
-    <section aria-label={t("nav.dashboard")} className="px-5 py-5">
+    <section aria-label={t("nav.dashboard")} className="px-6 py-5">
       <div className="grid gap-4 lg:grid-cols-2">
         <section className="rounded-md border border-border-subtle bg-bg-surface p-4 lg:col-span-2">
           <h2 className="text-sm font-semibold text-text-primary">{t("dashboard.quickActions")}</h2>

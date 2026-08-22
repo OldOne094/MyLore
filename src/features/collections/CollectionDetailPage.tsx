@@ -1,4 +1,4 @@
-import { useState } from "react";
+﻿import { useState } from "react";
 import {
   ArrowDown,
   ArrowUp,
@@ -186,7 +186,7 @@ export function CollectionDetailPage() {
 
   return (
     <section aria-label={t("nav.collections")} className="flex h-full min-h-0 flex-col">
-      <div className="shrink-0 border-b border-border-subtle px-5 py-3">
+      <div className="shrink-0 border-b border-border-subtle px-6 py-3">
         <Link
           to="/collections"
           aria-label={t("collections.backAria")}
@@ -248,7 +248,7 @@ export function CollectionDetailPage() {
           )}
         </div>
       ) : (
-        <div className="flex-1 space-y-1 overflow-y-auto px-5 py-4">
+        <div className="flex-1 space-y-1 overflow-y-auto px-6 py-4">
           {smart ? (
             <p className="px-1 pb-2 text-xs text-text-tertiary">{t("collections.computedNote")}</p>
           ) : (

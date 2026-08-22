@@ -21,7 +21,7 @@ function monthName(language: string, index: number, style: "short" | "long"): st
 function RecapSkeleton() {
   const { t } = useTranslation();
   return (
-    <section aria-label={t("nav.recap")} role="status" className="px-5 py-5">
+    <section aria-label={t("nav.recap")} role="status" className="px-6 py-5">
       <Skeleton className="h-6 w-48" />
       <div className="mt-4 grid gap-4 sm:grid-cols-2 lg:grid-cols-5">
         {Array.from({ length: 5 }, (_, index) => (
@@ -240,7 +240,7 @@ export function RecapPage() {
     data.best_month === null ? "—" : monthName(i18n.language, data.best_month - 1, "long");
 
   return (
-    <section aria-label={t("nav.recap")} className="px-5 py-5">
+    <section aria-label={t("nav.recap")} className="px-6 py-5">
       <div className="flex flex-wrap items-end justify-between gap-3">
         <h2 className="text-lg font-semibold text-text-primary">
           {t("recap.title", { year: String(year) })}

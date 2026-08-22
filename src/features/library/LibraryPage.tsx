@@ -1,4 +1,4 @@
-import { useState } from "react";
+﻿import { useState } from "react";
 import { CheckSquare, Library, Plus, RefreshCcw, SlidersHorizontal, Upload, X } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { Button, EmptyState, Skeleton } from "@/components/ui";
@@ -173,7 +173,7 @@ export function LibraryPage() {
 
   return (
     <section aria-label={t("nav.library")} className="flex h-full min-h-0 flex-col">
-      <div className="flex shrink-0 flex-wrap items-center justify-between gap-3 border-b border-border-subtle px-5 py-3">
+      <div className="flex shrink-0 flex-wrap items-center justify-between gap-3 border-b border-border-subtle px-6 py-3">
         <span className="text-sm tabular-nums text-text-secondary">
           {selectMode
             ? t("library.selectionCount", { count: selected.size })

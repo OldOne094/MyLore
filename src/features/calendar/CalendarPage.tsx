@@ -29,7 +29,7 @@ function dateKey(year: number, month: number, day: number): string {
 function CalendarSkeleton() {
   const { t } = useTranslation();
   return (
-    <section aria-label={t("nav.calendar")} role="status" className="px-5 py-5">
+    <section aria-label={t("nav.calendar")} role="status" className="px-6 py-5">
       <div className="flex items-center justify-between">
         <Skeleton className="h-9 w-9" />
         <Skeleton className="h-4 w-32" />
@@ -154,7 +154,7 @@ export function CalendarPage() {
   const cells = monthCells(cursor.year, cursor.month);
 
   return (
-    <section aria-label={t("nav.calendar")} className="px-5 py-5">
+    <section aria-label={t("nav.calendar")} className="px-6 py-5">
       <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_320px]">
         <div>
           <div className="flex items-center justify-between">
