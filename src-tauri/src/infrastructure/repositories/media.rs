@@ -877,7 +877,7 @@ async fn search_unicode61(
     let match_query = terms.join(" ");
 
     let sql = match content_type {
-        Some(ct) => {
+        Some(_) => {
             "SELECT m.id, m.content_type, m.title_main, m.pub_status, m.release_year, \
              m.cover_asset_id, COALESCE(r.favorite, 0) AS favorite, m.updated_at \
              FROM media_fts JOIN media m ON m.rowid = media_fts.rowid \
