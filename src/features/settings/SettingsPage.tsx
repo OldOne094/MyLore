@@ -31,7 +31,7 @@ export function SettingsPage() {
   const { preferences, setTheme, setLanguage, setDensity } = usePreferences();
 
   return (
-    <div className="mx-auto flex w-full max-w-xl flex-col gap-6 p-6">
+    <div className="mx-auto flex w-full max-w-3xl flex-col gap-6 p-6">
       <Section title={t("settings.theme")} hint={t("settings.themeHint")}>
         <div
           role="group"
