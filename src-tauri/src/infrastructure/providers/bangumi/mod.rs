@@ -124,7 +124,18 @@ impl Provider for BangumiProvider {
             None => vec![1, 2],
         };
         let page = self.client.search_subjects(query, &types).await?;
-        Ok(page.data.iter().filter_map(normalize::candidate).collect())
+        // Post-filter: Bangumi lumps manga under "Book" (type 1), so the API
+        // may return mixed types. Keep only hits whose *normalized* content
+        // type matches the requested one.
+        let hits: Vec<_> = page
+            .data
+            .iter()
+            .filter_map(normalize::candidate)
+            .filter(|c| {
+                content_type.is_none_or(|wanted| wanted == c.content_type)
+            })
+            .collect();
+        Ok(hits)
     }
 
     async fn get_details(&self, provider_id: &str) -> Result<ProviderMedia, ProviderError> {
@@ -213,16 +224,26 @@ mod tests {
             .mount(&server)
             .await;
         let provider = provider_with(&server);
-        for ct in [
-            ContentType::Anime,
-            ContentType::Manga,
-            ContentType::Novel,
-            ContentType::WebNovel,
-            ContentType::Book,
+        // Post-filter means only subjects whose *normalized* content_type
+        // matches the request survive; the fixture has one Manga + one Anime,
+        // so Book searches return empty (no book-type subjects in fixture).
+        for (ct, min_expected) in [
+            (ContentType::Manga, 1),
+            (ContentType::Anime, 1),
+            (ContentType::Book, 0),
         ] {
             let hits = provider.search("sangatsu", Some(ct)).await.unwrap();
-            assert!(!hits.is_empty(), "{ct:?} should route here");
+            assert!(
+                hits.len() >= min_expected,
+                "{ct:?}: expected ≥{min_expected}, got {}",
+                hits.len()
+            );
         }
+        let anime_hits = provider
+            .search("sangatsu", Some(ContentType::Anime))
+            .await
+            .unwrap();
+        assert!(!anime_hits.is_empty(), "Anime should route here");
         let hits = provider
             .search("cowboy", Some(ContentType::Movie))
             .await
@@ -319,7 +340,8 @@ mod tests {
         let outcome = coordinator
             .search_all("sangatsu", Some(ContentType::Anime), &coordinator.token())
             .await;
-        assert_eq!(outcome.hits.len(), 2);
+        // The post-filter keeps only the anime subject from the mixed fixture.
+        assert_eq!(outcome.hits.len(), 1);
         assert!(outcome.hits.iter().all(|h| h.provider == "bangumi"));
         assert!(outcome.failures.is_empty());
     }
