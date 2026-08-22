@@ -245,13 +245,16 @@ mod tests {
     }
 
     async fn wait_terminal(manager: &TaskManager, id: &str) -> TaskSnapshot {
+        // A real 1ms sleep (not yield_now): on the current-thread runtime,
+        // yield_now re-queues this test into the scheduler's LIFO slot and can
+        // starve the spawned runner indefinitely on slower CI machines.
         for _ in 0..10_000 {
             if let Some(snapshot) = manager.get(id) {
                 if snapshot.state.is_terminal() {
                     return snapshot;
                 }
             }
-            tokio::task::yield_now().await;
+            tokio::time::sleep(std::time::Duration::from_millis(1)).await;
         }
         panic!("task {id} never reached a terminal state");
     }
