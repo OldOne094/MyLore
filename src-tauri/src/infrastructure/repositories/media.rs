@@ -1270,12 +1270,18 @@ mod tests {
         ensure_person(&pool).await;
         let media = with_links(sample_media("m-1", "Doomed"));
         create(&pool, &media).await.expect("create");
-        assert_eq!(search(&pool, "doomed", None).await.expect("search").len(), 1);
+        assert_eq!(
+            search(&pool, "doomed", None).await.expect("search").len(),
+            1
+        );
 
         delete(&pool, "m-1").await.expect("delete");
 
         assert!(get(&pool, "m-1").await.expect("get").is_none());
-        assert!(search(&pool, "doomed", None).await.expect("search").is_empty());
+        assert!(search(&pool, "doomed", None)
+            .await
+            .expect("search")
+            .is_empty());
         for (sql, name) in [
             ("SELECT COUNT(*) FROM media_alt_title", "alt titles"),
             ("SELECT COUNT(*) FROM media_person", "media_person"),
@@ -1464,7 +1470,9 @@ mod tests {
         );
 
         // Arabic query is folded to the index form '??????'.
-        let hits = search(&pool, "?????????????", None).await.expect("search arabic");
+        let hits = search(&pool, "?????????????", None)
+            .await
+            .expect("search arabic");
         assert!(
             hits.iter().any(|h| h.id == "m-arabic"),
             "voweled Arabic query should match"

@@ -205,7 +205,9 @@ impl MediaService {
         if query.trim().is_empty() {
             return Ok(Vec::new());
         }
-        let rows = crate::infrastructure::repositories::media::search(&self.pool, query, content_type).await?;
+        let rows =
+            crate::infrastructure::repositories::media::search(&self.pool, query, content_type)
+                .await?;
         self.to_list_items(rows).await
     }
 

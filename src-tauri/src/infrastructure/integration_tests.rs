@@ -455,14 +455,20 @@ async fn fts_index_follows_review_content_changes() {
         .expect("search")
         .is_empty());
     assert_eq!(
-        media::search(&pool, "ghost", None).await.expect("search").len(),
+        media::search(&pool, "ghost", None)
+            .await
+            .expect("search")
+            .len(),
         1
     );
 
     // Deleting the review must not drop the media document.
     review::delete(&pool, "m-1").await.expect("delete review");
     assert_eq!(
-        media::search(&pool, "ghost", None).await.expect("search").len(),
+        media::search(&pool, "ghost", None)
+            .await
+            .expect("search")
+            .len(),
         1
     );
 
