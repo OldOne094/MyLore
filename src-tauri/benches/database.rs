@@ -194,10 +194,10 @@ fn bench_search(c: &mut Criterion) {
         assert_eq!(count_media(&pool), n as i64);
 
         group.bench_with_input(BenchmarkId::new("fts_selective", n), &n, |b, _| {
-            b.iter(|| rt.block_on(media::search(&pool, "nexus")));
+            b.iter(|| rt.block_on(media::search(&pool, "nexus", None)));
         });
         group.bench_with_input(BenchmarkId::new("fts_no_match", n), &n, |b, _| {
-            b.iter(|| rt.block_on(media::search(&pool, "zzzzyggg")));
+            b.iter(|| rt.block_on(media::search(&pool, "zzzzyggg", None)));
         });
         rt.block_on(pool.close());
     }
