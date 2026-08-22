@@ -19,3 +19,4 @@
 *.jpeg binary
 *.ico binary
 *.icns binary
+*.sql text eol=lf
