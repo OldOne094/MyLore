@@ -355,8 +355,10 @@ impl ProviderCoordinator {
 
         // Re-emit in registration order for stable UI ordering.
         for (idx, result) in results.iter().enumerate() {
+            let pid = &self.entries[idx].config.id;
             match result {
                 Some(Ok(found)) => {
+                    tracing::debug!(provider = %pid, hits = found.len(), "search ok");
                     for candidate in found {
                         hits.push(SearchHit {
                             provider: self.entries[idx].config.id.clone(),
@@ -364,10 +366,13 @@ impl ProviderCoordinator {
                         });
                     }
                 }
-                Some(Err(error)) => failures.push(SearchFailure {
-                    provider: self.entries[idx].config.id.clone(),
-                    error: error.clone(),
-                }),
+                Some(Err(error)) => {
+                    tracing::warn!(provider = %pid, error = %error, "provider search failed");
+                    failures.push(SearchFailure {
+                        provider: self.entries[idx].config.id.clone(),
+                        error: error.clone(),
+                    });
+                }
                 None => {}
             }
         }

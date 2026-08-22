@@ -131,9 +131,7 @@ impl Provider for BangumiProvider {
             .data
             .iter()
             .filter_map(normalize::candidate)
-            .filter(|c| {
-                content_type.is_none_or(|wanted| wanted == c.content_type)
-            })
+            .filter(|c| content_type.is_none_or(|wanted| wanted == c.content_type))
             .collect();
         Ok(hits)
     }
