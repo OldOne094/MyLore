@@ -508,7 +508,7 @@ mod tests {
             then: Vec<ProviderCandidate>,
         },
         Hang,
-        Details(ProviderMedia),
+        Details(Box<ProviderMedia>),
         Nodes(Vec<ProviderNode>),
     }
 
@@ -575,7 +575,7 @@ mod tests {
         }
         async fn get_details(&self, _provider_id: &str) -> Result<ProviderMedia, ProviderError> {
             match self.behavior.lock().unwrap().clone() {
-                Behavior::Details(details) => Ok(details),
+                Behavior::Details(details) => Ok(*details),
                 _ => Err(ProviderError::Unsupported {
                     provider: self.id.clone(),
                     operation: "details".into(),
@@ -708,7 +708,7 @@ mod tests {
                 details: true,
                 ..Default::default()
             },
-            Behavior::Details(details.clone()),
+            Behavior::Details(Box::new(details.clone())),
         );
         let c = coord(vec![(base_config("fake"), provider)]);
         let token = c.token();
@@ -721,7 +721,7 @@ mod tests {
         let provider = FakeProvider::make(
             "fake",
             ProviderCapabilities::default(),
-            Behavior::Details(ProviderMedia {
+            Behavior::Details(Box::new(ProviderMedia {
                 provider: "fake".to_string(),
                 provider_id: "x1".to_string(),
                 title_main: "Sword".to_string(),
@@ -748,7 +748,7 @@ mod tests {
                 genres: Vec::new(),
                 tags: Vec::new(),
                 external_ids: Vec::new(),
-            }),
+            })),
         );
         let c = coord(vec![(base_config("fake"), provider)]);
         let token = c.token();
@@ -792,7 +792,7 @@ mod tests {
                 details: true,
                 ..Default::default()
             },
-            Behavior::Details(details),
+            Behavior::Details(Box::new(details)),
         );
         let mut config = base_config("fake");
         config.enabled = false;

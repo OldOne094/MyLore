@@ -681,7 +681,7 @@ mod tests {
             "SELECT p.id, p.name, p.role FROM person p JOIN media_person mp \
              ON mp.person_id = p.id WHERE mp.media_id = ?",
         )
-        .bind(&report.items[0].media_id.clone().unwrap())
+        .bind(report.items[0].media_id.clone().unwrap())
         .fetch_all(&pool)
         .await
         .expect("people");

@@ -1,4 +1,4 @@
-import { defineConfig } from "vitest/config";
+import { defineConfig, configDefaults } from "vitest/config";
 import react from "@vitejs/plugin-react";
 import tailwindcss from "@tailwindcss/vite";
 import { fileURLToPath, URL } from "node:url";
@@ -19,6 +19,8 @@ export default defineConfig(async () => ({
     environment: "jsdom",
     setupFiles: ["./src/test/setup.ts"],
     css: false,
+    // Playwright specs live in e2e/ and are run by `npm run e2e`, not Vitest.
+    exclude: [...configDefaults.exclude, "**/e2e/**"],
   },
 
   // Vite options tailored for Tauri development and only applied in `tauri dev` or `tauri build`

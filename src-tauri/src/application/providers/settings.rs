@@ -499,10 +499,7 @@ mod tests {
 
         // The coordinator must reflect the persisted disabled flag.
         let providers = service.coordinator().providers();
-        assert_eq!(
-            providers.iter().find(|p| p.id == "tmdb").unwrap().enabled,
-            false
-        );
+        assert!(!providers.iter().find(|p| p.id == "tmdb").unwrap().enabled);
         cleanup_files(&dir);
     }
 

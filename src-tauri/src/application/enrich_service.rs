@@ -444,7 +444,7 @@ mod tests {
 
     #[derive(Clone)]
     enum Behavior {
-        Ok(ProviderMedia),
+        Ok(Box<ProviderMedia>),
         Fail(ProviderError),
     }
 
@@ -483,7 +483,7 @@ mod tests {
         }
         async fn get_details(&self, _provider_id: &str) -> Result<ProviderMedia, ProviderError> {
             match self.behavior.lock().unwrap().clone() {
-                Behavior::Ok(details) => Ok(details),
+                Behavior::Ok(details) => Ok(*details),
                 Behavior::Fail(error) => Err(error),
             }
         }
@@ -603,12 +603,12 @@ mod tests {
         seed_media(&pool, "m-1", "Sword of the Dawn").await;
         let provider: Arc<dyn Provider> = Arc::new(FakeProvider {
             id: "fake".into(),
-            behavior: Mutex::new(Behavior::Ok(details(
+            behavior: Mutex::new(Behavior::Ok(Box::new(details(
                 "x1",
                 "Sword of the Dawn",
                 Some(120),
                 Some("A fresh synopsis.".to_string()),
-            ))),
+            )))),
         });
         let service = EnrichService::new(pool.clone(), coord(provider));
 
@@ -643,12 +643,12 @@ mod tests {
         seed_media(&pool, "m-1", "Sword of the Dawn").await;
         let provider: Arc<dyn Provider> = Arc::new(FakeProvider {
             id: "fake".into(),
-            behavior: Mutex::new(Behavior::Ok(details(
+            behavior: Mutex::new(Behavior::Ok(Box::new(details(
                 "x1",
                 "Sword of the Dawn",
                 Some(100),
                 Some("Old synopsis.".to_string()),
-            ))),
+            )))),
         });
         let service = EnrichService::new(pool.clone(), coord(provider));
 
@@ -688,12 +688,12 @@ mod tests {
         // same domain tag set.
         let provider: Arc<dyn Provider> = Arc::new(FakeProvider {
             id: "fake".into(),
-            behavior: Mutex::new(Behavior::Ok(details(
+            behavior: Mutex::new(Behavior::Ok(Box::new(details(
                 "x1",
                 "Sword of the Dawn",
                 Some(120),
                 Some("A fresh synopsis.".to_string()),
-            ))),
+            )))),
         });
         let service = EnrichService::new(pool.clone(), coord(provider));
         let view = service.enrich_from_provider("m-1").await.expect("enrich");
@@ -767,7 +767,7 @@ mod tests {
         media_repo::create(&pool, &record).await.unwrap();
         let provider: Arc<dyn Provider> = Arc::new(FakeProvider {
             id: "fake".into(),
-            behavior: Mutex::new(Behavior::Ok(details("x1", "X", None, None))),
+            behavior: Mutex::new(Behavior::Ok(Box::new(details("x1", "X", None, None)))),
         });
         let service = EnrichService::new(pool.clone(), coord(provider));
 
@@ -818,7 +818,7 @@ mod tests {
         updated.tags = vec!["Isekai".to_string(), "Rising Action".to_string()];
         let provider: Arc<dyn Provider> = Arc::new(FakeProvider {
             id: "fake".into(),
-            behavior: Mutex::new(Behavior::Ok(updated)),
+            behavior: Mutex::new(Behavior::Ok(Box::new(updated))),
         });
         let service = EnrichService::new(pool.clone(), coord(provider));
 

@@ -156,9 +156,6 @@ pub fn default_provider_configs() -> Vec<ProviderConfig> {
 /// touches the real network.
 #[cfg(test)]
 pub(crate) mod test_support {
-    use wiremock::matchers::{method, path};
-    use wiremock::{Mock, MockServer, ResponseTemplate};
-
     /// Read a recorded fixture under tests/fixtures/<provider>/<name>.
     pub(crate) fn fixture(provider: &str, name: &str) -> String {
         std::fs::read_to_string(format!(
@@ -166,24 +163,6 @@ pub(crate) mod test_support {
             env!("CARGO_MANIFEST_DIR")
         ))
         .unwrap_or_else(|error| panic!("{provider}/{name} fixture missing: {error}"))
-    }
-
-    /// Mount a recorded fixture: GET route serves 200 + body.
-    pub(crate) async fn mount_get(server: &MockServer, route: &str, provider: &str, name: &str) {
-        Mock::given(method("GET"))
-            .and(path(route))
-            .respond_with(ResponseTemplate::new(200).set_body_string(fixture(provider, name)))
-            .mount(server)
-            .await;
-    }
-
-    /// Mount a recorded fixture: POST route serves 200 + body.
-    pub(crate) async fn mount_post(server: &MockServer, route: &str, provider: &str, name: &str) {
-        Mock::given(method("POST"))
-            .and(path(route))
-            .respond_with(ResponseTemplate::new(200).set_body_string(fixture(provider, name)))
-            .mount(server)
-            .await;
     }
 
     /// Fixture integrity (MISSION-098): every committed recording must be

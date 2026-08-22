@@ -330,9 +330,8 @@ mod tests {
 
     #[derive(Clone)]
     enum Behavior {
-        Ok(ProviderMedia, Vec<ProviderNode>),
+        Ok(Box<ProviderMedia>, Vec<ProviderNode>),
         DetailsFail(ProviderError),
-        NodesFail(ProviderError),
     }
 
     struct FakeProvider {
@@ -370,12 +369,8 @@ mod tests {
         }
         async fn get_details(&self, _provider_id: &str) -> Result<ProviderMedia, ProviderError> {
             match self.behavior.lock().unwrap().clone() {
-                Behavior::Ok(details, _) => Ok(details),
+                Behavior::Ok(details, _) => Ok(*details),
                 Behavior::DetailsFail(error) => Err(error),
-                Behavior::NodesFail(_) => Err(ProviderError::Unsupported {
-                    provider: self.id.clone(),
-                    operation: "details".into(),
-                }),
             }
         }
         async fn get_nodes(&self, _provider_id: &str) -> Result<Vec<ProviderNode>, ProviderError> {
@@ -385,7 +380,6 @@ mod tests {
                     provider: self.id.clone(),
                     operation: "nodes".into(),
                 }),
-                Behavior::NodesFail(error) => Err(error),
             }
         }
     }
@@ -467,7 +461,10 @@ mod tests {
         let (pool, path) = migrated_pool("import_service_new.db").await;
         let provider: Arc<dyn Provider> = Arc::new(FakeProvider {
             id: "fake".into(),
-            behavior: Mutex::new(Behavior::Ok(media("x1", "Sword of the Dawn"), nodes())),
+            behavior: Mutex::new(Behavior::Ok(
+                Box::new(media("x1", "Sword of the Dawn")),
+                nodes(),
+            )),
         });
         let service = ImportService::new(pool.clone(), coord(provider));
 
@@ -529,7 +526,10 @@ mod tests {
         let (pool, path) = migrated_pool("import_service_reimport.db").await;
         let provider: Arc<dyn Provider> = Arc::new(FakeProvider {
             id: "fake".into(),
-            behavior: Mutex::new(Behavior::Ok(media("x1", "Sword of the Dawn"), nodes())),
+            behavior: Mutex::new(Behavior::Ok(
+                Box::new(media("x1", "Sword of the Dawn")),
+                nodes(),
+            )),
         });
         let service = ImportService::new(pool.clone(), coord(provider));
 
@@ -557,7 +557,10 @@ mod tests {
         // A library row with the same title but no fake external id.
         let library: Arc<dyn Provider> = Arc::new(FakeProvider {
             id: "fake".into(),
-            behavior: Mutex::new(Behavior::Ok(media("zzz", "Sword of the Dawn"), nodes())),
+            behavior: Mutex::new(Behavior::Ok(
+                Box::new(media("zzz", "Sword of the Dawn")),
+                nodes(),
+            )),
         });
         let service = ImportService::new(pool.clone(), coord(library));
         let first = service
@@ -568,7 +571,10 @@ mod tests {
         // Incoming title matches, but the provider id differs.
         let provider: Arc<dyn Provider> = Arc::new(FakeProvider {
             id: "fake".into(),
-            behavior: Mutex::new(Behavior::Ok(media("x9", "Sword of the Dawn"), nodes())),
+            behavior: Mutex::new(Behavior::Ok(
+                Box::new(media("x9", "Sword of the Dawn")),
+                nodes(),
+            )),
         });
         let service = ImportService::new(pool.clone(), coord(provider));
         let second = service
@@ -610,7 +616,7 @@ mod tests {
         m.banner_url = Some("https://cdn.example/banner.jpg".to_string());
         let provider: Arc<dyn Provider> = Arc::new(FakeProvider {
             id: "fake".into(),
-            behavior: Mutex::new(Behavior::Ok(m, nodes())),
+            behavior: Mutex::new(Behavior::Ok(Box::new(m), nodes())),
         });
         let service = ImportService::new(pool.clone(), coord(provider));
 
@@ -652,7 +658,7 @@ mod tests {
         let (pool, path) = migrated_pool("import_service_no_assets.db").await;
         let provider: Arc<dyn Provider> = Arc::new(FakeProvider {
             id: "fake".into(),
-            behavior: Mutex::new(Behavior::Ok(media("x1", "Plain Title"), nodes())),
+            behavior: Mutex::new(Behavior::Ok(Box::new(media("x1", "Plain Title")), nodes())),
         });
         let service = ImportService::new(pool.clone(), coord(provider));
         let view = service
