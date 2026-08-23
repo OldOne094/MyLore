@@ -119,7 +119,7 @@ export function TabsTrigger({ value, children }: TabsTriggerProps) {
       tabIndex={active ? 0 : -1}
       onClick={() => onSelect(value)}
       className={cn(
-        "-mb-px border-b-2 px-1 py-2 text-sm font-medium transition-colors duration-150 ease-out",
+        "-mb-px border-b-2 px-3 py-2 text-sm font-medium transition-colors duration-150 ease-out",
         active
           ? "border-accent text-accent"
           : "border-transparent text-text-secondary hover:border-border-strong hover:text-text-primary",

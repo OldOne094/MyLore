@@ -112,7 +112,12 @@ function ExternalHitRow({ hit }: { hit: import("@/api").ExternalHit }) {
     <div className="flex items-center gap-3 rounded-md border border-transparent px-3 py-2 transition-colors duration-150 ease-out hover:border-border-subtle hover:bg-bg-hover">
       <div className="flex size-10 shrink-0 items-center justify-center overflow-hidden rounded-sm bg-bg-hover">
         {hit.cover_url ? (
-          <img src={hit.cover_url} alt="" loading="lazy" className="size-full object-cover" />
+          <img
+            src={hit.cover_url}
+            alt=""
+            loading="lazy"
+            className="cover-art size-full object-cover"
+          />
         ) : (
           <Search size={18} aria-hidden="true" className="text-text-tertiary" />
         )}

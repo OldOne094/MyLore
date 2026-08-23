@@ -17,7 +17,10 @@ export function ProgressBar({
       aria-hidden="true"
       className={cn("h-1 overflow-hidden rounded-full bg-accent/20", className)}
     >
-      <div className="h-full rounded-full bg-accent" style={{ width: `${width}%` }} />
+      <div
+        className="h-full rounded-full bg-accent transition-[width] duration-200 ease-out"
+        style={{ width: `${width}%` }}
+      />
     </div>
   );
 }

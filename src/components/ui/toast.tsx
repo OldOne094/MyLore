@@ -75,7 +75,7 @@ export function ToastProvider({ children, duration = 5000 }: ToastProviderProps)
               if (!open) dismiss(toast.id);
             }}
             className={cn(
-              "rounded-md border border-border-subtle border-s-4 bg-bg-raised p-4 shadow-lg",
+              "anim-rise rounded-md border border-border-subtle border-s-4 bg-bg-raised p-4 shadow-lg",
               KIND_CLASSES[toast.kind],
             )}
           >

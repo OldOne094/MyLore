@@ -11,7 +11,8 @@ const VARIANT_CLASSES = {
     "bg-accent text-bg-surface border border-accent hover:bg-accent-hover hover:border-accent-hover",
   secondary: "bg-bg-surface text-text-primary border border-border-strong hover:bg-bg-hover",
   ghost: "bg-transparent text-text-primary border border-transparent hover:bg-bg-hover",
-  danger: "bg-danger text-bg-surface border border-danger hover:opacity-90",
+  danger:
+    "bg-danger text-bg-surface border border-danger hover:bg-danger-hover hover:border-danger-hover",
 } as const;
 
 const SIZE_CLASSES = {
@@ -38,7 +39,8 @@ export function Button({
 }: ButtonProps) {
   const classes = cn(
     "inline-flex select-none items-center justify-center gap-2 whitespace-nowrap rounded-sm font-medium",
-    "transition-colors duration-150 ease-out disabled:pointer-events-none disabled:opacity-50",
+    "transition-[color,background-color,border-color,box-shadow,scale] duration-150 ease-out",
+    "active:scale-[0.96] disabled:pointer-events-none disabled:opacity-50",
     "data-[state=open]:bg-bg-hover",
     VARIANT_CLASSES[variant],
     SIZE_CLASSES[size],

@@ -26,6 +26,7 @@
   --color-ok: var(--ok);
   --color-warn: var(--warn);
   --color-danger: var(--danger);
+  --color-danger-hover: var(--danger-hover);
   --color-info: var(--info);
 
   /* Status → color (DESIGN_SYSTEM.md §2) */

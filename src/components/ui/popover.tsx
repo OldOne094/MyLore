@@ -21,7 +21,7 @@ export function PopoverContent({ className, children, ...props }: PopoverContent
       <PopoverPrimitive.Content
         sideOffset={6}
         className={cn(
-          "z-50 rounded-md border border-border-subtle bg-bg-raised p-3 shadow-lg",
+          "anim-rise z-50 rounded-md border border-border-subtle bg-bg-raised p-3 shadow-lg",
           className,
         )}
         {...props}

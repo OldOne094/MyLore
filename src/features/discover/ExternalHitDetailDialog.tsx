@@ -102,7 +102,7 @@ export function ExternalHitDetailDialog({
                   <img
                     src={data.cover_url}
                     alt=""
-                    className="aspect-[2/3] w-28 shrink-0 rounded-md object-cover"
+                    className="cover-art aspect-[2/3] w-28 shrink-0 rounded-md object-cover"
                     loading="lazy"
                   />
                 ) : null}
@@ -131,7 +131,7 @@ export function ExternalHitDetailDialog({
               {data.synopsis ? (
                 <p
                   dir="auto"
-                  className="max-h-40 overflow-y-auto text-sm leading-relaxed text-text-secondary"
+                  className="max-h-40 overflow-y-auto text-pretty text-sm leading-relaxed text-text-secondary"
                 >
                   {data.synopsis}
                 </p>

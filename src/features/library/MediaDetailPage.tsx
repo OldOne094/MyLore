@@ -283,7 +283,7 @@ export function MediaDetailPage() {
               ) : null}
             </div>
             {data.synopsis ? (
-              <p className="max-w-2xl text-sm leading-relaxed text-text-secondary">
+              <p className="max-w-2xl text-pretty text-sm leading-relaxed text-text-secondary">
                 {data.synopsis}
               </p>
             ) : null}

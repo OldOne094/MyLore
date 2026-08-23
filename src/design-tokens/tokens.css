@@ -81,7 +81,11 @@
   --ok: #2f7d32;
   --warn: #9a6700;
   --danger: #c62828;
+  --danger-hover: #a52222;
   --info: #1565c0;
+  /* Hairline depth cue drawn over artwork: pure black in light mode — a tinted
+     neutral would pick up the surface color and read as dirt on the edge. */
+  --img-outline: rgb(0 0 0 / 0.1);
   --elevation-sm: 0 1px 2px rgb(28 27 26 / 0.08);
   --elevation-lg: 0 2px 8px rgb(28 27 26 / 0.08), 0 12px 32px rgb(28 27 26 / 0.16);
   color-scheme: light;
@@ -105,7 +109,10 @@
   --ok: #7bc47f;
   --warn: #d9a441;
   --danger: #e57373;
+  --danger-hover: #f09393;
   --info: #64b5f6;
+  /* Pure white over artwork in dark mode (same rationale as light). */
+  --img-outline: rgb(255 255 255 / 0.1);
   --elevation-sm: 0 1px 2px rgb(0 0 0 / 0.4);
   --elevation-lg: 0 2px 8px rgb(0 0 0 / 0.5), 0 12px 32px rgb(0 0 0 / 0.6);
   color-scheme: dark;

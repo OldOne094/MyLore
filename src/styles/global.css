@@ -78,3 +78,84 @@ body {
   background-color: var(--accent-soft);
   color: var(--text-primary);
 }
+
+/* ---------------------------------------------------------------------------
+ * Presence animations for Radix primitives (dialog / popover / toast).
+ *
+ * CSS transitions/keyframes are interruptible; Radix unmounts only after the
+ * `[data-state="closed"]` animation finishes, so enter AND exit both play.
+ * The global reduced-motion rule above collapses these to 0.01ms.
+ * ------------------------------------------------------------------------- */
+
+@keyframes mylore-fade-in {
+  from {
+    opacity: 0;
+  }
+}
+
+@keyframes mylore-fade-out {
+  to {
+    opacity: 0;
+  }
+}
+
+/* Overlay: pure fade, softer than the content so depth reads. */
+.anim-overlay[data-state="open"] {
+  animation: mylore-fade-in var(--duration-base) var(--ease-out);
+}
+.anim-overlay[data-state="closed"] {
+  animation: mylore-fade-out var(--duration-fast) var(--ease-out);
+}
+
+/* Floating surfaces (popover / toast / command palette): rise 4px + scale
+   from 0.96 — subtle exits stay softer than enters (skill §5/§6). */
+@keyframes mylore-rise-in {
+  from {
+    opacity: 0;
+    transform: translateY(4px) scale(0.96);
+  }
+}
+
+@keyframes mylore-rise-out {
+  to {
+    opacity: 0;
+    transform: translateY(4px) scale(0.96);
+  }
+}
+
+.anim-rise[data-state="open"] {
+  animation: mylore-rise-in var(--duration-slow) var(--ease-out);
+}
+.anim-rise[data-state="closed"] {
+  animation: mylore-rise-out var(--duration-fast) var(--ease-out);
+}
+
+/* Centered dialogs carry their own -50%/-50% translate; the keyframes must
+   reproduce it or the entrance would drift from the final position. */
+@keyframes mylore-dialog-in {
+  from {
+    opacity: 0;
+    transform: translate(-50%, calc(-50% + 4px)) scale(0.96);
+  }
+}
+
+@keyframes mylore-dialog-out {
+  to {
+    opacity: 0;
+    transform: translate(-50%, calc(-50% + 4px)) scale(0.96);
+  }
+}
+
+.anim-dialog[data-state="open"] {
+  animation: mylore-dialog-in var(--duration-slow) var(--ease-out);
+}
+.anim-dialog[data-state="closed"] {
+  animation: mylore-dialog-out var(--duration-fast) var(--ease-out);
+}
+
+/* Hairline depth cue drawn over cover art (tokens define the theme-aware
+   color); negative offset keeps the outline inside the artwork bounds. */
+.cover-art {
+  outline: 1px solid var(--img-outline);
+  outline-offset: -1px;
+}

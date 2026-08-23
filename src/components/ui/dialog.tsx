@@ -29,10 +29,10 @@ export function DialogContent({
 }: DialogContentProps) {
   return (
     <DialogPrimitive.Portal>
-      <DialogPrimitive.Overlay className="fixed inset-0 z-50 bg-black/50 backdrop-blur-sm" />
+      <DialogPrimitive.Overlay className="anim-overlay fixed inset-0 z-50 bg-black/50 backdrop-blur-sm" />
       <DialogPrimitive.Content
         className={cn(
-          "fixed left-1/2 top-1/2 z-50 w-[calc(100%-2rem)] max-w-lg",
+          "anim-dialog fixed left-1/2 top-1/2 z-50 w-[calc(100%-2rem)] max-w-lg",
           "max-h-[85vh] overflow-y-auto",
           "translate-x-[-50%] translate-y-[-50%]",
           "rounded-lg border border-border-subtle bg-bg-raised shadow-lg",
@@ -60,7 +60,7 @@ export function DialogTitle({
 }: ComponentPropsWithoutRef<typeof DialogPrimitive.Title>) {
   return (
     <DialogPrimitive.Title
-      className={cn("text-lg font-semibold text-text-primary", className)}
+      className={cn("text-balance text-lg font-semibold text-text-primary", className)}
       {...props}
     />
   );

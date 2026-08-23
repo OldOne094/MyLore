@@ -38,7 +38,7 @@ export function CoverImage({
         src={src}
         alt={alt}
         loading="lazy"
-        className={cn("h-full w-full object-cover", imgClassName)}
+        className={cn("cover-art h-full w-full object-cover", imgClassName)}
       />
     );
   }
