@@ -64,3 +64,26 @@ pub async fn provider_test_connection(
     info!(provider, "provider_test_connection invoked");
     settings.test_connection(&provider).await
 }
+
+/// MISSION-129 — receive the hidden harvester webview's clearance report
+/// (UA + cookies). Invoked only from the `nu-fetch` window (capability-
+/// scoped); failures are swallowed client-side, so never reject loudly.
+#[command]
+pub fn nu_clearance_report(payload_json: String) -> Result<(), AppError> {
+    #[derive(serde::Deserialize)]
+    struct Payload {
+        ua: String,
+        cookie: String,
+    }
+    let payload: Payload = match serde_json::from_str(&payload_json) {
+        Ok(p) => p,
+        Err(error) => {
+            tracing::warn!(%error, "malformed NovelUpdates clearance report");
+            return Ok(());
+        }
+    };
+    if let Some(state) = crate::infrastructure::nu_bridge::global() {
+        state.store(payload.ua, payload.cookie);
+    }
+    Ok(())
+}

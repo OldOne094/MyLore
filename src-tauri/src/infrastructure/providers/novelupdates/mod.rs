@@ -167,10 +167,7 @@ mod tests {
     const DUNGEON_DEFENDER: &str = "dungeon-defender";
 
     fn provider_with(server: &MockServer) -> NovelUpdatesProvider {
-        NovelUpdatesProvider::new(NovelUpdatesClient::with_endpoint(
-            reqwest::Client::new(),
-            server.uri(),
-        ))
+        NovelUpdatesProvider::new(NovelUpdatesClient::with_test_endpoint(server.uri()))
     }
 
     async fn mount(server: &MockServer, route: &str, name: &str) {

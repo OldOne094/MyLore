@@ -10,11 +10,19 @@ async fn diagnose_simple_get_google() {
         Ok(resp) => println!("  → OK status={}", resp.status()),
         Err(e) => {
             println!("  → FAILED: {e}");
-            if e.is_connect() { println!("  → connection error"); }
-            if e.is_timeout() { println!("  → timeout"); }
-            if e.is_redirect() { println!("  → redirect"); }
+            if e.is_connect() {
+                println!("  → connection error");
+            }
+            if e.is_timeout() {
+                println!("  → timeout");
+            }
+            if e.is_redirect() {
+                println!("  → redirect");
+            }
             let source = std::error::Error::source(&e);
-            if let Some(s) = source { println!("  → source: {s}"); }
+            if let Some(s) = source {
+                println!("  → source: {s}");
+            }
         }
     }
 }
@@ -40,7 +48,12 @@ async fn diagnose_anilist_graphql() {
     let body = serde_json::json!({
         "query": "{ Page(page:1, perPage:1) { media(sort: POPULARITY_DESC) { id title { romaji } } } }"
     });
-    match client.post("https://graphql.anilist.co").json(&body).send().await {
+    match client
+        .post("https://graphql.anilist.co")
+        .json(&body)
+        .send()
+        .await
+    {
         Ok(resp) => {
             let status = resp.status();
             match resp.text().await {

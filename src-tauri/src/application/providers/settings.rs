@@ -157,10 +157,10 @@ impl ProviderSettingsService {
                 .ok_or_else(|| AppError::Config(format!("unknown provider {provider:?}")))?;
             if config.enabled != enabled {
                 config.enabled = enabled;
-            state.coordinator = rebuild(&self.builder, &state.configs).map_err(|e| {
-                tracing::error!(provider, error = %e, "set_key: coordinator rebuild failed");
-                e
-            })?;
+                state.coordinator = rebuild(&self.builder, &state.configs).map_err(|e| {
+                    tracing::error!(provider, error = %e, "set_key: coordinator rebuild failed");
+                    e
+                })?;
             }
         }
         self.persist_enabled()?;

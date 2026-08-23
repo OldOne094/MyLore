@@ -109,6 +109,40 @@ pub fn run() {
             });
             app.manage(backups);
 
+            // NovelUpdates Cloudflare-clearance bridge (MISSION-129): a hidden
+            // webview solves the managed JS challenge once with a real engine,
+            // then reports its cookies back through `nu_clearance_report`; the
+            // NU transport rides the clearance until it goes stale.
+            let nu_state = Arc::new(infrastructure::nu_bridge::NuClearanceState::default());
+            infrastructure::nu_bridge::init_global(nu_state.clone());
+            {
+                use tauri::WebviewUrl;
+                let init_script = format!(
+                    r#"(function() {{
+                      if (location.host.indexOf('novelupdates') === -1) return;
+                      const report = () => window.__TAURI__.core.invoke('{cmd}', {{
+                        payloadJson: JSON.stringify({{ ua: navigator.userAgent, cookie: document.cookie }}),
+                      }}).catch(() => {{}});
+                      setTimeout(report, 4000);
+                      setTimeout(report, 12000);
+                    }})();"#,
+                    cmd = infrastructure::nu_bridge::NU_CLEARANCE_COMMAND,
+                );
+                if let Ok(window) = tauri::WebviewWindowBuilder::new(
+                    app,
+                    infrastructure::nu_bridge::WINDOW_LABEL,
+                    WebviewUrl::External(infrastructure::nu_bridge::TARGET_URL.parse().expect("nu url")),
+                )
+                .visible(false)
+                .initialization_script(&init_script)
+                .title("MyLore background")
+                .build()
+                {
+                    infrastructure::nu_bridge::spawn_refresher(app.handle().clone(), nu_state);
+                    tracing::info!(window = %window.label(), "NovelUpdates clearance harvester started");
+                }
+            }
+
             tracing::info!(
                 ms = startup.elapsed().as_millis() as u64,
                 "startup services ready"
@@ -156,6 +190,7 @@ pub fn run() {
             commands::providers::provider_set_enabled,
             commands::providers::provider_set_key,
             commands::providers::provider_test_connection,
+            commands::providers::nu_clearance_report,
             commands::images::asset_resolve,
             commands::images::assets_resolve,
             commands::dashboard::dashboard_summary,
