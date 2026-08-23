@@ -1,7 +1,10 @@
 {
   "$schema": "../gen/schemas/desktop-schema.json",
   "identifier": "nu-fetch",
-  "description": "MISSION-129 — hidden NovelUpdates clearance harvester. May invoke only the clearance report command.",
+  "description": "MISSION-129 - hidden NovelUpdates clearance harvester. Grants IPC to the remote NU origin so its initialization script can invoke nu_clearance_report.",
   "windows": ["nu-fetch"],
+  "remote": {
+    "urls": ["https://www.novelupdates.com", "https://novelupdates.com"]
+  },
   "permissions": ["core:default"]
 }
