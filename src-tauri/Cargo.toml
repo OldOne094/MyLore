@@ -33,21 +33,6 @@ sqlx = { version = "0.8", features = ["sqlite", "runtime-tokio", "migrate"] }
 tokio = { version = "1", features = ["macros", "rt-multi-thread", "time", "sync"] }
 async-trait = "0.1"
 reqwest = { version = "0.13", default-features = false, features = ["json", "query", "form", "native-tls"] }
-# MISSION-129 — NovelUpdates sits behind Cloudflare, which fingerprints the TLS
-# handshake; plain reqwest is rejected before an HTTP response ever arrives.
-# wreq (the maintained rquest/wreq line) replays a full Chrome TLS + HTTP/2
-# fingerprint via BoringSSL. Scoped to the NU transport only; disable with
-# --no-default-features to build without the BoringSSL toolchain.
-wreq = { version = "6.0.0-rc", optional = true, default-features = false, features = [
-    "tokio-rt",
-    "webpki-roots",
-    "gzip",
-    "brotli",
-    "deflate",
-    "query",
-    "form",
-] }
-wreq-util = { version = "3.0.0-rc", optional = true, default-features = false, features = ["emulation"] }
 unicode-normalization = "0.1.25"
 uuid = { version = "1", features = ["v4"] }
 chrono = { version = "0.4", default-features = false, features = ["clock"] }
@@ -55,12 +40,6 @@ scraper = "0.27"
 keyring = "3"
 csv = "1"
 zip = { version = "2", default-features = false, features = ["deflate"] }
-
-[features]
-default = ["nu-impersonate"]
-# Chrome-fingerprint transport for the NovelUpdates client (MISSION-129).
-# Requires cmake + NASM + clang to compile the bundled BoringSSL (btls-sys).
-nu-impersonate = ["dep:wreq", "dep:wreq-util"]
 
 [dev-dependencies]
 tokio = { version = "1", features = ["macros", "rt-multi-thread", "test-util"] }

@@ -109,12 +109,12 @@ pub fn run() {
             });
             app.manage(backups);
 
-            // NovelUpdates Cloudflare-clearance bridge (MISSION-129): a real
-            // browser engine (this visible mini webview) solves the managed
-            // JS challenge; the page reports its UA+cookies through an
-            // intercepted navigation to a fake host, and the NU transport
-            // rides the clearance until it goes stale.
-            let nu_state = Arc::new(infrastructure::nu_bridge::NuClearanceState::default());
+            // NovelUpdates fetch bridge (MISSION-129): a visible mini webview
+            // lives on novelupdates.com; provider requests run inside it via
+            // same-origin fetch (HttpOnly clearance rides automatically) and
+            // answers come back through an intercepted navigation. The window
+            // hides itself after the first successful round-trip.
+            let nu_state = Arc::new(infrastructure::nu_bridge::BridgeState::default());
             infrastructure::nu_bridge::init_global(nu_state.clone());
             {
                 use tauri::WebviewUrl;
@@ -136,24 +136,16 @@ pub fn run() {
                 .build()
                 {
                     Ok(window) => {
-                        infrastructure::nu_bridge::spawn_refresher(
-                            app.handle().clone(),
-                            nu_state.clone(),
-                        );
-                        infrastructure::nu_bridge::spawn_title_diagnostics(
-                            app.handle().clone(),
-                            nu_state,
-                        );
                         infrastructure::nu_bridge::attach_window(&window);
                         tracing::info!(
                             window = %window.label(),
-                            "NovelUpdates clearance harvester started"
+                            "NovelUpdates bridge window started"
                         );
                     }
                     Err(error) => {
                         tracing::error!(
                             %error,
-                            "failed to create the NovelUpdates clearance harvester window"
+                            "failed to create the NovelUpdates bridge window"
                         );
                     }
                 }
@@ -206,7 +198,6 @@ pub fn run() {
             commands::providers::provider_set_enabled,
             commands::providers::provider_set_key,
             commands::providers::provider_test_connection,
-            commands::providers::nu_clearance_report,
             commands::images::asset_resolve,
             commands::images::assets_resolve,
             commands::dashboard::dashboard_summary,

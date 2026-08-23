@@ -1,226 +1,80 @@
-//! NovelUpdates Cloudflare-clearance bridge (MISSION-129).
+//! NovelUpdates fetch bridge (MISSION-129).
 //!
-//! NU's Cloudflare zone enforces an *active* managed JavaScript challenge
-//! (`cf-mitigated: challenge`) — a perfect TLS fingerprint alone receives
-//! "Just a moment…" (live-verified across Chrome/Firefox/Safari/Edge profiles,
-//! 2026-08-23). A real browser engine solves the challenge once, silently, and
-//! earns a `cf_clearance` cookie that is then honored for plain API-shaped
-//! requests from the same IP as long as the UA stays coherent.
+//! NU's Cloudflare zone enforces an active managed challenge AND marks its
+//! clearance cookie HttpOnly — so neither TLS impersonation nor
+//! `document.cookie` scraping can see it (both verified live, 2026-08-23).
 //!
-//! This module owns that handshake: a hidden webview (`nu-fetch` capability)
-//! loads novelupdates.com at startup; its initialization script reports
-//! `navigator.userAgent` + `document.cookie` back through the
-//! [`NU_CLEARANCE_COMMAND`] command; the credentials live here and are read by
-//! the NovelUpdates transport on every request. When a response ever comes
-//! back as a challenge page, the client calls [`NuClearanceState::stale`]
-//! and the refresher task reloads the hidden page to re-earn clearance.
+//! The definitive route: perform NU HTTP calls *inside* the harvester webview
+//! itself via same-origin `fetch(credentials: include)`. The browser attaches
+//! its own HttpOnly cookies, auto-renews challenges silently, and presents a
+//! genuine fingerprint — there is nothing left to impersonate. Responses come
+//! back through an intercepted navigation (`on_navigation`, cancelled before
+//! any network touch), chunked because NU pages reach hundreds of KB.
+//!
+//! The visible mini window is required: WebView2 never ran scripts for a
+//! never-shown window. It hides itself after the first successful fetch and
+//! re-shows if a challenge is detected later (manual Turnstile fallback).
+
+use std::collections::{BTreeMap, HashMap};
+use std::sync::{Arc, Mutex};
 
 use base64::Engine as _;
-use std::collections::HashMap;
-use std::sync::atomic::{AtomicU64, Ordering};
-use std::sync::{Arc, Mutex};
-use std::time::Instant;
+use tokio::sync::oneshot;
 
-use tauri::Manager;
-use tokio::sync::Notify;
-
-/// The hidden window's label (also its capability scope).
+/// The hidden-ish window's label (also its capability scope).
 pub const WINDOW_LABEL: &str = "nu-fetch";
 /// The page the harvester loads; any NU page works, the homepage is lightest.
 pub const TARGET_URL: &str = "https://www.novelupdates.com/";
-/// The Tauri command the initialization script invokes with its report.
-pub const NU_CLEARANCE_COMMAND: &str = "nu_clearance_report";
+/// Fake host carrying responses back to Rust (never resolved; navigations to
+/// it are cancelled inside `handle_report_navigation`).
+pub const REPORT_HOST: &str = "nu-report.mylore.internal";
 
-/// How often the refresher re-solves proactively (clearances outlive this on
-/// most zones; refreshing early keeps the cookie perpetually warm).
-const REFRESH_INTERVAL: std::time::Duration = std::time::Duration::from_secs(20 * 60);
+/// Max base64 chars per report navigation (well under browser URL caps).
+const CHUNK_SIZE: usize = 60_000;
 
-/// Credentials harvested from the hidden browser session.
-#[derive(Debug, Clone)]
-pub struct Clearance {
-    pub user_agent: String,
-    pub cookie: String,
-    #[allow(dead_code)]
-    pub harvested_at: Instant,
-}
+type PendingResult = Result<(u16, String), String>;
 
-/// Shared between the hidden webview's report command and the NU transport.
+/// Shared bridge state: pending request channels + whether the page ever
+/// answered (drives window visibility).
 #[derive(Default)]
-pub struct NuClearanceState {
-    inner: Mutex<HashMap<String, Clearance>>,
-    /// Bumped whenever the client hits a challenge page so the refresher
-    /// knows to re-solve immediately instead of waiting for the interval.
-    stale_generation: AtomicU64,
-    seen_generation: AtomicU64,
-    notify: Notify,
+pub struct BridgeState {
+    pending: Mutex<HashMap<String, oneshot::Sender<PendingResult>>>,
 }
 
-impl NuClearanceState {
-    /// Record a harvest report (last write wins; identical reports no-op).
-    pub fn store(&self, user_agent: String, cookie: String) {
-        let mut map = self.inner.lock().unwrap();
-        let fresh = match map.get("current") {
-            Some(prev) => prev.user_agent != user_agent || prev.cookie != cookie,
-            None => true,
-        };
-        if fresh {
-            let has_clearance = cookie.contains("cf_clearance");
-            tracing::info!(
-                ua_len = user_agent.len(),
-                cookie_len = cookie.len(),
-                has_clearance,
-                "NovelUpdates clearance harvested"
-            );
-            map.insert(
-                "current".to_string(),
-                Clearance {
-                    user_agent,
-                    cookie: cookie.clone(),
-                    harvested_at: Instant::now(),
-                },
-            );
-            sync_visibility(has_clearance);
+impl BridgeState {
+    fn register(self: &Arc<Self>, id: String) -> oneshot::Receiver<PendingResult> {
+        let (tx, rx) = oneshot::channel();
+        self.pending.lock().unwrap().insert(id, tx);
+        rx
+    }
+
+    fn resolve(self: &Arc<Self>, id: &str, result: PendingResult) {
+        if let Some(tx) = self.pending.lock().unwrap().remove(id) {
+            let _ = tx.send(result);
         }
-        self.notify.notify_waiters();
-    }
-
-    /// Current credentials, if a harvest has landed yet.
-    pub fn snapshot(&self) -> Option<Clearance> {
-        self.inner.lock().unwrap().get("current").cloned()
-    }
-
-    /// Mark the current clearance as rejected by Cloudflare.
-    pub fn mark_stale(&self) {
-        let gen = self.stale_generation.fetch_add(1, Ordering::SeqCst);
-        tracing::warn!(generation = gen, "NovelUpdates clearance marked stale");
-        // If a previously-good clearance died, surface the window again so an
-        // interactive challenge can be solved by hand. Before the first
-        // harvest the window is already visible by default.
-        if self.snapshot().is_some() {
-            sync_visibility(false);
-        }
-        self.notify.notify_waiters();
-    }
-
-    /// Resolve once the stale flag has moved past `seen`, or after `max`.
-    pub async fn wait_refresh(&self, max: std::time::Duration) {
-        let seen = self.seen_generation.load(Ordering::SeqCst);
-        let target = self.stale_generation.load(Ordering::SeqCst);
-        if target != seen {
-            self.seen_generation.store(target, Ordering::SeqCst);
-            return;
-        }
-        let _ = tokio::time::timeout(max, self.notify.notified()).await;
-        self.seen_generation.store(
-            self.stale_generation.load(Ordering::SeqCst),
-            Ordering::SeqCst,
-        );
     }
 }
 
-/// Spawn the periodic (and stale-triggered) refresher for the hidden window.
-/// `window` must already exist; the loop only drives `location.reload()`.
-pub fn spawn_refresher(app: tauri::AppHandle, state: Arc<NuClearanceState>) {
-    tauri::async_runtime::spawn(async move {
-        loop {
-            state.wait_refresh(REFRESH_INTERVAL).await;
-            if let Some(window) = app.get_webview_window(WINDOW_LABEL) {
-                tracing::debug!("reloading NovelUpdates harvester window");
-                let _ = window.eval("location.reload();");
-            }
-        }
-    });
-}
-
-/// The fake host the harvester page "navigates" to when reporting. The
-/// builder's on_navigation hook intercepts it, reads the base64url fragment,
-/// stores the clearance, and cancels the navigation — nothing ever hits the
-/// network and the live page is untouched.
-pub const REPORT_URL_PREFIX: &str = "https://nu-report.mylore.internal/#";
-
-/// JavaScript handed to `WebviewWindow::eval` by the poller: reads the CURRENT
-/// ua+cookies and routes them through the interception channel above. Unlike
-/// `window.title()` (which reflects the static builder title, not the live
-/// document), this exercises real browser APIs from inside the page.
-pub const REPORT_EVAL_JS: &str = r#"(function(){
-  try {
-    const payload = JSON.stringify({ ua: navigator.userAgent, cookie: document.cookie });
-    const b64 = btoa(unescape(encodeURIComponent(payload)))
-      .replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
-    location.assign('https://nu-report.mylore.internal/#' + b64);
-  } catch (e) {}
-})();"#;
-
-/// Spawn the harvest poller: until a clearance lands, poke the harvester
-/// page (via eval) every 3 seconds so it reports through the on_navigation
-/// channel. Stops early once a clearance exists.
-pub fn spawn_title_diagnostics(app: tauri::AppHandle, state: Arc<NuClearanceState>) {
-    tauri::async_runtime::spawn(async move {
-        for _ in 0..400 {
-            tokio::time::sleep(std::time::Duration::from_secs(3)).await;
-            if state.snapshot().is_some() {
-                tracing::info!("NU harvest poller: clearance present; stopping");
-                return;
-            }
-            if let Some(window) = app.get_webview_window(WINDOW_LABEL) {
-                if let Err(error) = window.eval(REPORT_EVAL_JS) {
-                    tracing::debug!(%error, "NU report eval failed");
-                }
-            }
-        }
-        tracing::warn!("NU harvest poller gave up after 20 minutes without clearance");
-    });
-}
-
-/// Handle one intercepted report navigation. Returns true only for URLs the
-/// webview should actually load.
-pub fn handle_report_navigation(state: &NuClearanceState, url: &tauri::Url) -> bool {
-    if url.host_str() != Some("nu-report.mylore.internal") {
-        return true;
-    }
-    match url.fragment().filter(|f| !f.is_empty()) {
-        Some(encoded) => match decode_payload(encoded) {
-            Ok((ua, cookie)) => {
-                tracing::info!(
-                    cookie_len = cookie.len(),
-                    has_clearance = cookie.contains("cf_clearance"),
-                    "NU clearance received via navigation channel"
-                );
-                state.store(ua, cookie);
-            }
-            Err(error) => tracing::warn!(%error, "NU report payload undecodable"),
-        },
-        None => tracing::warn!("NU report navigation carried no payload"),
-    }
-    false // always cancel: this "navigation" was only a message envelope
-}
-
-/// Decode `NUC|` base64url(JSON {ua, cookie}) payloads.
-fn decode_payload(encoded: &str) -> Result<(String, String), String> {
-    let normalized = encoded.trim().replace("-", "+").replace("_", "/");
-    let bytes = base64::engine::general_purpose::STANDARD
-        .decode(normalized.as_bytes())
-        .map_err(|e| format!("base64: {e}"))?;
-    #[derive(serde::Deserialize)]
-    struct Payload {
-        ua: String,
-        cookie: String,
-    }
-    let payload: Payload = serde_json::from_slice(&bytes).map_err(|e| format!("json: {e}"))?;
-    Ok((payload.ua, payload.cookie))
-}
-
-/// Handle to the live harvester window (for show/hide on clearance changes).
+static GLOBAL: std::sync::OnceLock<Arc<BridgeState>> = std::sync::OnceLock::new();
 static WINDOW: std::sync::OnceLock<tauri::WebviewWindow> = std::sync::OnceLock::new();
 
-/// Register the harvester window so clearance transitions can toggle it.
+/// Install the process-wide bridge state (once, from app setup).
+pub fn init_global(state: Arc<BridgeState>) -> bool {
+    GLOBAL.set(state).is_ok()
+}
+
+fn global() -> Option<&'static Arc<BridgeState>> {
+    GLOBAL.get()
+}
+
+/// Register the harvester window for visibility toggling.
 pub fn attach_window(window: &tauri::WebviewWindow) {
     let _ = WINDOW.set(window.clone());
 }
 
-fn sync_visibility(has_clearance: bool) {
+fn sync_visibility(page_proven_working: bool) {
     if let Some(window) = WINDOW.get() {
-        if has_clearance {
+        if page_proven_working {
             let _ = window.hide();
         } else {
             let _ = window.show();
@@ -229,16 +83,200 @@ fn sync_visibility(has_clearance: bool) {
     }
 }
 
-static GLOBAL: std::sync::OnceLock<Arc<NuClearanceState>> = std::sync::OnceLock::new();
-
-/// Install the process-wide clearance state. Called once from app setup.
-/// The NovelUpdates transport reads through [`global`] because adapters are
-/// constructed by the settings factory, which carries no app state.
-pub fn init_global(state: Arc<NuClearanceState>) -> bool {
-    GLOBAL.set(state).is_ok()
+/// One-shot bootstrap + call: defines the worker on `window` when missing,
+/// then invokes it. Everything is escaped server-side via serde_json strings.
+fn call_worker_js(id: &str, url: &str, opts_json: &str) -> String {
+    format!(
+        r#"(function(){{
+          if (!window.__myloreFetch) {{
+            const b64url = (s) => btoa(unescape(encodeURIComponent(s)))
+              .replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+            window.__myloreFetch = async (id, url, optsJson) => {{
+              try {{
+                const opts = JSON.parse(optsJson || '{{}}');
+                const init = {{ credentials: 'include', method: opts.method || 'GET' }};
+                if (opts.body) init.body = opts.body;
+                const response = await fetch(url, init);
+                const text = await response.text();
+                const payload = b64url(JSON.stringify({{ status: response.status, text }}));
+                const total = Math.max(1, Math.ceil(payload.length / {chunk}));
+                for (let i = 0; i < total; i++) {{
+                  const chunkPart = payload.substr(i * {chunk}, {chunk});
+                  location.assign('https://{host}/#r|' + id + '|' + i + '|' + total + '|' + chunkPart);
+                }}
+              }} catch (e) {{
+                location.assign('https://{host}/#e|' + id + '|' +
+                  b64url(String((e && e.message) || e)));
+              }}
+            }};
+          }}
+          window.__myloreFetch({id}, {url}, {opts});
+        }})();"#,
+        chunk = CHUNK_SIZE,
+        host = REPORT_HOST,
+        id = serde_json::to_string(id).unwrap_or_else(|_| "\"\"".into()),
+        url = serde_json::to_string(url).unwrap_or_else(|_| "\"\"".into()),
+        opts = serde_json::to_string(opts_json).unwrap_or_else(|_| "\"\"".into()),
+    )
 }
 
-/// The process-wide state, after [`init_global`].
-pub fn global() -> Option<&'static Arc<NuClearanceState>> {
-    GLOBAL.get()
+/// Perform one NU HTTP round-trip through the webview. `form` implies POST
+/// form-urlencoded; otherwise GET.
+pub async fn fetch(
+    url: &str,
+    form: Option<&[(&str, &str)]>,
+) -> Result<(u16, String), crate::error::AppError> {
+    let state = global()
+        .ok_or_else(|| crate::error::AppError::internal("NovelUpdates bridge not initialised"))?;
+    let Some(window) = WINDOW.get() else {
+        return Err(crate::error::AppError::internal(
+            "NovelUpdates bridge window missing",
+        ));
+    };
+
+    let id = uuid::Uuid::new_v4().to_string();
+    let rx = state.register(id.clone());
+
+    let body = form.map(|pairs| {
+        pairs
+            .iter()
+            .map(|(k, v)| format!("{k}={}", urlencoding_escape(v)))
+            .collect::<Vec<_>>()
+            .join("&")
+    });
+    let method = if form.is_some() { "POST" } else { "GET" };
+    // Note: NU's admin-ajax POST expects the URL-encoded body verbatim; keys
+    // are fixed literals from the adapter, values are numeric/simple ids.
+    let opts = serde_json::json!({ "method": method, "body": body }).to_string();
+
+    let js = call_worker_js(&id, url, &opts);
+    window
+        .eval(&js)
+        .map_err(|e| crate::error::AppError::internal(e.to_string()))?;
+
+    match tokio::time::timeout(std::time::Duration::from_secs(45), rx).await {
+        Ok(Ok(result)) => {
+            sync_visibility(true);
+            result.map_err(crate::error::AppError::internal)
+        }
+        Ok(Err(_)) => Err(crate::error::AppError::internal(
+            "NovelUpdates bridge dropped the response channel",
+        )),
+        Err(_) => Err(crate::error::AppError::internal(
+            "NovelUpdates bridge timed out (45s)",
+        )),
+    }
+}
+
+/// Minimal application/x-www-form-urlencoded value escaping for the fixed,
+/// known-simple values this app sends (ids and digits).
+fn urlencoding_escape(value: &str) -> String {
+    let mut out = String::with_capacity(value.len());
+    for byte in value.bytes() {
+        match byte {
+            b'A'..=b'Z' | b'a'..=b'z' | b'0'..=b'9' | b'-' | b'_' | b'.' | b'~' => {
+                out.push(byte as char)
+            }
+            other => {
+                out.push('%');
+                out.push_str(&format!("{other:02X}"));
+            }
+        }
+    }
+    out
+}
+
+/// Accumulates chunked report navigations per request id.
+#[derive(Default)]
+struct Assembly {
+    parts: Mutex<HashMap<String, BTreeMap<usize, String>>>,
+    totals: Mutex<HashMap<String, usize>>,
+}
+
+static ASSEMBLY: std::sync::OnceLock<Assembly> = std::sync::OnceLock::new();
+
+fn assembly() -> &'static Assembly {
+    ASSEMBLY.get_or_init(Default::default)
+}
+
+/// Handle one intercepted navigation. Returns true only for URLs the webview
+/// should really load.
+pub fn handle_report_navigation(state: &Arc<BridgeState>, url: &tauri::Url) -> bool {
+    if url.host_str() != Some(REPORT_HOST) {
+        return true;
+    }
+    let Some(fragment) = url.fragment().filter(|f| !f.is_empty()) else {
+        return false;
+    };
+    let segments: Vec<&str> = fragment.split('|').collect();
+
+    match segments.first().copied() {
+        Some("r") if segments.len() >= 5 => {
+            let id = segments[1].to_string();
+            let index: usize = segments[2].parse().unwrap_or(0);
+            let total: usize = segments[3].parse().unwrap_or(1);
+            let chunk = segments[4].to_string();
+
+            {
+                let mut totals = assembly().totals.lock().unwrap();
+                totals.entry(id.clone()).or_insert(total);
+                let expected = *totals.get(&id).unwrap();
+                let _ = expected;
+                assembly()
+                    .parts
+                    .lock()
+                    .unwrap()
+                    .entry(id.clone())
+                    .or_default()
+                    .insert(index, chunk);
+            }
+
+            let complete = {
+                let totals = assembly().totals.lock().unwrap();
+                let parts = assembly().parts.lock().unwrap();
+                match (totals.get(&id), parts.get(&id)) {
+                    (Some(total), Some(parts)) => parts.len() == *total,
+                    _ => false,
+                }
+            };
+
+            if complete {
+                let assembled: String = assembly()
+                    .parts
+                    .lock()
+                    .unwrap()
+                    .remove(&id)
+                    .unwrap_or_default()
+                    .into_values()
+                    .collect();
+                assembly().totals.lock().unwrap().remove(&id);
+
+                let result =
+                    decode_response(&assembled).map_err(|e| format!("response decode failed: {e}"));
+                state.resolve(&id, result);
+            }
+        }
+        Some("e") if segments.len() >= 3 => {
+            let id = segments[1].to_string();
+            let message = segments[2..].join("|");
+            state.resolve(&id, Err(format!("in-page fetch failed: {message}")));
+        }
+        _ => {}
+    }
+    false // cancel: report navigations are envelopes, not destinations
+}
+
+/// Decode `{status, text}` JSON transported as base64url.
+fn decode_response(assembled_b64: &str) -> Result<(u16, String), String> {
+    let normalized = assembled_b64.replace("-", "+").replace("_", "/");
+    let bytes = base64::engine::general_purpose::STANDARD
+        .decode(normalized.as_bytes())
+        .map_err(|e| format!("base64: {e}"))?;
+    #[derive(serde::Deserialize)]
+    struct Payload {
+        status: u16,
+        text: String,
+    }
+    let payload: Payload = serde_json::from_slice(&bytes).map_err(|e| format!("json: {e}"))?;
+    Ok((payload.status, payload.text))
 }

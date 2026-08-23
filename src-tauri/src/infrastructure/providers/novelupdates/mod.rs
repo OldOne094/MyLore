@@ -14,7 +14,7 @@ pub mod client;
 mod normalize;
 mod response;
 
-pub use client::{NovelUpdatesClient, APP_USER_AGENT};
+pub use client::NovelUpdatesClient;
 
 use async_trait::async_trait;
 
