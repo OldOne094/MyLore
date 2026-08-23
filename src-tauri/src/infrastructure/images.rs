@@ -105,6 +105,14 @@ impl ImageClient {
             return Err(ImageError::Transient("empty image body".to_string()));
         }
 
+        // Some CDNs answer a missing image with HTTP 200 + a tiny placeholder
+        // (OpenLibrary's default blank 1×1 GIF is 43 bytes). Real cover art is
+        // never this small, so classify it as a permanent miss rather than
+        // caching an invisible "cover".
+        if bytes.len() < 64 {
+            return Err(ImageError::NotFound);
+        }
+
         Ok(FetchedImage {
             bytes,
             mime_type,
@@ -202,7 +210,9 @@ mod tests {
                 ResponseTemplate::new(200)
                     .insert_header("content-type", "image/jpeg; charset=utf-8")
                     .insert_header("etag", "\"abc123\"")
-                    .set_body_bytes(b"fake-jpeg-bytes"),
+                    .set_body_bytes(
+                        b"fake-jpeg-bytes-padded-far-beyond-the-tiny-placeholder-body-size-guard",
+                    ),
             )
             .mount(&server)
             .await;
@@ -211,7 +221,10 @@ mod tests {
             .fetch(&format!("{}/cover.jpg", server.uri()))
             .await
             .expect("fetch");
-        assert_eq!(image.bytes, b"fake-jpeg-bytes");
+        assert_eq!(
+            image.bytes,
+            b"fake-jpeg-bytes-padded-far-beyond-the-tiny-placeholder-body-size-guard"
+        );
         assert_eq!(image.mime_type, "image/jpeg", "params after ; are stripped");
         assert_eq!(image.etag.as_deref(), Some("\"abc123\""));
     }
@@ -260,6 +273,25 @@ mod tests {
         assert!(
             matches!(result, Err(ImageError::Transient(_))),
             "empty body must be transient"
+        );
+    }
+
+    #[tokio::test]
+    async fn fetch_maps_tiny_placeholder_bodies_to_not_found() {
+        let server = MockServer::start().await;
+        Mock::given(method("GET")).respond_with(
+            ResponseTemplate::new(200)
+                .insert_header("content-type", "image/gif")
+                .set_body_bytes(
+                    b"GIF89a\x01\x00\x01\x00\x80\x00\x00\x00\x00\x00\xff\xff\xff!\xf9\x04\x01\x00\x00\x00\x00,\x00\x00\x00\x00\x01\x00\x01\x00\x00\x02\x02D\x01\x00;",
+                ),
+        ).mount(&server).await;
+        let result = client_with(&server)
+            .fetch(&format!("{}/blank.gif", server.uri()))
+            .await;
+        assert!(
+            matches!(result, Err(ImageError::NotFound)),
+            "a 1×1 GIF placeholder must be a permanent miss"
         );
     }
 

@@ -1,4 +1,4 @@
-//! Pure OpenLibrary → domain mappers (MISSION-057).
+﻿//! Pure OpenLibrary → domain mappers (MISSION-057).
 //!
 //! Books have no chapter tree, no relations and no "episodes", so this module
 //! only maps candidates (search), media (work + authors) and external ids
@@ -51,9 +51,12 @@ pub(crate) fn work_id(key: &str) -> String {
     key.rsplit('/').next().unwrap_or(key).to_string()
 }
 
-/// `covers.id` → cover CDN url (medium size, `M`).
+/// `covers.id` → cover CDN url (medium size, `M`). `default=false` makes the
+/// CDN answer a missing cover id with a real 404 instead of its default blank
+/// 1×1 GIF placeholder — which the image pipeline would otherwise cache as a
+/// successful (but invisible) cover.
 pub(crate) fn cover_url(cover_id: i64) -> String {
-    format!("https://covers.openlibrary.org/b/id/{cover_id}-M.jpg")
+    format!("https://covers.openlibrary.org/b/id/{cover_id}-M.jpg?default=false")
 }
 
 /// Canonical human-facing page for a work.
@@ -218,7 +221,7 @@ mod tests {
         assert_eq!(c.release_year, Some(1965));
         assert_eq!(
             c.cover_url.as_deref(),
-            Some("https://covers.openlibrary.org/b/id/68486-M.jpg")
+            Some("https://covers.openlibrary.org/b/id/68486-M.jpg?default=false")
         );
         assert!(c.synopsis.is_none());
         assert_eq!(
@@ -257,7 +260,7 @@ mod tests {
         );
         assert_eq!(
             m.cover_url.as_deref(),
-            Some("https://covers.openlibrary.org/b/id/68486-M.jpg")
+            Some("https://covers.openlibrary.org/b/id/68486-M.jpg?default=false")
         );
         assert_eq!(
             m.people,
