@@ -24,6 +24,10 @@ pub const APP_USER_AGENT: &str = concat!(
 pub struct AniListClient {
     http: reqwest::Client,
     endpoint: String,
+    /// Optional personal access token (MISSION-130). Sent as Bearer on every
+    /// GraphQL call; raises rate limits and bypasses intermittent Cloudflare
+    /// 403s that hit anonymous traffic.
+    token: Option<String>,
 }
 
 impl Default for AniListClient {
@@ -41,10 +45,17 @@ impl AniListClient {
         Self::with_client(http)
     }
 
+    /// Attach a personal access token (settings-managed, never logged).
+    pub fn with_token(mut self, token: &str) -> Self {
+        self.token = Some(token.to_string());
+        self
+    }
+
     pub fn with_client(http: reqwest::Client) -> Self {
         Self {
             http,
             endpoint: super::ENDPOINT.to_string(),
+            token: None,
         }
     }
 
@@ -53,6 +64,7 @@ impl AniListClient {
         Self {
             http,
             endpoint: endpoint.into(),
+            token: None,
         }
     }
 
@@ -65,10 +77,11 @@ impl AniListClient {
         variables: Value,
     ) -> Result<T, ProviderError> {
         let body = json!({ "query": query, "variables": variables });
-        let response = self
-            .http
-            .post(&self.endpoint)
-            .json(&body)
+        let mut request = self.http.post(&self.endpoint).json(&body);
+        if let Some(token) = &self.token {
+            request = request.bearer_auth(token);
+        }
+        let response = request
             .send()
             .await
             .map_err(|e| ProviderError::Transport {
@@ -124,12 +137,54 @@ impl AniListClient {
 #[cfg(test)]
 mod tests {
     use serde_json::json;
-    use wiremock::matchers::{body_partial_json, method, path};
+    use wiremock::matchers::{body_partial_json, header, method, path};
     use wiremock::{Mock, MockServer, ResponseTemplate};
-
     use super::*;
     use crate::infrastructure::providers::anilist::graphql;
     use crate::infrastructure::providers::test_support::fixture;
+
+    #[tokio::test]
+    async fn sends_bearer_header_when_token_set() {
+        let server = MockServer::start().await;
+        let client = AniListClient::with_endpoint(reqwest::Client::new(), server.uri())
+            .with_token("sekrit-token");
+
+        Mock::given(method("POST"))
+            .and(header("authorization", "Bearer sekrit-token"))
+            .respond_with(
+                ResponseTemplate::new(200)
+                    .set_body_string(fixture("anilist", "search_anime.json")),
+            )
+            .expect(1)
+            .mount(&server)
+            .await;
+
+        client
+            .graphql::<serde_json::Value>(graphql::SEARCH_QUERY, json!({}))
+            .await
+            .expect("authorized call succeeds");
+    }
+
+    #[tokio::test]
+    async fn sends_no_authorization_header_without_token() {
+        let server = MockServer::start().await;
+        let client = AniListClient::with_endpoint(reqwest::Client::new(), server.uri());
+
+        Mock::given(method("POST"))
+            .and(header("authorization", "Bearer .*"))
+            .respond_with(ResponseTemplate::new(500))
+            .mount(&server)
+            .await;
+        Mock::given(method("POST"))
+            .respond_with(ResponseTemplate::new(200).set_body_string("{}"))
+            .mount(&server)
+            .await;
+
+        // The 500 mock must never fire: without a token no auth header goes out.
+        let _ = client
+            .graphql::<serde_json::Value>(graphql::SEARCH_QUERY, json!({}))
+            .await;
+    }
 
     #[tokio::test]
     async fn posts_query_and_variables_and_parses_data() {

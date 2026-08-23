@@ -1,6 +1,13 @@
 import "@testing-library/jest-dom/vitest";
-import { afterEach } from "vitest";
+import { afterEach, vi } from "vitest";
 import { cleanup } from "@testing-library/react";
+
+// Tauri event transport is unavailable in jsdom; suites that render surfaces
+// subscribing to backend events (e.g. the AniList OAuth listener) get a no-op.
+vi.mock("@tauri-apps/api/event", () => ({
+  listen: vi.fn(() => Promise.resolve(() => undefined)),
+  emit: vi.fn(),
+}));
 
 // Radix positioning primitives inquire element size in jsdom.
 class ResizeObserverMock {

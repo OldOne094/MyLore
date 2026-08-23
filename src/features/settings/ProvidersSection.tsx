@@ -4,6 +4,8 @@ import { Check, X } from "lucide-react";
 import { Button, useToast } from "@/components/ui";
 import { cn } from "@/lib/cn";
 import {
+  useAnilistConnect,
+  useAnilistOauthEvent,
   useProvidersQuery,
   useSetProviderEnabled,
   useSetProviderKey,
@@ -17,7 +19,15 @@ import {
    "test connection" probe. MISSION-098: save success/failure surfaces as
    inline feedback so silent keyring failures can't recur. */
 
-function ProviderRow({ row }: { row: ProviderSettingsRow }) {
+function ProviderRow({
+  row,
+  connect,
+  connecting,
+}: {
+  row: ProviderSettingsRow;
+  connect?: ReturnType<typeof useAnilistConnect>;
+  connecting?: boolean;
+}) {
   const { t } = useTranslation();
   const toast = useToast();
   const toggle = useSetProviderEnabled();
@@ -88,7 +98,19 @@ function ProviderRow({ row }: { row: ProviderSettingsRow }) {
       </div>
 
       {row.requires_key ? (
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2">
+          {row.provider === "anilist" ? (
+            <Button
+              variant="secondary"
+              size="sm"
+              disabled={connecting}
+              onClick={() => connect?.mutate()}
+            >
+              {connecting
+                ? t("settings.providersAnilistConnecting")
+                : t("settings.providersAnilistConnect")}
+            </Button>
+          ) : null}
           <input
             type="password"
             autoComplete="off"
@@ -156,7 +178,16 @@ function ProviderRow({ row }: { row: ProviderSettingsRow }) {
 
 export function ProvidersSection() {
   const { t } = useTranslation();
+  const toast = useToast();
   const { data, isLoading, isError, refetch } = useProvidersQuery();
+  const connect = useAnilistConnect();
+  useAnilistOauthEvent((ok, message) => {
+    if (ok) toast.success({ title: t("settings.providersOauthOk") });
+    else
+      toast.error({
+        title: t("settings.providersOauthFailed", { message: message ?? "" }),
+      });
+  });
 
   if (isLoading) {
     return (
@@ -190,7 +221,12 @@ export function ProvidersSection() {
   return (
     <ul className="divide-y-0">
       {data.map((row) => (
-        <ProviderRow key={row.provider} row={row} />
+        <ProviderRow
+          key={row.provider}
+          row={row}
+          connect={row.provider === "anilist" ? connect : undefined}
+          connecting={connect.isPending}
+        />
       ))}
     </ul>
   );

@@ -198,6 +198,7 @@ pub fn run() {
             commands::providers::provider_set_enabled,
             commands::providers::provider_set_key,
             commands::providers::provider_test_connection,
+            commands::providers::anilist_oauth_start,
             commands::images::asset_resolve,
             commands::images::assets_resolve,
             commands::dashboard::dashboard_summary,

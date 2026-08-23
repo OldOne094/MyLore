@@ -8,10 +8,23 @@ use tauri::command;
 use tauri::State;
 use tracing::info;
 
+use crate::application::providers::oauth;
 use crate::application::providers::settings::{
     ProviderSettingsService, ProviderSettingsView, ProviderTestView,
 };
 use crate::error::AppError;
+
+/// MISSION-130 — start the AniList OAuth (authorization-code + loopback)
+/// flow: opens the system browser and returns once the listener is bound.
+/// Completion arrives via the `anilist-oauth` event.
+#[command]
+pub async fn anilist_oauth_start(
+    app: tauri::AppHandle,
+    settings: State<'_, Arc<ProviderSettingsService>>,
+) -> Result<(), AppError> {
+    info!("anilist_oauth_start invoked");
+    oauth::start(app, settings.inner().clone())
+}
 
 /// Snapshot every registered provider for the settings UI. Resolves with the
 /// rows in registration order, or rejects with an AppError string.

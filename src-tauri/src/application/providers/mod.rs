@@ -8,6 +8,7 @@
 
 pub mod config;
 pub mod coordinator;
+pub mod oauth;
 pub mod rate_limiter;
 pub mod settings;
 

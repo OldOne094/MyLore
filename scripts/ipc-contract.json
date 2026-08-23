@@ -530,6 +530,12 @@
       "doc": "Ping one provider with a probe search. Runs even when the provider is disabled so a key can be verified before enabling. Resolves with the test outcome (never rejects for a provider failure) or rejects with an AppError."
     },
     {
+      "name": "anilist_oauth_start",
+      "args": {},
+      "returns": "void",
+      "doc": "MISSION-130 - start the AniList OAuth (authorization-code + loopback) flow: binds 127.0.0.1:24110, opens the system browser at the authorize page, then exchanges the returned code and stores the token as the anilist provider key. Completion arrives via the anilist-oauth event. Rejects only if the loopback port is unavailable or the browser cannot be launched."
+    },
+    {
       "name": "dashboard_summary",
       "args": { "limit": "number | null" },
       "returns": "DashboardSummary",
@@ -779,6 +785,11 @@
     }
   ],
   "events": [
+    {
+      "name": "anilist-oauth",
+      "payload": "{ ok: boolean; message?: string }",
+      "doc": "MISSION-130 - emitted when the AniList OAuth loopback flow finishes: ok=true means the token was stored as the anilist provider key (callers should invalidate the providers list); otherwise message carries a user-safe failure reason."
+    },
     {
       "name": "task-changed",
       "payload": "TaskSnapshot",

@@ -742,6 +742,11 @@ export function provider_test_connection(args: { provider: string }): Promise<Pr
   return invoke<ProviderTestView>("provider_test_connection", args);
 }
 
+/** MISSION-130 - start the AniList OAuth (authorization-code + loopback) flow: binds 127.0.0.1:24110, opens the system browser at the authorize page, then exchanges the returned code and stores the token as the anilist provider key. Completion arrives via the anilist-oauth event. Rejects only if the loopback port is unavailable or the browser cannot be launched. */
+export function anilist_oauth_start(): Promise<void> {
+  return invoke<void>("anilist_oauth_start");
+}
+
 /** Resolve the dashboard widget lists (continue watching, recently completed, recently added). `limit` is optional and clamped per widget (1..=20). Resolves with the DashboardSummary or rejects with an AppError string. */
 export function dashboard_summary(args: { limit: number | null }): Promise<DashboardSummary> {
   return invoke<DashboardSummary>("dashboard_summary", args);
@@ -973,6 +978,18 @@ export function recap_year(args: { year: number }): Promise<YearRecap> {
 /** Resolve the reading recap for one year: pages and chapters consumed per month (book pages weighed by page count, all bucketed by local time), the year totals including distinct finished reading media, plus all-time taste distributions - mood set, pace and format - built from review metadata and tracked reading media. Resolves with the ReadingRecap or rejects with an AppError string. */
 export function reading_recap(args: { year: number }): Promise<ReadingRecap> {
   return invoke<ReadingRecap>("reading_recap", args);
+}
+
+export function listenAnilistOauth(
+  handler: (payload: { ok: boolean; message?: string }) => void,
+): Promise<UnlistenFn> {
+  return listen<{ ok: boolean; message?: string }>("anilist-oauth", (event) =>
+    handler(event.payload),
+  );
+}
+
+export function emitAnilistOauth(payload: { ok: boolean; message?: string }): Promise<void> {
+  return emit("anilist-oauth", payload);
 }
 
 export function listenTaskChanged(handler: (payload: TaskSnapshot) => void): Promise<UnlistenFn> {

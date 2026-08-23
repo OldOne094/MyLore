@@ -6,9 +6,12 @@ import { ToastProvider } from "@/components/ui";
 import "@/i18n";
 import i18n from "@/i18n";
 
-vi.mock("@tauri-apps/api/core", () => ({
-  invoke: vi.fn(),
+vi.mock("@tauri-apps/api/event", () => ({
+  listen: vi.fn(() => Promise.resolve(() => undefined)),
+  emit: vi.fn(),
 }));
+
+vi.mock("@tauri-apps/api/core", () => ({ invoke: vi.fn() }));
 
 import { invoke } from "@tauri-apps/api/core";
 import { ProvidersSection } from "./ProvidersSection";
