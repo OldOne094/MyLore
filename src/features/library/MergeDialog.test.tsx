@@ -37,8 +37,8 @@ beforeEach(() => {
           : { id: ID_B, title_main: "Fairy Tail (Duplicate)" };
       case "merge_plan":
         return {
-          survivor_id: payload?.survivor_id,
-          duplicate_id: payload?.duplicate_id,
+          survivor_id: payload?.survivorId,
+          duplicate_id: payload?.duplicateId,
           survivor_title: "Fairy Tail",
           duplicate_title: "Fairy Tail (Duplicate)",
           merged_title: "Fairy Tail",
@@ -80,8 +80,8 @@ describe("MergeDialog", () => {
       screen.getByText((_, element) => element?.textContent === "Conflicts (2)"),
     ).toBeInTheDocument();
     expect(vi.mocked(invoke)).toHaveBeenCalledWith("merge_plan", {
-      survivor_id: ID_B,
-      duplicate_id: ID_A,
+      survivorId: ID_B,
+      duplicateId: ID_A,
     });
   });
 
@@ -100,8 +100,8 @@ describe("MergeDialog", () => {
 
     await waitFor(() => expect(merged).toBe(true));
     expect(vi.mocked(invoke)).toHaveBeenCalledWith("merge_apply", {
-      survivor_id: ID_A,
-      duplicate_id: ID_B,
+      survivorId: ID_A,
+      duplicateId: ID_B,
     });
   });
 });

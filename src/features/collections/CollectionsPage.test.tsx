@@ -36,7 +36,7 @@ function mockCollections(initial: CollectionViewFixture[] = VIEWS) {
   vi.mocked(invoke).mockImplementation((command: string, args?: InvokeArgs) => {
     const a = (args ?? {}) as {
       name?: string;
-      collection_id?: string;
+      collectionId?: string;
       filter?: unknown;
     };
     if (command === "collection_list") return Promise.resolve(list);
@@ -70,13 +70,13 @@ function mockCollections(initial: CollectionViewFixture[] = VIEWS) {
       return Promise.resolve(view);
     }
     if (command === "collection_rename") {
-      const id = a.collection_id as string;
+      const id = a.collectionId as string;
       const name = a.name as string;
       list = list.map((c) => (c.id === id ? { ...c, name } : c));
       return Promise.resolve(list.find((c) => c.id === id));
     }
     if (command === "collection_delete") {
-      const id = a.collection_id as string;
+      const id = a.collectionId as string;
       list = list.filter((c) => c.id !== id);
       return Promise.resolve("Reading Now");
     }
@@ -151,7 +151,7 @@ describe("CollectionsPage", () => {
     await userEvent.click(within(dialog).getByRole("button", { name: "Save" }));
 
     expect(invoke).toHaveBeenCalledWith("collection_rename", {
-      collection_id: "c-1",
+      collectionId: "c-1",
       name: "Currently reading",
     });
     expect(await screen.findByRole("heading", { name: "Currently reading" })).toBeInTheDocument();
@@ -166,7 +166,7 @@ describe("CollectionsPage", () => {
     const dialog = screen.getByRole("dialog");
     await userEvent.click(within(dialog).getByRole("button", { name: "Delete" }));
 
-    expect(invoke).toHaveBeenCalledWith("collection_delete", { collection_id: "c-1" });
+    expect(invoke).toHaveBeenCalledWith("collection_delete", { collectionId: "c-1" });
     expect(await screen.findByText("Deleted “Reading Now”")).toBeInTheDocument();
     expect(screen.queryByRole("heading", { name: "Reading Now" })).not.toBeInTheDocument();
     expect(screen.getByRole("heading", { name: "Watchlist" })).toBeInTheDocument();

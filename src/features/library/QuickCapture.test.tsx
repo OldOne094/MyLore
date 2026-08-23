@@ -106,7 +106,7 @@ describe("QuickCapture", () => {
 
     await user.type(input, "gate");
     expect(await screen.findByText("Steins;Gate")).toBeInTheDocument();
-    expect(invoke).toHaveBeenCalledWith("media_search", { query: "gate", content_type: null });
+    expect(invoke).toHaveBeenCalledWith("media_search", { query: "gate", contentType: null });
 
     await user.click(screen.getByText("Steins;Gate"));
     expect(await screen.findByRole("button", { name: /Mark next done/ })).toBeInTheDocument();
@@ -121,7 +121,7 @@ describe("QuickCapture", () => {
     await user.click(await screen.findByText("Steins;Gate"));
 
     await user.click(await screen.findByRole("button", { name: /Mark next done/ }));
-    expect(invoke).toHaveBeenCalledWith("node_progress_next", { media_id: "m-1" });
+    expect(invoke).toHaveBeenCalledWith("node_progress_next", { mediaId: "m-1" });
     expect(await screen.findByText("Marked E3 done")).toBeInTheDocument();
   });
 
@@ -135,10 +135,10 @@ describe("QuickCapture", () => {
 
     await user.click(await screen.findByRole("button", { name: "Mark up to 2" }));
     expect(invoke).toHaveBeenCalledWith("node_progress_range", {
-      media_id: "m-1",
-      from_id: "e3",
-      to_id: "e4",
-      node_state: "watched",
+      mediaId: "m-1",
+      fromId: "e3",
+      toId: "e4",
+      nodeState: "watched",
     });
     expect(await screen.findByText("Marked 2 units")).toBeInTheDocument();
   });

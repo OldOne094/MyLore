@@ -93,7 +93,7 @@ describe("DiscoverPage", () => {
     expect(await screen.findByRole("heading", { name: /AniList/ })).toBeInTheDocument();
     expect(invoke).toHaveBeenCalledWith("search_external", {
       query: "attack",
-      content_type: null,
+      contentType: null,
     });
   });
 
@@ -139,7 +139,7 @@ describe("DiscoverPage", () => {
     expect(await screen.findByText("No results")).toBeInTheDocument();
     expect(invoke).toHaveBeenCalledWith("search_external", {
       query: "zzz",
-      content_type: null,
+      contentType: null,
     });
   });
 
@@ -171,7 +171,7 @@ describe("DiscoverPage", () => {
     expect(await screen.findByTestId("library-detail")).toBeInTheDocument();
     expect(invoke).toHaveBeenCalledWith("import_provider", {
       provider: "anilist",
-      provider_id: "999",
+      providerId: "999",
     });
     expect(await screen.findByText("Added “Berserk” to your library")).toBeInTheDocument();
   });

@@ -23,17 +23,17 @@ import type { AddMediaInput } from "./types";
 
 export interface MediaCreateArgs {
   title: string;
-  content_type: string;
+  contentType: string;
   format: string | null;
-  pub_status: string | null;
+  pubStatus: string | null;
   synopsis: string | null;
-  release_year: number | null;
+  releaseYear: number | null;
   language: string | null;
   country: string | null;
   pages: number | null;
-  duration_min: number | null;
-  ep_count: number | null;
-  ch_count: number | null;
+  durationMin: number | null;
+  epCount: number | null;
+  chCount: number | null;
   genres: string[];
 }
 
@@ -101,9 +101,9 @@ export interface MediaFacets {
 }
 
 export interface MediaListArgs {
-  content_type: string | null;
+  contentType: string | null;
   format: string | null;
-  pub_status: string | null;
+  pubStatus: string | null;
   genre: string | null;
   tag: string | null;
   year: number | null;
@@ -117,9 +117,9 @@ export interface MediaListArgs {
 
 /** Default library listing: everything, title ascending. */
 export const MEDIA_LIST_DEFAULT_ARGS: MediaListArgs = {
-  content_type: null,
+  contentType: null,
   format: null,
-  pub_status: null,
+  pubStatus: null,
   genre: null,
   tag: null,
   year: null,
@@ -134,17 +134,17 @@ export const MEDIA_LIST_DEFAULT_ARGS: MediaListArgs = {
 export function toMediaCreateArgs(input: AddMediaInput): MediaCreateArgs {
   return {
     title: input.title,
-    content_type: input.contentType,
+    contentType: input.contentType,
     format: input.format ?? null,
-    pub_status: input.pubStatus ?? null,
+    pubStatus: input.pubStatus ?? null,
     synopsis: input.synopsis ?? null,
-    release_year: input.releaseYear ?? null,
+    releaseYear: input.releaseYear ?? null,
     language: input.language ?? null,
     country: input.country ?? null,
     pages: input.pages ?? null,
-    duration_min: input.durationMin ?? null,
-    ep_count: input.epCount ?? null,
-    ch_count: input.chCount ?? null,
+    durationMin: input.durationMin ?? null,
+    epCount: input.epCount ?? null,
+    chCount: input.chCount ?? null,
     genres: input.genres,
   };
 }
@@ -192,7 +192,7 @@ export function useMediaDetailQuery(id: string) {
 export function useEnrichMedia() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: (mediaId: string) => media_enrich({ media_id: mediaId }),
+    mutationFn: (mediaId: string) => media_enrich({ mediaId: mediaId }),
     onSuccess: async () => {
       await queryClient.invalidateQueries({ queryKey: queryKeys.media.lists() });
       await queryClient.invalidateQueries({ queryKey: queryKeys.media.facets() });
@@ -219,7 +219,7 @@ export function useAssetViews(assetIds: string[]) {
   const ids = useMemo(() => [...new Set(assetIds.filter((id) => id !== ""))].sort(), [assetIds]);
   return useQuery({
     queryKey: queryKeys.media.assets(ids.join("|")),
-    queryFn: () => assets_resolve({ asset_ids: ids }),
+    queryFn: () => assets_resolve({ assetIds: ids }),
     enabled: ids.length > 0,
   });
 }
@@ -247,7 +247,7 @@ export function useNodeProgress(mediaId: string) {
   const markNode = async (nodeId: string, state: string) => {
     const previous = commit([nodeId], state);
     try {
-      await node_progress_set({ node_id: nodeId, node_state: state });
+      await node_progress_set({ nodeId: nodeId, nodeState: state });
       await queryClient.invalidateQueries({ queryKey: queryKeys.tracking.all() });
     } catch {
       queryClient.setQueryData(key, previous);
@@ -259,10 +259,10 @@ export function useNodeProgress(mediaId: string) {
     const previous = commit(rangeIds, state);
     try {
       const affected = await node_progress_range({
-        media_id: mediaId,
-        from_id: fromId,
-        to_id: toId,
-        node_state: state,
+        mediaId: mediaId,
+        fromId: fromId,
+        toId: toId,
+        nodeState: state,
       });
       queryClient.setQueryData(key, setNodeState(previous, new Set(affected), state));
       await queryClient.invalidateQueries({ queryKey: queryKeys.tracking.all() });

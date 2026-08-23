@@ -9,7 +9,7 @@ import { queryKeys } from "@/api";
 export function useMergePlan() {
   return useMutation({
     mutationFn: (input: { survivorId: string; duplicateId: string }): Promise<MergePreview> =>
-      merge_plan({ survivor_id: input.survivorId, duplicate_id: input.duplicateId }),
+      merge_plan({ survivorId: input.survivorId, duplicateId: input.duplicateId }),
   });
 }
 
@@ -18,7 +18,7 @@ export function useMergeApply() {
   const client = useQueryClient();
   return useMutation({
     mutationFn: (input: { survivorId: string; duplicateId: string }): Promise<MergeResult> =>
-      merge_apply({ survivor_id: input.survivorId, duplicate_id: input.duplicateId }),
+      merge_apply({ survivorId: input.survivorId, duplicateId: input.duplicateId }),
     onSuccess: () => {
       void client.invalidateQueries({ queryKey: queryKeys.media.all() });
       void client.invalidateQueries({ queryKey: queryKeys.trash.all() });

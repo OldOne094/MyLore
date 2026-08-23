@@ -48,7 +48,7 @@ beforeEach(() => {
       }
       case "provider_set_key": {
         const provider = String(input.provider);
-        const apiKey = String(input.api_key);
+        const apiKey = String(input.apiKey);
         const row = current.find((r) => r.provider === provider);
         if (row) row.has_key = apiKey.trim().length > 0;
         return { ...(row ?? { provider: "" }) };
@@ -116,7 +116,7 @@ describe("ProvidersSection", () => {
 
     expect(invoke).toHaveBeenCalledWith("provider_set_key", {
       provider: "tmdb",
-      api_key: "abc-123",
+      apiKey: "abc-123",
     });
     await waitFor(() => {
       expect(screen.getByText("Key saved")).toBeInTheDocument();

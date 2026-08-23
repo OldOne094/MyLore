@@ -259,7 +259,7 @@ describe("MediaDetailPage", () => {
     const refresh = screen.getByRole("button", { name: "Refresh Steins;Gate from anilist" });
     await userEvent.click(refresh);
 
-    expect(invoke).toHaveBeenCalledWith("media_enrich", { media_id: "m-111" });
+    expect(invoke).toHaveBeenCalledWith("media_enrich", { mediaId: "m-111" });
     expect(await screen.findByText("Metadata refresh")).toBeInTheDocument();
     expect(screen.getByText("Refreshed “Steins;Gate” from anilist")).toBeInTheDocument();
     expect(screen.getByText("Title")).toBeInTheDocument();
@@ -356,7 +356,7 @@ describe("MediaDetailPage", () => {
 
     await userEvent.click(screen.getByRole("button", { name: /Acknowledge content warnings for/ }));
     expect(invoke).toHaveBeenCalledWith("review_acknowledge_warnings", {
-      media_id: "m-111",
+      mediaId: "m-111",
     });
     expect(await screen.findByText("Content warnings acknowledged")).toBeInTheDocument();
     expect(await screen.findByText("Acknowledged")).toBeInTheDocument();

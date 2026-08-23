@@ -429,17 +429,17 @@ export function greet(args: { name: string }): Promise<string> {
 /** Create a media entry from manual input. Resolves with the new media id or rejects with an AppError string. */
 export function media_create(args: {
   title: string;
-  content_type: string;
+  contentType: string;
   format: string | null;
-  pub_status: string | null;
+  pubStatus: string | null;
   synopsis: string | null;
-  release_year: number | null;
+  releaseYear: number | null;
   language: string | null;
   country: string | null;
   pages: number | null;
-  duration_min: number | null;
-  ep_count: number | null;
-  ch_count: number | null;
+  durationMin: number | null;
+  epCount: number | null;
+  chCount: number | null;
   genres: string[];
 }): Promise<string> {
   return invoke<string>("media_create", args);
@@ -447,9 +447,9 @@ export function media_create(args: {
 
 /** List library entries with optional filters. Resolves with summary rows (each carrying its progress summary for the in-grid quick controls) or rejects with an AppError string. */
 export function media_list(args: {
-  content_type: string | null;
+  contentType: string | null;
   format: string | null;
-  pub_status: string | null;
+  pubStatus: string | null;
   genre: string | null;
   tag: string | null;
   year: number | null;
@@ -548,64 +548,64 @@ export function media_get(args: { id: string }): Promise<{
 /** Local full-text search over the library. When content_type is provided, only media of that type are returned. Resolves with summary rows (each carrying its progress summary) or rejects with an AppError string. */
 export function media_search(args: {
   query: string;
-  content_type: string | null;
+  contentType: string | null;
 }): Promise<MediaListItem[]> {
   return invoke<MediaListItem[]>("media_search", args);
 }
 
 /** The personal tags linked to one media. Resolves with tag rows (id + name + scope) or rejects with an AppError string. */
-export function media_tags(args: { media_id: string }): Promise<MediaTagView[]> {
+export function media_tags(args: { mediaId: string }): Promise<MediaTagView[]> {
   return invoke<MediaTagView[]>("media_tags", args);
 }
 
 /** Add a personal tag to one media (reused or created as needed). Resolves with the updated personal-tag list or rejects with an AppError string. */
-export function media_add_tag(args: { media_id: string; tag: string }): Promise<MediaTagView[]> {
+export function media_add_tag(args: { mediaId: string; tag: string }): Promise<MediaTagView[]> {
   return invoke<MediaTagView[]>("media_add_tag", args);
 }
 
 /** Remove a personal tag from one media (the tag row is kept for other media). Resolves with the updated personal-tag list or rejects with an AppError string. */
 export function media_remove_tag(args: {
-  media_id: string;
-  tag_id: string;
+  mediaId: string;
+  tagId: string;
 }): Promise<MediaTagView[]> {
   return invoke<MediaTagView[]>("media_remove_tag", args);
 }
 
 /** Read a media's review. Resolves with the row or null when the user hasn't reviewed it; rejects with an AppError string. */
-export function review_get(args: { media_id: string }): Promise<ReviewView | null> {
+export function review_get(args: { mediaId: string }): Promise<ReviewView | null> {
   return invoke<ReviewView | null>("review_get", args);
 }
 
 /** Save (create or update) a media's review. Resolves with the stored row (an entirely empty review clears the row and resolves with an empty view) or rejects with an AppError string. */
 export function review_save(args: {
-  media_id: string;
+  mediaId: string;
   rating: number | null;
   review: string | null;
-  short_review: string | null;
+  shortReview: string | null;
   notes: string | null;
   favorite: boolean;
-  is_spoiler: boolean;
+  isSpoiler: boolean;
   moods: string[];
   pace: string | null;
-  content_warnings: string[];
+  contentWarnings: string[];
 }): Promise<ReviewView> {
   return invoke<ReviewView>("review_save", args);
 }
 
 /** Acknowledge a media's current content-warning set (MISSION-079) — stamps warnings_acknowledged_at now and resolves with the updated row, or rejects when there is no review / no warnings to acknowledge. */
-export function review_acknowledge_warnings(args: { media_id: string }): Promise<ReviewView> {
+export function review_acknowledge_warnings(args: { mediaId: string }): Promise<ReviewView> {
   return invoke<ReviewView>("review_acknowledge_warnings", args);
 }
 
 /** Delete a media's review row. Resolves or rejects with an AppError string. */
-export function review_delete(args: { media_id: string }): Promise<void> {
+export function review_delete(args: { mediaId: string }): Promise<void> {
   return invoke<void>("review_delete", args);
 }
 
 /** External (provider) search grouped by provider, with identity flags. `content_type` narrows the fan-out when provided; null searches every enabled provider (domain-agnostic). Resolves with local hits + provider groups + per-provider failures, or rejects with an AppError string. */
 export function search_external(args: {
   query: string;
-  content_type: string | null;
+  contentType: string | null;
 }): Promise<ExternalSearchView> {
   return invoke<ExternalSearchView>("search_external", args);
 }
@@ -618,7 +618,7 @@ export function provider_get_details(args: { provider: string; id: string }): Pr
 /** Import one provider title into the library (details → identity check → add). Resolves with the media that owns the title — newly created (created: true) or an existing library row the identity check matched (created: false), or rejects with an AppError string. */
 export function import_provider(args: {
   provider: string;
-  provider_id: string;
+  providerId: string;
 }): Promise<ProviderImportView> {
   return invoke<ProviderImportView>("import_provider", args);
 }
@@ -674,9 +674,9 @@ export function backup_prefs_get(): Promise<BackupPrefs> {
 
 /** Validate and persist the backup preferences (MISSION-086): the interval must be 1-8760 hours and the keep count 1-100. Every backup (manual or automatic) applies the retention policy afterwards - keeping the newest N archives plus the newest of every older month. Resolves with the stored BackupPrefs or rejects with an AppError string. */
 export function backup_prefs_set(args: {
-  auto_enabled: boolean;
-  interval_hours: number;
-  keep_count: number;
+  autoEnabled: boolean;
+  intervalHours: number;
+  keepCount: number;
 }): Promise<BackupPrefs> {
   return invoke<BackupPrefs>("backup_prefs_set", args);
 }
@@ -712,7 +712,7 @@ export function import_csv_headers(args: { source: string; delimiter: string }):
 }
 
 /** Refresh a media's provider-owned metadata from its provider and report what changed (per-field before → after). Never touches user data (tracking, review, collections, personal tags, asset ids). Resolves with the diff view or rejects with an AppError string. */
-export function media_enrich(args: { media_id: string }): Promise<EnrichView> {
+export function media_enrich(args: { mediaId: string }): Promise<EnrichView> {
   return invoke<EnrichView>("media_enrich", args);
 }
 
@@ -732,7 +732,7 @@ export function provider_set_enabled(args: {
 /** Store (or clear, when blank) a provider's API key in the OS keyring. The key is never persisted in settings files and never returned to the webview. Resolves with the updated row or rejects with an AppError string. */
 export function provider_set_key(args: {
   provider: string;
-  api_key: string;
+  apiKey: string;
 }): Promise<ProviderSettingsView> {
   return invoke<ProviderSettingsView>("provider_set_key", args);
 }
@@ -748,12 +748,12 @@ export function dashboard_summary(args: { limit: number | null }): Promise<Dashb
 }
 
 /** Resolve one cover/banner asset to a cached local file, downloading per the cache policy when needed. `status` is `cached` (local_path usable via `convertFileSrc`), `failed` (transient, retried after a cooldown) or `missing` (permanent broken URL). Resolves with the asset view or rejects with an AppError string. */
-export function asset_resolve(args: { asset_id: string }): Promise<AssetView> {
+export function asset_resolve(args: { assetId: string }): Promise<AssetView> {
   return invoke<AssetView>("asset_resolve", args);
 }
 
 /** Resolve many cover/banner assets in one call (deduped; unknown ids are skipped). The library grid calls this once per visible page so covers resolve as a batch. Resolves with the resolved asset views or rejects with an AppError string. */
-export function assets_resolve(args: { asset_ids: string[] }): Promise<AssetView[]> {
+export function assets_resolve(args: { assetIds: string[] }): Promise<AssetView[]> {
   return invoke<AssetView[]>("assets_resolve", args);
 }
 
@@ -763,44 +763,44 @@ export function media_nodes(args: { id: string }): Promise<ContentNode[]> {
 }
 
 /** Set the progress state of one node (read/watched/skipped/unread). Completed states stamp read_at. Resolves or rejects with an AppError string. */
-export function node_progress_set(args: { node_id: string; node_state: string }): Promise<void> {
+export function node_progress_set(args: { nodeId: string; nodeState: string }): Promise<void> {
   return invoke<void>("node_progress_set", args);
 }
 
 /** Set the progress state of every node between two nodes in the media's display order. Resolves with the affected node ids (for optimistic UI) or rejects with an AppError string. */
 export function node_progress_range(args: {
-  media_id: string;
-  from_id: string;
-  to_id: string;
-  node_state: string;
+  mediaId: string;
+  fromId: string;
+  toId: string;
+  nodeState: string;
 }): Promise<string[]> {
   return invoke<string[]>("node_progress_range", args);
 }
 
 /** Mark the next not-yet-consumed countable node of a media done (watched for episodes, read otherwise) and run the auto-status rule. Resolves with the refreshed progress summary, null when nothing is left to mark, or rejects with an AppError string. */
 export function node_progress_next(args: {
-  media_id: string;
+  mediaId: string;
 }): Promise<NodeProgressNextView | null> {
   return invoke<NodeProgressNextView | null>("node_progress_next", args);
 }
 
 /** Read the tracking row for one media. Resolves with the row or null when the media is untracked; rejects with an AppError string. */
-export function tracking_get(args: { media_id: string }): Promise<TrackingView | null> {
+export function tracking_get(args: { mediaId: string }): Promise<TrackingView | null> {
   return invoke<TrackingView | null>("tracking_get", args);
 }
 
 /** Apply a status transition for one media (status engine applies, incl. the Repeat guard and started/finished stamps). Resolves with the updated row or rejects with an AppError string. */
 export function tracking_set_status(args: {
-  media_id: string;
-  core_status: string;
+  mediaId: string;
+  coreStatus: string;
 }): Promise<TrackingView> {
   return invoke<TrackingView>("tracking_set_status", args);
 }
 
 /** Toggle Normal (autoTrack) vs Manual tracking mode for one media. Resolves with the updated row (turning Normal back on re-syncs the status to the current progress) or rejects with an AppError string. */
 export function tracking_set_auto_track(args: {
-  media_id: string;
-  auto_track: boolean;
+  mediaId: string;
+  autoTrack: boolean;
 }): Promise<TrackingView> {
   return invoke<TrackingView>("tracking_set_auto_track", args);
 }
@@ -824,16 +824,16 @@ export function trash_restore(args: { id: string }): Promise<void> {
 
 /** Preview what merging the duplicate into the survivor would change (MISSION-089): field-level conflicts (different non-empty values), the merged title, and what will move - content nodes, review/tracking when the survivor lacks one, collection memberships. Resolves with the MergePreview or rejects with an AppError string. */
 export function merge_plan(args: {
-  survivor_id: string;
-  duplicate_id: string;
+  survivorId: string;
+  duplicateId: string;
 }): Promise<MergePreview> {
   return invoke<MergePreview>("merge_plan", args);
 }
 
 /** Apply a merge (MISSION-089): snapshots the duplicate into trash (kind `merge`, restorable from the Trash page), folds its metadata into the survivor per the MISSION-028 policy, re-keys its nodes / review / tracking / collections onto the survivor and deletes it. Resolves with the trash id for undo or rejects with an AppError string. */
 export function merge_apply(args: {
-  survivor_id: string;
-  duplicate_id: string;
+  survivorId: string;
+  duplicateId: string;
 }): Promise<MergeResult> {
   return invoke<MergeResult>("merge_apply", args);
 }
@@ -846,7 +846,7 @@ export function trash_purge(args: { id: string }): Promise<void> {
 /** Set the tracking status for many media at once (status engine applies). An optional filter resolves the media set server-side (apply to the whole filtered selection). Resolves with a per-item summary — media that can't reach the target are in `failures`, not an error — or rejects with an AppError string. */
 export function tracking_bulk_set_status(args: {
   ids: string[];
-  core_status: string;
+  coreStatus: string;
   filter: BulkFilter | null;
 }): Promise<BulkResult> {
   return invoke<BulkResult>("tracking_bulk_set_status", args);
@@ -889,7 +889,7 @@ export function collection_create_smart(args: {
 
 /** Replace a smart collection's filter. Resolves with the updated view or rejects with an AppError string. */
 export function collection_update_smart(args: {
-  collection_id: string;
+  collectionId: string;
   filter: SmartFilter;
 }): Promise<CollectionView> {
   return invoke<CollectionView>("collection_update_smart", args);
@@ -897,28 +897,28 @@ export function collection_update_smart(args: {
 
 /** Rename a collection; resolves with the updated view or rejects with an AppError string. */
 export function collection_rename(args: {
-  collection_id: string;
+  collectionId: string;
   name: string;
 }): Promise<CollectionView> {
   return invoke<CollectionView>("collection_rename", args);
 }
 
 /** Delete a collection (members cascade). Resolves with the removed name or rejects with an AppError string. */
-export function collection_delete(args: { collection_id: string }): Promise<string> {
+export function collection_delete(args: { collectionId: string }): Promise<string> {
   return invoke<string>("collection_delete", args);
 }
 
 /** A collection's members in display order. Resolves with the rows or rejects with an AppError string. */
 export function collection_members(args: {
-  collection_id: string;
+  collectionId: string;
 }): Promise<CollectionMemberView[]> {
   return invoke<CollectionMemberView[]>("collection_members", args);
 }
 
 /** Add many media to one collection (idempotent append). An optional filter resolves the media set server-side. Resolves with a per-item summary or rejects with an AppError string. */
 export function collection_bulk_add(args: {
-  collection_id: string;
-  media_ids: string[];
+  collectionId: string;
+  mediaIds: string[];
   filter: BulkFilter | null;
 }): Promise<BulkResult> {
   return invoke<BulkResult>("collection_bulk_add", args);
@@ -926,16 +926,16 @@ export function collection_bulk_add(args: {
 
 /** Remove one media from a collection; resolves with the removed media id or rejects with an AppError string. */
 export function collection_remove_member(args: {
-  collection_id: string;
-  media_id: string;
+  collectionId: string;
+  mediaId: string;
 }): Promise<string> {
   return invoke<string>("collection_remove_member", args);
 }
 
 /** Persist a drag/drop reorder of a collection's members (the media ids must be exactly the current members). Resolves or rejects with an AppError string. */
 export function collection_reorder(args: {
-  collection_id: string;
-  media_ids: string[];
+  collectionId: string;
+  mediaIds: string[];
 }): Promise<void> {
   return invoke<void>("collection_reorder", args);
 }

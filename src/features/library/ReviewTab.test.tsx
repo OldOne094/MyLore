@@ -98,8 +98,8 @@ describe("ReviewTab", () => {
       "aria-pressed",
       "true",
     );
-    expect(invoke).toHaveBeenCalledWith("review_get", { media_id: "m-111" });
-    expect(invoke).toHaveBeenCalledWith("media_tags", { media_id: "m-111" });
+    expect(invoke).toHaveBeenCalledWith("review_get", { mediaId: "m-111" });
+    expect(invoke).toHaveBeenCalledWith("media_tags", { mediaId: "m-111" });
   });
 
   it("shows the empty-state hint when no review exists", async () => {
@@ -122,16 +122,16 @@ describe("ReviewTab", () => {
 
     await waitFor(() =>
       expect(invoke).toHaveBeenCalledWith("review_save", {
-        media_id: "m-111",
+        mediaId: "m-111",
         rating: null,
         review: "Slow burn, worth it.",
-        short_review: "Slow burn.",
+        shortReview: "Slow burn.",
         notes: null,
         favorite: false,
-        is_spoiler: false,
+        isSpoiler: false,
         moods: [],
         pace: null,
-        content_warnings: [],
+        contentWarnings: [],
       }),
     );
     expect(await screen.findByText("Review saved")).toBeInTheDocument();
@@ -151,16 +151,16 @@ describe("ReviewTab", () => {
     await userEvent.click(screen.getByRole("button", { name: "Save review" }));
     await waitFor(() =>
       expect(invoke).toHaveBeenCalledWith("review_save", {
-        media_id: "m-111",
+        mediaId: "m-111",
         rating: null,
         review: null,
-        short_review: null,
+        shortReview: null,
         notes: null,
         favorite: true,
-        is_spoiler: false,
+        isSpoiler: false,
         moods: [],
         pace: null,
-        content_warnings: [],
+        contentWarnings: [],
       }),
     );
   });
@@ -176,16 +176,16 @@ describe("ReviewTab", () => {
 
     await waitFor(() =>
       expect(invoke).toHaveBeenCalledWith("review_save", {
-        media_id: "m-111",
+        mediaId: "m-111",
         rating: null,
         review: "The twist is X.",
-        short_review: null,
+        shortReview: null,
         notes: null,
         favorite: false,
-        is_spoiler: true,
+        isSpoiler: true,
         moods: [],
         pace: null,
-        content_warnings: [],
+        contentWarnings: [],
       }),
     );
   });
@@ -217,16 +217,16 @@ describe("ReviewTab", () => {
     await userEvent.click(screen.getByRole("button", { name: "Save review" }));
     await waitFor(() =>
       expect(invoke).toHaveBeenCalledWith("review_save", {
-        media_id: "m-111",
+        mediaId: "m-111",
         rating: null,
         review: null,
-        short_review: null,
+        shortReview: null,
         notes: null,
         favorite: false,
-        is_spoiler: false,
+        isSpoiler: false,
         moods: ["dark", "mysterious"],
         pace: "slow",
-        content_warnings: ["gore"],
+        contentWarnings: ["gore"],
       }),
     );
   });
@@ -238,9 +238,7 @@ describe("ReviewTab", () => {
 
     await userEvent.click(screen.getByRole("button", { name: "Clear review" }));
 
-    await waitFor(() =>
-      expect(invoke).toHaveBeenCalledWith("review_delete", { media_id: "m-111" }),
-    );
+    await waitFor(() => expect(invoke).toHaveBeenCalledWith("review_delete", { mediaId: "m-111" }));
     expect(await screen.findByText("No review yet — write one below.")).toBeInTheDocument();
   });
 
@@ -253,15 +251,15 @@ describe("ReviewTab", () => {
     await userEvent.click(screen.getByRole("button", { name: "Add" }));
 
     await waitFor(() =>
-      expect(invoke).toHaveBeenCalledWith("media_add_tag", { media_id: "m-111", tag: "shelf" }),
+      expect(invoke).toHaveBeenCalledWith("media_add_tag", { mediaId: "m-111", tag: "shelf" }),
     );
     expect(await screen.findByText("Tag added")).toBeInTheDocument();
 
     await userEvent.click(screen.getByRole("button", { name: /Tag removed: cozy/ }));
     await waitFor(() =>
       expect(invoke).toHaveBeenCalledWith("media_remove_tag", {
-        media_id: "m-111",
-        tag_id: "tag-1",
+        mediaId: "m-111",
+        tagId: "tag-1",
       }),
     );
   });

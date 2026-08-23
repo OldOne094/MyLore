@@ -91,7 +91,7 @@ function ExternalHitRow({ hit }: { hit: import("@/api").ExternalHit }) {
   const alreadyAdded = hit.identity.kind === "in_library";
   const onImport = () => {
     importProvider.mutate(
-      { provider: hit.provider, provider_id: hit.provider_id },
+      { provider: hit.provider, providerId: hit.provider_id },
       {
         onSuccess: (view) => {
           if (view.created) {

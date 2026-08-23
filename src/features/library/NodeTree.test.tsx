@@ -95,7 +95,7 @@ function mockTreeApi(options: { rangeIds?: string[] } = {}) {
     if (cmd === "media_nodes") return Promise.resolve(VOLUMES);
     if (cmd === "node_progress_set") return Promise.resolve();
     if (cmd === "node_progress_range") {
-      const ids = options.rangeIds ?? [params.from_id, params.to_id];
+      const ids = options.rangeIds ?? [params.fromId, params.toId];
       return Promise.resolve(ids);
     }
     return Promise.reject(new Error(`unhandled cmd ${cmd}`));
@@ -211,15 +211,15 @@ describe("NodeTree", () => {
     const checkbox = await screen.findByRole("checkbox", { name: "Mark Chapter 1 as read" });
     await userEvent.click(checkbox);
     expect(invoke).toHaveBeenCalledWith("node_progress_set", {
-      node_id: "c1",
-      node_state: "read",
+      nodeId: "c1",
+      nodeState: "read",
     });
     expect(screen.getByRole("checkbox", { name: "Mark Chapter 1 as unread" })).toBeChecked();
 
     await userEvent.click(screen.getByRole("checkbox", { name: "Mark Chapter 1 as unread" }));
     expect(invoke).toHaveBeenCalledWith("node_progress_set", {
-      node_id: "c1",
-      node_state: "unread",
+      nodeId: "c1",
+      nodeState: "unread",
     });
     expect(screen.getByRole("checkbox", { name: "Mark Chapter 1 as read" })).not.toBeChecked();
   });
@@ -237,10 +237,10 @@ describe("NodeTree", () => {
     });
 
     expect(invoke).toHaveBeenCalledWith("node_progress_range", {
-      media_id: "m-1",
-      from_id: "v1",
-      to_id: "v2",
-      node_state: "read",
+      mediaId: "m-1",
+      fromId: "v1",
+      toId: "v2",
+      nodeState: "read",
     });
     expect(screen.getByRole("checkbox", { name: "Mark Chapter 1 as unread" })).toBeChecked();
     expect(
@@ -258,14 +258,14 @@ describe("NodeTree", () => {
       within(chapter1).getByRole("button", { name: "Mark Chapter 1 as skipped" }),
     );
     expect(invoke).toHaveBeenCalledWith("node_progress_set", {
-      node_id: "c1",
-      node_state: "skipped",
+      nodeId: "c1",
+      nodeState: "skipped",
     });
 
     await userEvent.click(screen.getByRole("button", { name: "Mark Chapter 1 as unread" }));
     expect(invoke).toHaveBeenCalledWith("node_progress_set", {
-      node_id: "c1",
-      node_state: "unread",
+      nodeId: "c1",
+      nodeState: "unread",
     });
   });
 
@@ -275,8 +275,8 @@ describe("NodeTree", () => {
     const checkbox = await screen.findByRole("checkbox", { name: "Mark Chapter 1 as watched" });
     await userEvent.click(checkbox);
     expect(invoke).toHaveBeenCalledWith("node_progress_set", {
-      node_id: "c1",
-      node_state: "watched",
+      nodeId: "c1",
+      nodeState: "watched",
     });
   });
 

@@ -44,7 +44,7 @@ describe("AddMediaDialog", () => {
     await waitFor(() => {
       expect(invoke).toHaveBeenCalledWith(
         "media_create",
-        expect.objectContaining({ title: "Steins;Gate", content_type: "anime" }),
+        expect.objectContaining({ title: "Steins;Gate", contentType: "anime" }),
       );
     });
     expect(await screen.findByText("Title added")).toBeInTheDocument();
@@ -75,8 +75,8 @@ describe("AddMediaDialog", () => {
         "media_create",
         expect.objectContaining({
           genres: ["historical", "action"],
-          release_year: 2005,
-          pub_status: null,
+          releaseYear: 2005,
+          pubStatus: null,
           format: null,
         }),
       );

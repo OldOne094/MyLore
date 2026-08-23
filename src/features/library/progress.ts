@@ -63,7 +63,7 @@ export function useMarkNextUnit() {
   const queryClient = useQueryClient();
   const toast = useToast();
   return useMutation({
-    mutationFn: (mediaId: string) => node_progress_next({ media_id: mediaId }),
+    mutationFn: (mediaId: string) => node_progress_next({ mediaId: mediaId }),
     onSuccess: async (_view, mediaId) => invalidateProgress(queryClient, mediaId),
     onError: () => toast.error({ title: t("progress.setErrorToast") }),
   });
@@ -77,7 +77,7 @@ export function useMarkRange(mediaId: string) {
   const toast = useToast();
   return useMutation({
     mutationFn: ({ fromId, toId, state }: { fromId: string; toId: string; state: string }) =>
-      node_progress_range({ media_id: mediaId, from_id: fromId, to_id: toId, node_state: state }),
+      node_progress_range({ mediaId: mediaId, fromId: fromId, toId: toId, nodeState: state }),
     onSuccess: async () => invalidateProgress(queryClient, mediaId),
     onError: () => toast.error({ title: t("progress.rangeErrorToast") }),
   });

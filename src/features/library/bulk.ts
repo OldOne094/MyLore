@@ -41,9 +41,9 @@ export function useBulkSetStatus() {
     mutationFn: ({
       ids,
       filter,
-      core_status,
-    }: BulkScope & { core_status: string }): Promise<BulkResult> =>
-      tracking_bulk_set_status({ ids, core_status, filter: toBulkFilter(filter) }),
+      coreStatus,
+    }: BulkScope & { coreStatus: string }): Promise<BulkResult> =>
+      tracking_bulk_set_status({ ids, coreStatus: coreStatus, filter: toBulkFilter(filter) }),
     onSuccess: async () => {
       await Promise.all([
         queryClient.invalidateQueries({ queryKey: queryKeys.media.lists() }),
@@ -93,11 +93,15 @@ export function useBulkAddToCollection() {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: ({
-      collection_id,
+      collectionId,
       ids,
       filter,
-    }: BulkScope & { collection_id: string }): Promise<BulkResult> =>
-      collection_bulk_add({ collection_id, media_ids: ids, filter: toBulkFilter(filter) }),
+    }: BulkScope & { collectionId: string }): Promise<BulkResult> =>
+      collection_bulk_add({
+        collectionId: collectionId,
+        mediaIds: ids,
+        filter: toBulkFilter(filter),
+      }),
     onSuccess: async () => {
       await queryClient.invalidateQueries({ queryKey: queryKeys.collection.all() });
     },

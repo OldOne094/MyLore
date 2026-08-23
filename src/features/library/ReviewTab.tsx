@@ -180,7 +180,7 @@ export function ReviewTab({ mediaId }: { mediaId: string }) {
     const tag = tagInput.trim();
     if (!tag || addTag.isPending) return;
     addTag.mutate(
-      { media_id: mediaId, tag },
+      { mediaId: mediaId, tag },
       {
         onSuccess: () => {
           setTagInput("");
@@ -193,7 +193,7 @@ export function ReviewTab({ mediaId }: { mediaId: string }) {
 
   const handleRemoveTag = (tagId: string) => {
     removeTag.mutate(
-      { media_id: mediaId, tag_id: tagId },
+      { mediaId: mediaId, tagId: tagId },
       { onError: () => toast.error({ title: t("review.tagRemoveErrorToast") }) },
     );
   };

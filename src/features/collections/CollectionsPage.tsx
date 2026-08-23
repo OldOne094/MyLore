@@ -292,7 +292,7 @@ export function CollectionsPage() {
               const trimmed = renameValue.trim();
               if (!trimmed) return;
               rename.mutate(
-                { collection_id: renaming.id, name: trimmed },
+                { collectionId: renaming.id, name: trimmed },
                 {
                   onSuccess: (view) => {
                     setRenaming(null);

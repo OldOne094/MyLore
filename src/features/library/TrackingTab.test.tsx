@@ -89,8 +89,8 @@ describe("TrackingTab", () => {
 
     await waitFor(() =>
       expect(invoke).toHaveBeenCalledWith("tracking_set_status", {
-        media_id: "m-111",
-        core_status: "on_hold",
+        mediaId: "m-111",
+        coreStatus: "on_hold",
       }),
     );
     expect(await screen.findByRole("button", { name: "On hold" })).toHaveAttribute(
@@ -172,8 +172,8 @@ describe("TrackingTab", () => {
 
     await waitFor(() =>
       expect(invoke).toHaveBeenCalledWith("tracking_set_auto_track", {
-        media_id: "m-111",
-        auto_track: false,
+        mediaId: "m-111",
+        autoTrack: false,
       }),
     );
     expect(await screen.findByRole("button", { name: "Manual" })).toHaveAttribute(

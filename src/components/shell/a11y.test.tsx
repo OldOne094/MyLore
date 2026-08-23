@@ -124,7 +124,7 @@ describe("header search (MISSION-043)", () => {
     );
     expect(invoke).toHaveBeenCalledWith("media_search", {
       query: "Steins;Gate",
-      content_type: null,
+      contentType: null,
     });
   });
 

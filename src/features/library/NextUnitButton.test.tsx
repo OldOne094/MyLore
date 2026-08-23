@@ -63,7 +63,7 @@ describe("NextUnitButton", () => {
     });
 
     await user.click(screen.getByRole("button", { name: "Mark E3 as watched" }));
-    expect(invoke).toHaveBeenCalledWith("node_progress_next", { media_id: "m-1" });
+    expect(invoke).toHaveBeenCalledWith("node_progress_next", { mediaId: "m-1" });
   });
 
   it("shows the all-caught-up info toast when nothing is left to mark", async () => {

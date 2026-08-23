@@ -34,7 +34,7 @@ export function useCollectionsQuery() {
 export function useCollectionMembersQuery(collectionId: string) {
   return useQuery({
     queryKey: queryKeys.collection.members(collectionId),
-    queryFn: () => collection_members({ collection_id: collectionId }),
+    queryFn: () => collection_members({ collectionId: collectionId }),
   });
 }
 
@@ -70,8 +70,8 @@ export function useCreateSmartCollection() {
 export function useUpdateSmartFilter() {
   const { onAny } = useCollectionWrite();
   return useMutation({
-    mutationFn: ({ collection_id, filter }: { collection_id: string; filter: SmartFilter }) =>
-      collection_update_smart({ collection_id, filter }),
+    mutationFn: ({ collectionId, filter }: { collectionId: string; filter: SmartFilter }) =>
+      collection_update_smart({ collectionId: collectionId, filter }),
     onSuccess: onAny,
   });
 }
@@ -79,8 +79,8 @@ export function useUpdateSmartFilter() {
 export function useRenameCollection() {
   const { onAny } = useCollectionWrite();
   return useMutation({
-    mutationFn: ({ collection_id, name }: { collection_id: string; name: string }) =>
-      collection_rename({ collection_id, name }),
+    mutationFn: ({ collectionId, name }: { collectionId: string; name: string }) =>
+      collection_rename({ collectionId: collectionId, name }),
     onSuccess: onAny,
   });
 }
@@ -88,7 +88,7 @@ export function useRenameCollection() {
 export function useDeleteCollection() {
   const { onAny } = useCollectionWrite();
   return useMutation({
-    mutationFn: (collection_id: string) => collection_delete({ collection_id }),
+    mutationFn: (collectionId: string) => collection_delete({ collectionId: collectionId }),
     onSuccess: onAny,
   });
 }
@@ -96,8 +96,8 @@ export function useDeleteCollection() {
 export function useAddMembers() {
   const { onAny } = useCollectionWrite();
   return useMutation({
-    mutationFn: ({ collection_id, media_ids }: { collection_id: string; media_ids: string[] }) =>
-      collection_bulk_add({ collection_id, media_ids, filter: null }),
+    mutationFn: ({ collectionId, mediaIds }: { collectionId: string; mediaIds: string[] }) =>
+      collection_bulk_add({ collectionId: collectionId, mediaIds: mediaIds, filter: null }),
     onSuccess: onAny,
   });
 }
@@ -105,8 +105,8 @@ export function useAddMembers() {
 export function useRemoveMember() {
   const { onAny } = useCollectionWrite();
   return useMutation({
-    mutationFn: ({ collection_id, media_id }: { collection_id: string; media_id: string }) =>
-      collection_remove_member({ collection_id, media_id }),
+    mutationFn: ({ collectionId, mediaId }: { collectionId: string; mediaId: string }) =>
+      collection_remove_member({ collectionId: collectionId, mediaId: mediaId }),
     onSuccess: onAny,
   });
 }
@@ -114,8 +114,8 @@ export function useRemoveMember() {
 export function useReorderMembers() {
   const { onAny } = useCollectionWrite();
   return useMutation({
-    mutationFn: ({ collection_id, media_ids }: { collection_id: string; media_ids: string[] }) =>
-      collection_reorder({ collection_id, media_ids }),
+    mutationFn: ({ collectionId, mediaIds }: { collectionId: string; mediaIds: string[] }) =>
+      collection_reorder({ collectionId: collectionId, mediaIds: mediaIds }),
     onSuccess: onAny,
   });
 }

@@ -61,16 +61,16 @@ const COLLECTION = {
 
 function mockDetail(members: typeof MEMBERS = MEMBERS) {
   vi.mocked(invoke).mockImplementation((command: string, args?: InvokeArgs) => {
-    const a = (args ?? {}) as { collection_id?: string; media_id?: string; media_ids?: string[] };
+    const a = (args ?? {}) as { collectionId?: string; mediaId?: string; mediaIds?: string[] };
     if (command === "collection_list") return Promise.resolve([COLLECTION]);
     if (command === "collection_members") return Promise.resolve(members);
     if (command === "collection_remove_member") {
-      const mediaId = a.media_id as string;
+      const mediaId = a.mediaId as string;
       members = members.filter((m) => m.media.id !== mediaId);
       return Promise.resolve(mediaId);
     }
     if (command === "collection_reorder") {
-      const ids = a.media_ids as string[];
+      const ids = a.mediaIds as string[];
       members = [...members].sort((a, b) => ids.indexOf(a.media.id) - ids.indexOf(b.media.id));
       return Promise.resolve(undefined);
     }
@@ -168,8 +168,8 @@ describe("CollectionDetailPage", () => {
     await screen.findByText("Order saved");
 
     expect(invoke).toHaveBeenCalledWith("collection_reorder", {
-      collection_id: "c-1",
-      media_ids: ["m-2", "m-1"],
+      collectionId: "c-1",
+      mediaIds: ["m-2", "m-1"],
     });
     expect(memberTitles()).toEqual(["Berserk", "Dune"]);
   });
@@ -191,8 +191,8 @@ describe("CollectionDetailPage", () => {
     await screen.findByText("Order saved");
 
     expect(invoke).toHaveBeenCalledWith("collection_reorder", {
-      collection_id: "c-1",
-      media_ids: ["m-2", "m-1"],
+      collectionId: "c-1",
+      mediaIds: ["m-2", "m-1"],
     });
     expect(memberTitles()).toEqual(["Berserk", "Dune"]);
   });
@@ -216,8 +216,8 @@ describe("CollectionDetailPage", () => {
     await userEvent.click(screen.getAllByRole("button", { name: "Remove" })[0]);
 
     expect(invoke).toHaveBeenCalledWith("collection_remove_member", {
-      collection_id: "c-1",
-      media_id: "m-1",
+      collectionId: "c-1",
+      mediaId: "m-1",
     });
     await screen.findByText("Removed “Dune”");
     expect(memberTitles()).toEqual(["Berserk"]);
@@ -264,7 +264,7 @@ describe("CollectionDetailPage", () => {
     expect(invoke).toHaveBeenCalledWith(
       "collection_update_smart",
       expect.objectContaining({
-        collection_id: "c-smart",
+        collectionId: "c-smart",
         filter: expect.objectContaining({ pub_status: "completed" }),
       }),
     );

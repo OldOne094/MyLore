@@ -39,7 +39,7 @@ export interface SaveReviewInput {
 export function useReviewQuery(mediaId: string, enabled = true) {
   return useQuery({
     queryKey: queryKeys.review.forMedia(mediaId),
-    queryFn: () => review_get({ media_id: mediaId }),
+    queryFn: () => review_get({ mediaId: mediaId }),
     enabled,
   });
 }
@@ -50,16 +50,16 @@ export function useSaveReview() {
   return useMutation({
     mutationFn: (input: SaveReviewInput) =>
       review_save({
-        media_id: input.media_id,
+        mediaId: input.media_id,
         rating: input.rating,
         review: input.review,
-        short_review: input.short_review,
+        shortReview: input.short_review,
         notes: input.notes,
         favorite: input.favorite,
-        is_spoiler: input.is_spoiler,
+        isSpoiler: input.is_spoiler,
         moods: input.moods,
         pace: input.pace,
-        content_warnings: input.content_warnings,
+        contentWarnings: input.content_warnings,
       }),
     onSuccess: (view) => {
       queryClient.setQueryData(queryKeys.review.forMedia(view.media_id), view);
@@ -73,7 +73,7 @@ export function useSaveReview() {
 export function useAcknowledgeWarnings() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: (media_id: string) => review_acknowledge_warnings({ media_id }),
+    mutationFn: (mediaId: string) => review_acknowledge_warnings({ mediaId: mediaId }),
     onSuccess: (view) => {
       queryClient.setQueryData(queryKeys.review.forMedia(view.media_id), view);
     },
@@ -84,7 +84,7 @@ export function useAcknowledgeWarnings() {
 export function useDeleteReview() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: (media_id: string) => review_delete({ media_id }),
+    mutationFn: (mediaId: string) => review_delete({ mediaId: mediaId }),
     onSuccess: (_void, mediaId) => {
       queryClient.setQueryData(queryKeys.review.forMedia(mediaId), null);
       void queryClient.invalidateQueries({ queryKey: queryKeys.media.details() });
@@ -97,7 +97,7 @@ export function useDeleteReview() {
 export function useMediaTagsQuery(mediaId: string) {
   return useQuery({
     queryKey: queryKeys.media.tags(mediaId),
-    queryFn: () => media_tags({ media_id: mediaId }),
+    queryFn: () => media_tags({ mediaId: mediaId }),
   });
 }
 
@@ -114,9 +114,9 @@ function seedTags(
 export function useAddMediaTag() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: ({ media_id, tag }: { media_id: string; tag: string }) =>
-      media_add_tag({ media_id, tag }),
-    onSuccess: (tags, { media_id }) => seedTags(queryClient, media_id, tags),
+    mutationFn: ({ mediaId, tag }: { mediaId: string; tag: string }) =>
+      media_add_tag({ mediaId: mediaId, tag }),
+    onSuccess: (tags, { mediaId }) => seedTags(queryClient, mediaId, tags),
   });
 }
 
@@ -124,8 +124,8 @@ export function useAddMediaTag() {
 export function useRemoveMediaTag() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: ({ media_id, tag_id }: { media_id: string; tag_id: string }) =>
-      media_remove_tag({ media_id, tag_id }),
-    onSuccess: (tags, { media_id }) => seedTags(queryClient, media_id, tags),
+    mutationFn: ({ mediaId, tagId }: { mediaId: string; tagId: string }) =>
+      media_remove_tag({ mediaId: mediaId, tagId: tagId }),
+    onSuccess: (tags, { mediaId }) => seedTags(queryClient, mediaId, tags),
   });
 }

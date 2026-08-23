@@ -1,4 +1,4 @@
-﻿import { useState } from "react";
+import { useState } from "react";
 import {
   ArrowDown,
   ArrowUp,
@@ -123,7 +123,7 @@ export function CollectionDetailPage() {
 
   const commitOrder = (orderedIds: string[], previous: typeof members) => {
     reorder.mutate(
-      { collection_id: collectionId, media_ids: orderedIds },
+      { collectionId: collectionId, mediaIds: orderedIds },
       {
         onSuccess: () => {
           toast.success({ title: t("collections.reorderToast") });
@@ -171,7 +171,7 @@ export function CollectionDetailPage() {
       previous.filter((m) => m.media.id !== mediaId),
     );
     removeMember.mutate(
-      { collection_id: collectionId, media_id: mediaId },
+      { collectionId: collectionId, mediaId: mediaId },
       {
         onSuccess: () => {
           toast.success({ title: t("collections.removeMemberToast", { title }) });
@@ -331,7 +331,7 @@ export function CollectionDetailPage() {
             onSubmit={(event) => {
               event.preventDefault();
               updateSmart.mutate(
-                { collection_id: collectionId, filter: editFilter },
+                { collectionId: collectionId, filter: editFilter },
                 {
                   onSuccess: () => {
                     setEditOpen(false);

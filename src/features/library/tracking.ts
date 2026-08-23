@@ -11,7 +11,7 @@ import { queryKeys } from "@/api";
 export function useTrackingQuery(mediaId: string) {
   return useQuery({
     queryKey: queryKeys.tracking.detail(mediaId),
-    queryFn: () => tracking_get({ media_id: mediaId }),
+    queryFn: () => tracking_get({ mediaId: mediaId }),
   });
 }
 
@@ -20,8 +20,8 @@ export function useTrackingQuery(mediaId: string) {
 export function useSetStatus() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: ({ media_id, core_status }: { media_id: string; core_status: string }) =>
-      tracking_set_status({ media_id, core_status }),
+    mutationFn: ({ mediaId, coreStatus }: { mediaId: string; coreStatus: string }) =>
+      tracking_set_status({ mediaId: mediaId, coreStatus: coreStatus }),
     onSuccess: (view) => {
       queryClient.setQueryData(queryKeys.tracking.detail(view.media_id), view);
       void queryClient.invalidateQueries({ queryKey: queryKeys.dashboard.all() });
@@ -34,8 +34,8 @@ export function useSetStatus() {
 export function useSetAutoTrack() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: ({ media_id, auto_track }: { media_id: string; auto_track: boolean }) =>
-      tracking_set_auto_track({ media_id, auto_track }),
+    mutationFn: ({ mediaId, autoTrack }: { mediaId: string; autoTrack: boolean }) =>
+      tracking_set_auto_track({ mediaId: mediaId, autoTrack: autoTrack }),
     onSuccess: (view) => {
       queryClient.setQueryData(queryKeys.tracking.detail(view.media_id), view);
       void queryClient.invalidateQueries({ queryKey: queryKeys.dashboard.all() });

@@ -55,6 +55,11 @@ function jsDoc(doc) {
 }
 
 /** Generate the TS source for a single command wrapper. */
+/** Convert snake_case to camelCase for TS/JS convention (Tauri v2 expects camelCase). */
+function toCamelCase(snake) {
+  return snake.replace(/_([a-z])/g, (_, c) => c.toUpperCase());
+}
+
 function commandWrapper(command) {
   const lines = [];
   const doc = jsDoc(command.doc);
@@ -62,7 +67,7 @@ function commandWrapper(command) {
   const argNames = Object.entries(command.args ?? {});
   const params =
     argNames.length > 0
-      ? `args: { ${argNames.map(([n, t]) => `${n}: ${tsType(t)}`).join(", ")} }`
+      ? `args: { ${argNames.map(([n, t]) => `${toCamelCase(n)}: ${tsType(t)}`).join(", ")} }`
       : "";
   const invokeArgs = argNames.length > 0 ? ", args" : "";
   const ret = tsType(command.returns ?? "void");

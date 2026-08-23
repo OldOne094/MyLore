@@ -8,11 +8,11 @@ import { import_provider, search_external } from "@/api";
 import { queryKeys } from "@/api";
 
 /** Search providers by query (optionally narrowed to one content type). */
-export function useDiscoverSearchQuery(query: string, content_type: string | null) {
+export function useDiscoverSearchQuery(query: string, contentType: string | null) {
   const trimmed = query.trim();
   return useQuery({
-    queryKey: queryKeys.search.external(trimmed, content_type),
-    queryFn: () => search_external({ query: trimmed, content_type }),
+    queryKey: queryKeys.search.external(trimmed, contentType),
+    queryFn: () => search_external({ query: trimmed, contentType: contentType }),
     enabled: trimmed.length > 0,
     staleTime: 60_000,
   });
@@ -23,7 +23,8 @@ export function useDiscoverSearchQuery(query: string, content_type: string | nul
 export function useImportProvider() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: (input: { provider: string; provider_id: string }) => import_provider(input),
+    mutationFn: (input: { provider: string; providerId: string }) =>
+      import_provider({ provider: input.provider, providerId: input.providerId }),
     onSuccess: async () => {
       await Promise.all([
         queryClient.invalidateQueries({ queryKey: queryKeys.media.lists() }),

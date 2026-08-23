@@ -92,7 +92,7 @@ export function BulkActionBar({ ids, filter, matchingCount, onDone }: BulkAction
 
   const handleStatus = (status: string) => {
     setStatus.mutate(
-      { ids, core_status: status, filter: opFilter },
+      { ids, coreStatus: status, filter: opFilter },
       {
         onSuccess: (result) => {
           toast.success({
@@ -130,7 +130,7 @@ export function BulkActionBar({ ids, filter, matchingCount, onDone }: BulkAction
   const handleAddToList = (collectionId: string) => {
     const name = collections.data?.find((c) => c.id === collectionId)?.name ?? "";
     addToCollection.mutate(
-      { collection_id: collectionId, ids, filter: opFilter },
+      { collectionId: collectionId, ids, filter: opFilter },
       {
         onSuccess: (result) => {
           toast.success({ title: t("bulk.listAdded", { name }) });

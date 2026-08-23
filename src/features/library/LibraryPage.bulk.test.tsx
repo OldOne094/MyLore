@@ -175,7 +175,7 @@ describe("LibraryPage bulk select", () => {
 
     expect(invoke).toHaveBeenCalledWith("tracking_bulk_set_status", {
       ids: ["m-111", "m-222"],
-      core_status: "in_progress",
+      coreStatus: "in_progress",
       filter: null,
     });
     expect(screen.queryByRole("toolbar", { name: "Select" })).not.toBeInTheDocument();
@@ -229,8 +229,8 @@ describe("LibraryPage bulk select", () => {
     await userEvent.click(await screen.findByRole("button", { name: "Reading Now" }));
 
     expect(invoke).toHaveBeenCalledWith("collection_bulk_add", {
-      collection_id: "c-1",
-      media_ids: ["m-111"],
+      collectionId: "c-1",
+      mediaIds: ["m-111"],
       filter: null,
     });
   });
@@ -305,7 +305,7 @@ describe("LibraryPage bulk select", () => {
 
     expect(invoke).toHaveBeenCalledWith("tracking_bulk_set_status", {
       ids: ["m-111"],
-      core_status: "in_progress",
+      coreStatus: "in_progress",
       filter: {
         content_type: null,
         format: null,

@@ -44,7 +44,7 @@ export function useSetProviderKey() {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: ({ provider, apiKey }: { provider: string; apiKey: string }) =>
-      provider_set_key({ provider, api_key: apiKey }),
+      provider_set_key({ provider: provider, apiKey: apiKey }),
     onSuccess: async () => {
       await queryClient.invalidateQueries({ queryKey: queryKeys.settings.providers() });
     },

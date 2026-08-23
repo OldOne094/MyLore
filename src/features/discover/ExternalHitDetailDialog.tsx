@@ -68,7 +68,7 @@ export function ExternalHitDetailDialog({
 
   const handleImport = () => {
     importProvider.mutate(
-      { provider: hit.provider, provider_id: hit.provider_id },
+      { provider: hit.provider, providerId: hit.provider_id },
       {
         onSuccess: () => {
           setImported(true);

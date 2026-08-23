@@ -112,14 +112,14 @@ export function TrackingTab({ mediaId }: { mediaId: string }) {
 
   const apply = (coreStatus: string) => {
     setStatus.mutate(
-      { media_id: mediaId, core_status: coreStatus },
+      { mediaId: mediaId, coreStatus: coreStatus },
       { onError: () => toast.error({ title: t("tracking.setErrorToast") }) },
     );
   };
 
   const applyMode = (enabled: boolean) => {
     setAutoTrack.mutate(
-      { media_id: mediaId, auto_track: enabled },
+      { mediaId: mediaId, autoTrack: enabled },
       { onError: () => toast.error({ title: t("tracking.setModeErrorToast") }) },
     );
   };

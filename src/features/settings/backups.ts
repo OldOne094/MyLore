@@ -47,9 +47,9 @@ export function useSaveBackupPrefs() {
   return useMutation({
     mutationFn: (prefs: BackupPrefs) =>
       backup_prefs_set({
-        auto_enabled: prefs.auto_enabled,
-        interval_hours: prefs.interval_hours,
-        keep_count: prefs.keep_count,
+        autoEnabled: prefs.auto_enabled,
+        intervalHours: prefs.interval_hours,
+        keepCount: prefs.keep_count,
       }),
     onSuccess: (prefs) => client.setQueryData(queryKeys.settings.backupPrefs(), prefs),
   });

@@ -61,9 +61,9 @@ export function activeFilterCount(filters: LibraryFilters): number {
 
 export function filtersToArgs(filters: LibraryFilters, sort: LibrarySort): MediaListArgs {
   return {
-    content_type: filters.content_type,
+    contentType: filters.content_type,
     format: filters.format,
-    pub_status: filters.pub_status,
+    pubStatus: filters.pub_status,
     genre: filters.genre,
     tag: filters.tag,
     year: filters.year,

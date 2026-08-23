@@ -109,17 +109,17 @@ describe("toMediaCreateArgs", () => {
     });
     expect(args).toEqual({
       title: "Steins;Gate",
-      content_type: "anime",
+      contentType: "anime",
       format: "TV",
-      pub_status: "completed",
+      pubStatus: "completed",
       synopsis: "A sci-fi thriller.",
-      release_year: 2011,
+      releaseYear: 2011,
       language: "ja",
       country: "JP",
       pages: null,
-      duration_min: 24,
-      ep_count: 24,
-      ch_count: null,
+      durationMin: 24,
+      epCount: 24,
+      chCount: null,
       genres: ["sci-fi"],
     });
   });

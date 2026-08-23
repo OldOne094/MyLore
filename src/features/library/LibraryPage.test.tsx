@@ -120,7 +120,7 @@ describe("LibraryPage", () => {
 
     expect(invoke).toHaveBeenCalledWith(
       "media_list",
-      expect.objectContaining({ sort: "title", ascending: true, content_type: null }),
+      expect.objectContaining({ sort: "title", ascending: true, contentType: null }),
     );
   });
 
@@ -222,7 +222,7 @@ describe("LibraryPage", () => {
 
     expect(invoke).toHaveBeenCalledWith(
       "media_list",
-      expect.objectContaining({ content_type: "anime" }),
+      expect.objectContaining({ contentType: "anime" }),
     );
   });
 
@@ -257,8 +257,8 @@ describe("LibraryPage", () => {
     vi.mocked(invoke).mockImplementation((command: string, args?: unknown) => {
       if (command === "media_facets") return Promise.resolve(FACETS);
       if (command === "media_list") {
-        const content_type = (args as { content_type?: string } | undefined)?.content_type;
-        return Promise.resolve(content_type === "anime" ? [] : TITLES);
+        const contentType = (args as { contentType?: string } | undefined)?.contentType;
+        return Promise.resolve(contentType === "anime" ? [] : TITLES);
       }
       return Promise.resolve(null);
     });
@@ -298,7 +298,7 @@ describe("LibraryPage", () => {
     await screen.findByText("Steins;Gate");
 
     await waitFor(() => {
-      expect(invoke).toHaveBeenCalledWith("assets_resolve", { asset_ids: ["a-1", "a-2"] });
+      expect(invoke).toHaveBeenCalledWith("assets_resolve", { assetIds: ["a-1", "a-2"] });
     });
     expect(await screen.findByRole("img", { name: "Steins;Gate" })).toBeInTheDocument();
     expect(screen.getByRole("img", { name: "Steins;Gate" })).toHaveAttribute(
