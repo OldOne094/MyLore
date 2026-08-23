@@ -377,6 +377,13 @@ impl ProviderCoordinator {
             }
         }
 
+        // Global content-type filter (safety net): some providers return
+        // mixed-type results even with internal filtering. This guarantees
+        // the caller only sees hits matching the requested type.
+        if let Some(ct) = content_type {
+            hits.retain(|hit| hit.candidate.content_type == *ct);
+        }
+
         SearchOutcome { hits, failures }
     }
 
