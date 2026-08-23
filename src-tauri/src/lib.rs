@@ -117,12 +117,21 @@ pub fn run() {
             infrastructure::nu_bridge::init_global(nu_state.clone());
             {
                 use tauri::WebviewUrl;
-                let init_script = r#"(function() {
+                                let init_script = r#"(function() {
                   const ready = () => window.__TAURI__ && window.__TAURI__.core && window.__TAURI__.core.invoke;
                   let attempts = 0;
+                  const diag = (tag) => {
+                    try {
+                      document.title = 'NU|' + tag + '|' + attempts +
+                        '|ipc=' + (ready() ? 'y' : 'n') +
+                        '|clr=' + (document.cookie.indexOf('cf_clearance') >= 0 ? 'y' : 'n') +
+                        '|' + location.href.slice(0, 80);
+                    } catch (e) {}
+                  };
                   const tick = () => {
                     attempts++;
-                    if (!ready()) { if (attempts < 60) setTimeout(tick, 1000); return; }
+                    diag('tick');
+                    if (!ready()) { if (attempts < 90) setTimeout(tick, 2000); else diag('dead'); return; }
                     window.__TAURI__.core
                       .invoke('nu_clearance_report', {
                         payloadJson: JSON.stringify({
@@ -131,12 +140,14 @@ pub fn run() {
                           href: location.href,
                         }),
                       })
-                      .catch(function () {});
-                    if (attempts < 60) setTimeout(tick, 4000);
+                      .then(function () { diag('sent'); })
+                      .catch(function (e) { diag('err:' + String(e).slice(0, 40)); });
+                    if (attempts < 90) setTimeout(tick, 4000);
                   };
                   if (document.readyState === 'complete') setTimeout(tick, 2000);
                   else window.addEventListener('load', () => setTimeout(tick, 2000));
-                })();"#;
+                 })();"#
+;
                 match tauri::WebviewWindowBuilder::new(
                     app,
                     infrastructure::nu_bridge::WINDOW_LABEL,
@@ -148,7 +159,8 @@ pub fn run() {
                 .build()
                 {
                     Ok(window) => {
-                        infrastructure::nu_bridge::spawn_refresher(app.handle().clone(), nu_state);
+                        infrastructure::nu_bridge::spawn_refresher(app.handle().clone(), nu_state.clone());
+                        infrastructure::nu_bridge::spawn_title_diagnostics(app.handle().clone(), nu_state);
                         tracing::info!(
                             window = %window.label(),
                             "NovelUpdates clearance harvester started"

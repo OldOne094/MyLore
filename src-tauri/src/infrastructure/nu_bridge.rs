@@ -122,6 +122,29 @@ pub fn spawn_refresher(app: tauri::AppHandle, state: Arc<NuClearanceState>) {
     });
 }
 
+/// Spawn a short-lived diagnostic poller: while no clearance exists yet, log
+/// the harvester window's document.title (written by the init script's `diag`)
+/// so the IPC-free state of the remote page is visible in the host log.
+pub fn spawn_title_diagnostics(app: tauri::AppHandle, state: Arc<NuClearanceState>) {
+    tauri::async_runtime::spawn(async move {
+        for _ in 0..60 {
+            tokio::time::sleep(std::time::Duration::from_secs(5)).await;
+            if state.snapshot().is_some() {
+                tracing::info!("NU diagnostics: clearance present; title poller stopping");
+                return;
+            }
+            if let Some(window) = app.get_webview_window(WINDOW_LABEL) {
+                match window.title() {
+                    Ok(title) if title.starts_with("NU|") => {
+                        tracing::info!(title = %title, "NU harvester page state")
+                    }
+                    _ => {}
+                }
+            }
+        }
+    });
+}
+
 static GLOBAL: std::sync::OnceLock<Arc<NuClearanceState>> = std::sync::OnceLock::new();
 
 /// Install the process-wide clearance state. Called once from app setup.
