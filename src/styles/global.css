@@ -159,3 +159,36 @@ body {
   outline: 1px solid var(--img-outline);
   outline-offset: -1px;
 }
+
+/* ---------------------------------------------------------------------------
+ * Theme-aware scrollbars. A polished desktop app should not ship Chromium's
+ * default gray chrome; a thin token-colored bar reads as part of the surface.
+ * ------------------------------------------------------------------------- */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: var(--border-strong) transparent;
+}
+
+::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background-color: var(--border-subtle);
+  border-radius: var(--radius-full);
+  border: 3px solid transparent;
+  background-clip: padding-box;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background-color: var(--border-strong);
+}
+
+::-webkit-scrollbar-corner {
+  background: transparent;
+}

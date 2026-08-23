@@ -20,11 +20,11 @@ export function EmptyState({ icon: Icon, title, hint, action, className }: Empty
         className,
       )}
     >
-      <div className="flex size-12 items-center justify-center rounded-full bg-bg-hover text-text-tertiary">
+      <div className="flex size-12 items-center justify-center rounded-full bg-accent-soft text-accent">
         <Icon size={24} aria-hidden="true" />
       </div>
-      <h2 className="mt-1 text-md font-semibold text-text-primary">{title}</h2>
-      {hint ? <p className="max-w-sm text-sm text-text-secondary">{hint}</p> : null}
+      <h2 className="mt-1 text-balance text-md font-semibold text-text-primary">{title}</h2>
+      {hint ? <p className="max-w-sm text-pretty text-sm text-text-secondary">{hint}</p> : null}
       {action ? <div className="mt-2">{action}</div> : null}
     </div>
   );

@@ -92,7 +92,7 @@ export function ToastProvider({ children, duration = 5000 }: ToastProviderProps)
               </div>
               <ToastPrimitive.Close
                 aria-label="Dismiss"
-                className="shrink-0 rounded-sm p-1 text-text-tertiary transition-colors duration-150 ease-out hover:bg-bg-hover hover:text-text-primary"
+                className="shrink-0 rounded-sm p-1.5 text-text-tertiary transition-colors duration-150 ease-out hover:bg-bg-hover hover:text-text-primary"
               >
                 <X size={14} aria-hidden="true" />
               </ToastPrimitive.Close>

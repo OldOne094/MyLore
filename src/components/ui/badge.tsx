@@ -18,19 +18,34 @@ const VARIANT_CLASSES: Record<BadgeVariant, string> = {
   repeat: "text-status-repeat bg-status-repeat/12 border-status-repeat/30",
 };
 
+/** Status variants lead with a color dot so a card's state scans at a glance
+    even where several badges sit side by side (type + status + year). */
+const DOT_VARIANTS: Partial<Record<BadgeVariant, string>> = {
+  planned: "bg-status-planned",
+  inprogress: "bg-status-inprogress",
+  completed: "bg-status-completed",
+  onhold: "bg-status-onhold",
+  dropped: "bg-status-dropped",
+  repeat: "bg-status-repeat",
+};
+
 export interface BadgeProps extends HTMLAttributes<HTMLSpanElement> {
   variant?: BadgeVariant;
 }
 
-export function Badge({ variant = "neutral", className, ...props }: BadgeProps) {
+export function Badge({ variant = "neutral", className, children, ...props }: BadgeProps) {
+  const dot = DOT_VARIANTS[variant];
   return (
     <span
       className={cn(
-        "inline-flex items-center gap-1 whitespace-nowrap rounded-full border px-2.5 py-0.5 text-xs font-medium",
+        "inline-flex items-center gap-1.5 whitespace-nowrap rounded-full border px-2.5 py-0.5 text-xs font-medium",
         VARIANT_CLASSES[variant],
         className,
       )}
       {...props}
-    />
+    >
+      {dot ? <span aria-hidden="true" className={cn("size-1.5 rounded-full", dot)} /> : null}
+      {children}
+    </span>
   );
 }

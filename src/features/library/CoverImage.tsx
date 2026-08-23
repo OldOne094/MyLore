@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { convertFileSrc } from "@tauri-apps/api/core";
 import { cn } from "@/lib/cn";
 import type { AssetView } from "@/api";
@@ -7,7 +8,8 @@ import { TYPE_ICONS } from "./mediaMeta";
    (`status === "cached"` with a local path) the cached file is served through
    the Tauri asset protocol (`convertFileSrc`); any other status (including
    `failed`/`missing` and not-yet-resolved) falls back to the content-type
-   placeholder icon so broken URLs never show a broken image. */
+   placeholder icon so broken URLs never show a broken image. The image fades
+   in over ~150ms once decoded instead of popping into place. */
 
 export interface CoverImageProps {
   /** Resolved asset view; `undefined`/`null` renders the placeholder icon. */
@@ -29,6 +31,7 @@ export function CoverImage({
   className,
   imgClassName,
 }: CoverImageProps) {
+  const [loaded, setLoaded] = useState(false);
   const src =
     asset?.status === "cached" && asset.local_path ? convertFileSrc(asset.local_path) : null;
 
@@ -38,7 +41,12 @@ export function CoverImage({
         src={src}
         alt={alt}
         loading="lazy"
-        className={cn("cover-art h-full w-full object-cover", imgClassName)}
+        onLoad={() => setLoaded(true)}
+        className={cn(
+          "cover-art h-full w-full object-cover transition-opacity duration-150 ease-out",
+          loaded ? "opacity-100" : "opacity-0",
+          imgClassName,
+        )}
       />
     );
   }

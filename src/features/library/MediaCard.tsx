@@ -40,7 +40,13 @@ export function MediaCard({
 
   const poster = (
     <div className="relative flex aspect-[2/3] w-full items-center justify-center overflow-hidden rounded-sm bg-bg-hover text-text-tertiary">
-      <CoverImage asset={cover} contentType={item.content_type} alt={item.title} iconSize={28} />
+      <CoverImage
+        asset={cover}
+        contentType={item.content_type}
+        alt={item.title}
+        iconSize={28}
+        imgClassName="transition-transform duration-200 ease-out group-hover:scale-[1.03]"
+      />
       {item.favorite && (
         <FavoriteFlag
           size={13}
@@ -69,6 +75,13 @@ export function MediaCard({
     </>
   );
 
+  const cardClasses = cn(
+    "group relative flex flex-col gap-2 rounded-lg border border-border-subtle bg-bg-surface p-2.5",
+    "transition-[border-color,box-shadow,translate] duration-150 ease-out",
+    "hover:-translate-y-0.5 hover:border-border-strong hover:shadow-sm",
+    selected && "border-accent ring-1 ring-accent",
+  );
+
   if (selectable) {
     return (
       <button
@@ -76,16 +89,12 @@ export function MediaCard({
         aria-pressed={selected}
         aria-label={item.title}
         onClick={() => onToggle?.(item.id)}
-        className={cn(
-          "relative flex flex-col gap-2 rounded-lg border bg-bg-surface p-2.5 text-start",
-          "transition-colors duration-150 ease-out hover:border-border-strong",
-          selected && "border-accent ring-1 ring-accent",
-        )}
+        className={cn(cardClasses, "text-start")}
       >
         <span
           aria-hidden="true"
           className={cn(
-            "absolute end-2 top-2 flex size-5 items-center justify-center rounded-sm border",
+            "absolute end-2 top-2 z-10 flex size-5 items-center justify-center rounded-sm border",
             selected
               ? "border-accent bg-accent text-bg-surface"
               : "border-border-strong bg-bg-surface",
@@ -100,11 +109,7 @@ export function MediaCard({
 
   return (
     <div className="relative">
-      <Link
-        to={`/library/${item.id}`}
-        aria-label={item.title}
-        className="flex flex-col gap-2 rounded-lg border border-border-subtle bg-bg-surface p-2.5 transition-colors duration-150 ease-out hover:border-border-strong"
-      >
+      <Link to={`/library/${item.id}`} aria-label={item.title} className={cardClasses}>
         {body}
       </Link>
       <NextUnitButton item={item} className="absolute end-2 top-2" />
