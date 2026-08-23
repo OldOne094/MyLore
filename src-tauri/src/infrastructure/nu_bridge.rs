@@ -85,32 +85,46 @@ fn sync_visibility(page_proven_working: bool) {
 
 /// One-shot bootstrap + call: defines the worker on `window` when missing,
 /// then invokes it. Everything is escaped server-side via serde_json strings.
+/// Any setup/invocation failure itself reports back through the same channel,
+/// so a broken injection can never manifest as a silent timeout again.
 fn call_worker_js(id: &str, url: &str, opts_json: &str) -> String {
     format!(
         r#"(function(){{
-          if (!window.__myloreFetch) {{
+          const reportErr = (m) => {{
             const b64url = (s) => btoa(unescape(encodeURIComponent(s)))
               .replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
-            window.__myloreFetch = async (id, url, optsJson) => {{
-              try {{
-                const opts = JSON.parse(optsJson || '{{}}');
-                const init = {{ credentials: 'include', method: opts.method || 'GET' }};
-                if (opts.body) init.body = opts.body;
-                const response = await fetch(url, init);
-                const text = await response.text();
-                const payload = b64url(JSON.stringify({{ status: response.status, text }}));
-                const total = Math.max(1, Math.ceil(payload.length / {chunk}));
-                for (let i = 0; i < total; i++) {{
-                  const chunkPart = payload.substr(i * {chunk}, {chunk});
-                  location.assign('https://{host}/#r|' + id + '|' + i + '|' + total + '|' + chunkPart);
+            location.assign('https://{host}/#e|{id}|' + b64url(String(m)));
+          }};
+          try {{
+            if (!window.__myloreFetch) {{
+              const b64url = (s) => btoa(unescape(encodeURIComponent(s)))
+                .replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+              window.__myloreFetch = async (id2, url2, optsJson2) => {{
+                try {{
+                  const opts = JSON.parse(optsJson2 || '{{}}');
+                  const init = {{ credentials: 'include', method: opts.method || 'GET' }};
+                  if (opts.body) init.body = opts.body;
+                  const response = await fetch(url2, init);
+                  const text = await response.text();
+                  const payload = b64url(JSON.stringify({{ status: response.status, text }}));
+                  const total = Math.max(1, Math.ceil(payload.length / {chunk}));
+                  const sendChunk = (i) => {{
+                    if (i >= total) return;
+                    const chunkPart = payload.substr(i * {chunk}, {chunk});
+                    location.assign('https://{host}/#r|' + id2 + '|' + i + '|' + total + '|' + chunkPart);
+                    setTimeout(() => sendChunk(i + 1), 60);
+                  }};
+                  sendChunk(0);
+                }} catch (e2) {{
+                  location.assign('https://{host}/#e|' + id2 + '|' +
+                    b64url(String((e2 && e2.message) || e2)));
                 }}
-              }} catch (e) {{
-                location.assign('https://{host}/#e|' + id + '|' +
-                  b64url(String((e && e.message) || e)));
-              }}
-            }};
+              }};
+            }}
+            window.__myloreFetch({id}, {url}, {opts});
+          }} catch (setupError) {{
+            reportErr('setup: ' + String(setupError));
           }}
-          window.__myloreFetch({id}, {url}, {opts});
         }})();"#,
         chunk = CHUNK_SIZE,
         host = REPORT_HOST,
@@ -206,9 +220,17 @@ pub fn handle_report_navigation(state: &Arc<BridgeState>, url: &tauri::Url) -> b
         return true;
     }
     let Some(fragment) = url.fragment().filter(|f| !f.is_empty()) else {
+        tracing::debug!(%url, "NU report navigation without payload");
         return false;
     };
     let segments: Vec<&str> = fragment.split('|').collect();
+    tracing::debug!(
+        kind = segments.first().copied().unwrap_or("?"),
+        id = segments.get(1).copied().unwrap_or("?"),
+        chunk_index = segments.get(2).copied().unwrap_or("?"),
+        total = segments.get(3).copied().unwrap_or("?"),
+        "NU report navigation"
+    );
 
     match segments.first().copied() {
         Some("r") if segments.len() >= 5 => {
