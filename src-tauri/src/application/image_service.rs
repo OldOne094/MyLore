@@ -284,7 +284,9 @@ mod tests {
                 ResponseTemplate::new(200)
                     .insert_header("content-type", "image/jpeg")
                     .insert_header("etag", "\"etag-1\"")
-                    .set_body_bytes(b"jpeg-bytes"),
+                    .set_body_bytes(
+                        b"fake-jpeg-image-body-0000000000000000000000000000000000000000000000",
+                    ),
             )
             .mount(&server)
             .await;
@@ -327,7 +329,11 @@ mod tests {
         let cache_path = h
             .service
             .cache
-            .save("a-1", "image/jpeg", b"jpeg-bytes")
+            .save(
+                "a-1",
+                "image/jpeg",
+                b"fake-jpeg-image-body-0000000000000000000000000000000000000000000000",
+            )
             .expect("seed cache file");
         asset_repo::insert(
             &h.pool,
@@ -364,7 +370,9 @@ mod tests {
             .respond_with(
                 ResponseTemplate::new(200)
                     .insert_header("content-type", "image/png")
-                    .set_body_bytes(b"png-bytes"),
+                    .set_body_bytes(
+                        b"fake-png-image-body-00000000000000000000000000000000000000000000",
+                    ),
             )
             .mount(&server)
             .await;
@@ -449,7 +457,9 @@ mod tests {
             .respond_with(
                 ResponseTemplate::new(200)
                     .insert_header("content-type", "image/webp")
-                    .set_body_bytes(b"webp-bytes"),
+                    .set_body_bytes(
+                        b"fake-webp-image-body-000000000000000000000000000000000000000000000",
+                    ),
             )
             .expect(1)
             .mount_as_scoped(&server)
@@ -481,7 +491,9 @@ mod tests {
             .respond_with(
                 ResponseTemplate::new(200)
                     .insert_header("content-type", "image/jpeg")
-                    .set_body_bytes(b"jpeg-bytes"),
+                    .set_body_bytes(
+                        b"fake-jpeg-image-body-0000000000000000000000000000000000000000000000",
+                    ),
             )
             .mount(&server)
             .await;

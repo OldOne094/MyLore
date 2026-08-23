@@ -22,16 +22,19 @@ use super::PROVIDER_ID;
 pub(crate) const COVER_SIZE: &str = "256";
 const COVER_BASE: &str = "https://uploads.mangadex.org/covers";
 
-/// Map MangaDex's `format` to a domain content type. `one_shot`/`doujinshi`
-/// are still manga; manhwa/manhua are explicit formats; `novel` covers light
-/// and web novels hosted on MangaDex.
+/// Map MangaDex's `format` to a domain content type. Manhwa/manhua/novel are
+/// explicit formats; **everything else — including a missing `format` — is
+/// manga**. The live search endpoint returns `format: null` for most rows
+/// (uploaders rarely tag it), and MangaDex's catalog is overwhelmingly manga;
+/// treating absence as "unknown" would silently drop nearly every real hit.
 pub(crate) fn content_type(format: Option<&str>) -> ContentType {
     match format {
-        Some("manga") | Some("one_shot") | Some("doujinshi") => ContentType::Manga,
         Some("manhwa") => ContentType::Manhwa,
         Some("manhua") => ContentType::Manhua,
         Some("novel") => ContentType::Novel,
-        _ => ContentType::Other,
+        // None = untagged (the common case) plus explicit manga kinds
+        // ("manga"/"one_shot"/"doujinshi") and any unrecognized value.
+        _ => ContentType::Manga,
     }
 }
 
@@ -388,8 +391,22 @@ mod tests {
         assert_eq!(content_type(Some("manhwa")), ContentType::Manhwa);
         assert_eq!(content_type(Some("manhua")), ContentType::Manhua);
         assert_eq!(content_type(Some("novel")), ContentType::Novel);
-        assert_eq!(content_type(Some("anime")), ContentType::Other);
-        assert_eq!(content_type(None), ContentType::Other);
+        // Untagged rows are the live API's common case — manga, never dropped.
+        assert_eq!(content_type(None), ContentType::Manga);
+        assert_eq!(content_type(Some("whatever")), ContentType::Manga);
+    }
+
+    #[test]
+    fn untagged_search_rows_are_kept_as_manga() {
+        // Regression (live-API): the search endpoint returns format: null for
+        // most rows; they must surface as manga instead of being dropped.
+        let mut data: super::super::response::MangaListResponse = parse("search_manga.json");
+        for manga in data.data.iter_mut() {
+            manga.attributes.format = None;
+        }
+        let hits: Vec<ProviderCandidate> = data.data.iter().filter_map(candidate).collect();
+        assert_eq!(hits.len(), 3, "every row survives without a format tag");
+        assert!(hits.iter().all(|h| h.content_type == ContentType::Manga));
     }
 
     #[test]
