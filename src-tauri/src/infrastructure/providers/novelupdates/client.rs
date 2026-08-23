@@ -36,8 +36,31 @@ impl Default for NovelUpdatesClient {
 
 impl NovelUpdatesClient {
     pub fn new() -> Self {
+        Self::with_cookies(None)
+    }
+
+    /// Create a client with user-provided cookies (from their browser session).
+    pub fn with_cookies(cookie_str: Option<&str>) -> Self {
+        use reqwest::header::{HeaderMap, HeaderValue, ACCEPT, ACCEPT_LANGUAGE, REFERER};
+
+        let mut headers = HeaderMap::new();
+        headers.insert(
+            ACCEPT,
+            HeaderValue::from_static(
+                "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8",
+            ),
+        );
+        headers.insert(ACCEPT_LANGUAGE, HeaderValue::from_static("en-US,en;q=0.9"));
+        headers.insert(REFERER, HeaderValue::from_static("https://www.novelupdates.com/"));
+        if let Some(cookies) = cookie_str {
+            if let Ok(value) = HeaderValue::from_str(cookies) {
+                headers.insert("cookie", value);
+            }
+        }
+
         let http = reqwest::Client::builder()
-            .user_agent(APP_USER_AGENT)
+            .user_agent("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36")
+            .default_headers(headers)
             .build()
             .expect("reqwest client builds");
         Self::with_client(http)
