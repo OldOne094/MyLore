@@ -117,29 +117,46 @@ pub fn run() {
             infrastructure::nu_bridge::init_global(nu_state.clone());
             {
                 use tauri::WebviewUrl;
-                let init_script = format!(
-                    r#"(function() {{
-                      if (location.host.indexOf('novelupdates') === -1) return;
-                      const report = () => window.__TAURI__.core.invoke('{cmd}', {{
-                        payloadJson: JSON.stringify({{ ua: navigator.userAgent, cookie: document.cookie }}),
-                      }}).catch(() => {{}});
-                      setTimeout(report, 4000);
-                      setTimeout(report, 12000);
-                    }})();"#,
-                    cmd = infrastructure::nu_bridge::NU_CLEARANCE_COMMAND,
-                );
-                if let Ok(window) = tauri::WebviewWindowBuilder::new(
+                let init_script = r#"(function() {
+                  const ready = () => window.__TAURI__ && window.__TAURI__.core && window.__TAURI__.core.invoke;
+                  let attempts = 0;
+                  const tick = () => {
+                    attempts++;
+                    if (!ready()) { if (attempts < 60) setTimeout(tick, 1000); return; }
+                    window.__TAURI__.core
+                      .invoke('nu_clearance_report', {
+                        payloadJson: JSON.stringify({
+                          ua: navigator.userAgent,
+                          cookie: document.cookie,
+                          href: location.href,
+                        }),
+                      })
+                      .catch(function () {});
+                    if (attempts < 60) setTimeout(tick, 4000);
+                  };
+                  if (document.readyState === 'complete') setTimeout(tick, 2000);
+                  else window.addEventListener('load', () => setTimeout(tick, 2000));
+                })();"#;
+                match tauri::WebviewWindowBuilder::new(
                     app,
                     infrastructure::nu_bridge::WINDOW_LABEL,
                     WebviewUrl::External(infrastructure::nu_bridge::TARGET_URL.parse().expect("nu url")),
                 )
                 .visible(false)
-                .initialization_script(&init_script)
+                .initialization_script(init_script)
                 .title("MyLore background")
                 .build()
                 {
-                    infrastructure::nu_bridge::spawn_refresher(app.handle().clone(), nu_state);
-                    tracing::info!(window = %window.label(), "NovelUpdates clearance harvester started");
+                    Ok(window) => {
+                        infrastructure::nu_bridge::spawn_refresher(app.handle().clone(), nu_state);
+                        tracing::info!(
+                            window = %window.label(),
+                            "NovelUpdates clearance harvester started"
+                        );
+                    }
+                    Err(error) => {
+                        tracing::error!(%error, "failed to create the NovelUpdates clearance harvester window");
+                    }
                 }
             }
 

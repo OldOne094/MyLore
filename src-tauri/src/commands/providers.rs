@@ -74,14 +74,22 @@ pub fn nu_clearance_report(payload_json: String) -> Result<(), AppError> {
     struct Payload {
         ua: String,
         cookie: String,
+        #[serde(default)]
+        href: String,
     }
     let payload: Payload = match serde_json::from_str(&payload_json) {
         Ok(p) => p,
         Err(error) => {
-            tracing::warn!(%error, "malformed NovelUpdates clearance report");
+            tracing::warn!(%error, first = %payload_json.chars().take(120).collect::<String>(), "malformed NovelUpdates clearance report");
             return Ok(());
         }
     };
+    tracing::debug!(
+        cookie_len = payload.cookie.len(),
+        has_clearance = payload.cookie.contains("cf_clearance"),
+        href = %payload.href,
+        "NovelUpdates harvester report received"
+    );
     if let Some(state) = crate::infrastructure::nu_bridge::global() {
         state.store(payload.ua, payload.cookie);
     }
