@@ -39,9 +39,12 @@ function ProviderRow({ row }: { row: ProviderSettingsRow }) {
         onSuccess: () => {
           setKeyError(false);
         },
-        onError: () => {
+        onError: (error) => {
           setKeyError(true);
-          toast.error({ title: t("settings.providersKeySaveFailed") });
+          toast.error({
+            title: t("settings.providersKeySaveFailed"),
+            description: error instanceof Error ? error.message : String(error),
+          });
         },
       },
     );

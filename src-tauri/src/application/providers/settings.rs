@@ -157,7 +157,10 @@ impl ProviderSettingsService {
                 .ok_or_else(|| AppError::Config(format!("unknown provider {provider:?}")))?;
             if config.enabled != enabled {
                 config.enabled = enabled;
-                state.coordinator = rebuild(&self.builder, &state.configs)?;
+            state.coordinator = rebuild(&self.builder, &state.configs).map_err(|e| {
+                tracing::error!(provider, error = %e, "set_key: coordinator rebuild failed");
+                e
+            })?;
             }
         }
         self.persist_enabled()?;
@@ -170,6 +173,7 @@ impl ProviderSettingsService {
     /// never persisted in the JSON settings file and never returned.
     pub fn set_key(&self, provider: &str, api_key: &str) -> Result<ProviderSettingsView, AppError> {
         let trimmed = api_key.trim();
+        tracing::debug!(provider, key_len = trimmed.len(), "set_key: starting");
         let (exists, requires_key) = {
             let state = self.state.read().unwrap();
             (
@@ -181,6 +185,7 @@ impl ProviderSettingsService {
                     .any(|p| p.id == provider && p.capabilities.auth == AuthKind::Key),
             )
         };
+        tracing::debug!(provider, exists, requires_key, "set_key: checks done");
         if !exists {
             return Err(AppError::Config(format!("unknown provider {provider:?}")));
         }
