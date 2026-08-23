@@ -288,10 +288,14 @@ pub fn handle_report_navigation(state: &Arc<BridgeState>, url: &tauri::Url) -> b
     false // cancel: report navigations are envelopes, not destinations
 }
 
-/// Decode `{status, text}` JSON transported as base64url.
+/// Decode `{status, text}` JSON transported as base64url. The JS side strips
+/// the padding, so decode with the no-pad engine.
 fn decode_response(assembled_b64: &str) -> Result<(u16, String), String> {
-    let normalized = assembled_b64.replace("-", "+").replace("_", "/");
-    let bytes = base64::engine::general_purpose::STANDARD
+    let normalized = assembled_b64
+        .trim_end_matches('=')
+        .replace("-", "+")
+        .replace("_", "/");
+    let bytes = base64::engine::general_purpose::STANDARD_NO_PAD
         .decode(normalized.as_bytes())
         .map_err(|e| format!("base64: {e}"))?;
     #[derive(serde::Deserialize)]
