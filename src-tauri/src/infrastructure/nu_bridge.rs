@@ -132,40 +132,67 @@ pub fn spawn_refresher(app: tauri::AppHandle, state: Arc<NuClearanceState>) {
     });
 }
 
-/// Spawn a short-lived diagnostic/harvest poller: reads the harvester
-/// window's document.title, which the init script rewrites every few seconds
-/// with either a `NU|…` state marker or a `NUC|<base64url(json)>` payload
-/// carrying {ua, cookie}. This channel is IPC-free by design — remote-page
-/// invoke ACLs never factor in. Stops once a clearance lands.
+/// The fake host the harvester page "navigates" to when reporting. The
+/// builder's on_navigation hook intercepts it, reads the base64url fragment,
+/// stores the clearance, and cancels the navigation — nothing ever hits the
+/// network and the live page is untouched.
+pub const REPORT_URL_PREFIX: &str = "https://nu-report.mylore.internal/#";
+
+/// JavaScript handed to `WebviewWindow::eval` by the poller: reads the CURRENT
+/// ua+cookies and routes them through the interception channel above. Unlike
+/// `window.title()` (which reflects the static builder title, not the live
+/// document), this exercises real browser APIs from inside the page.
+pub const REPORT_EVAL_JS: &str = r#"(function(){
+  try {
+    const payload = JSON.stringify({ ua: navigator.userAgent, cookie: document.cookie });
+    const b64 = btoa(unescape(encodeURIComponent(payload)))
+      .replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+    location.assign('https://nu-report.mylore.internal/#' + b64);
+  } catch (e) {}
+})();"#;
+
+/// Spawn the harvest poller: until a clearance lands, poke the harvester
+/// page (via eval) every 3 seconds so it reports through the on_navigation
+/// channel. Stops early once a clearance exists.
 pub fn spawn_title_diagnostics(app: tauri::AppHandle, state: Arc<NuClearanceState>) {
     tauri::async_runtime::spawn(async move {
-        for _ in 0..240 {
+        for _ in 0..400 {
             tokio::time::sleep(std::time::Duration::from_secs(3)).await;
-            let Some(window) = app.get_webview_window(WINDOW_LABEL) else {
-                continue;
-            };
-            let Ok(title) = window.title() else { continue };
-            if let Some(encoded) = title.strip_prefix("NUC|") {
-                match decode_payload(encoded) {
-                    Ok((ua, cookie)) => {
-                        tracing::info!(
-                            cookie_len = cookie.len(),
-                            has_clearance = cookie.contains("cf_clearance"),
-                            "NU title-channel payload decoded"
-                        );
-                        state.store(ua, cookie);
-                    }
-                    Err(error) => {
-                        tracing::warn!(%error, "NU title payload undecodable");
-                    }
-                }
-                continue;
+            if state.snapshot().is_some() {
+                tracing::info!("NU harvest poller: clearance present; stopping");
+                return;
             }
-            if title.starts_with("NU|") && state.snapshot().is_none() {
-                tracing::info!(title = %title, "NU harvester page state");
+            if let Some(window) = app.get_webview_window(WINDOW_LABEL) {
+                if let Err(error) = window.eval(REPORT_EVAL_JS) {
+                    tracing::debug!(%error, "NU report eval failed");
+                }
             }
         }
+        tracing::warn!("NU harvest poller gave up after 20 minutes without clearance");
     });
+}
+
+/// Handle one intercepted report navigation. Returns true only for URLs the
+/// webview should actually load.
+pub fn handle_report_navigation(state: &NuClearanceState, url: &tauri::Url) -> bool {
+    if url.host_str() != Some("nu-report.mylore.internal") {
+        return true;
+    }
+    match url.fragment().filter(|f| !f.is_empty()) {
+        Some(encoded) => match decode_payload(encoded) {
+            Ok((ua, cookie)) => {
+                tracing::info!(
+                    cookie_len = cookie.len(),
+                    has_clearance = cookie.contains("cf_clearance"),
+                    "NU clearance received via navigation channel"
+                );
+                state.store(ua, cookie);
+            }
+            Err(error) => tracing::warn!(%error, "NU report payload undecodable"),
+        },
+        None => tracing::warn!("NU report navigation carried no payload"),
+    }
+    false // always cancel: this "navigation" was only a message envelope
 }
 
 /// Decode `NUC|` base64url(JSON {ua, cookie}) payloads.

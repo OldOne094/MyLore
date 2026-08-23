@@ -109,56 +109,41 @@ pub fn run() {
             });
             app.manage(backups);
 
-            // NovelUpdates Cloudflare-clearance bridge (MISSION-129): a hidden
-            // webview solves the managed JS challenge once with a real engine,
-            // then reports its cookies back through `nu_clearance_report`; the
-            // NU transport rides the clearance until it goes stale.
+            // NovelUpdates Cloudflare-clearance bridge (MISSION-129): a real
+            // browser engine (this visible mini webview) solves the managed
+            // JS challenge; the page reports its UA+cookies through an
+            // intercepted navigation to a fake host, and the NU transport
+            // rides the clearance until it goes stale.
             let nu_state = Arc::new(infrastructure::nu_bridge::NuClearanceState::default());
             infrastructure::nu_bridge::init_global(nu_state.clone());
             {
                 use tauri::WebviewUrl;
-                let init_script = r#"(function() {
-                  const b64url = (s) => btoa(unescape(encodeURIComponent(s)))
-                    .replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
-                  let attempts = 0;
-                  const tick = () => {
-                    attempts++;
-                    const payload = JSON.stringify({
-                      ua: navigator.userAgent,
-                      cookie: document.cookie,
-                    });
-                    // Primary channel (no IPC involved): title carries a
-                    // base64url payload the Rust poller decodes.
-                    try { document.title = 'NUC|' + b64url(payload); } catch (e) {}
-                    // Secondary channel: direct IPC when the ACL allows it.
-                    if (window.__TAURI__ && window.__TAURI__.core && window.__TAURI__.core.invoke) {
-                      window.__TAURI__.core
-                        .invoke('nu_clearance_report', {
-                          payloadJson: JSON.stringify({ ua: navigator.userAgent, cookie: document.cookie, href: location.href }),
-                        })
-                        .catch(function () {});
-                    }
-                    if (attempts < 200) setTimeout(tick, 4000);
-                  };
-                  setTimeout(tick, 1500);
-                })();"#;
+                let nav_state = nu_state.clone();
                 match tauri::WebviewWindowBuilder::new(
                     app,
                     infrastructure::nu_bridge::WINDOW_LABEL,
-                    WebviewUrl::External(infrastructure::nu_bridge::TARGET_URL.parse().expect("nu url")),
+                    WebviewUrl::External(
+                        infrastructure::nu_bridge::TARGET_URL
+                            .parse()
+                            .expect("nu url"),
+                    ),
                 )
-                // MISSION-129: WebView2 can defer script/navigation for never-
-                // shown windows, which starved the harvester entirely. Keep it
-                // visible but tiny; NuClearanceState::store hides it after the
-                // first successful harvest (and shows it again when stale).
                 .inner_size(340.0, 220.0)
-                .initialization_script(init_script)
+                .on_navigation(move |url| {
+                    infrastructure::nu_bridge::handle_report_navigation(&nav_state, url)
+                })
                 .title("MyLore · NovelUpdates link")
                 .build()
                 {
                     Ok(window) => {
-                        infrastructure::nu_bridge::spawn_refresher(app.handle().clone(), nu_state.clone());
-                        infrastructure::nu_bridge::spawn_title_diagnostics(app.handle().clone(), nu_state);
+                        infrastructure::nu_bridge::spawn_refresher(
+                            app.handle().clone(),
+                            nu_state.clone(),
+                        );
+                        infrastructure::nu_bridge::spawn_title_diagnostics(
+                            app.handle().clone(),
+                            nu_state,
+                        );
                         infrastructure::nu_bridge::attach_window(&window);
                         tracing::info!(
                             window = %window.label(),
@@ -166,7 +151,10 @@ pub fn run() {
                         );
                     }
                     Err(error) => {
-                        tracing::error!(%error, "failed to create the NovelUpdates clearance harvester window");
+                        tracing::error!(
+                            %error,
+                            "failed to create the NovelUpdates clearance harvester window"
+                        );
                     }
                 }
             }
