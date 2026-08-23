@@ -63,19 +63,22 @@ impl NuClearanceState {
             None => true,
         };
         if fresh {
+            let has_clearance = cookie.contains("cf_clearance");
             tracing::info!(
                 ua_len = user_agent.len(),
                 cookie_len = cookie.len(),
+                has_clearance,
                 "NovelUpdates clearance harvested"
             );
             map.insert(
                 "current".to_string(),
                 Clearance {
                     user_agent,
-                    cookie,
+                    cookie: cookie.clone(),
                     harvested_at: Instant::now(),
                 },
             );
+            sync_visibility(has_clearance);
         }
         self.notify.notify_waiters();
     }
@@ -89,6 +92,12 @@ impl NuClearanceState {
     pub fn mark_stale(&self) {
         let gen = self.stale_generation.fetch_add(1, Ordering::SeqCst);
         tracing::warn!(generation = gen, "NovelUpdates clearance marked stale");
+        // If a previously-good clearance died, surface the window again so an
+        // interactive challenge can be solved by hand. Before the first
+        // harvest the window is already visible by default.
+        if self.snapshot().is_some() {
+            sync_visibility(false);
+        }
         self.notify.notify_waiters();
     }
 
@@ -135,14 +144,33 @@ pub fn spawn_title_diagnostics(app: tauri::AppHandle, state: Arc<NuClearanceStat
             }
             if let Some(window) = app.get_webview_window(WINDOW_LABEL) {
                 match window.title() {
-                    Ok(title) if title.starts_with("NU|") => {
-                        tracing::info!(title = %title, "NU harvester page state")
-                    }
-                    _ => {}
+                    Ok(title) => tracing::info!(title = %title, "NU harvester page state"),
+                    Err(e) => tracing::info!(error = %e, "NU harvester title unreadable"),
                 }
+            } else {
+                tracing::info!("NU harvester window not found by label");
             }
         }
     });
+}
+
+/// Handle to the live harvester window (for show/hide on clearance changes).
+static WINDOW: std::sync::OnceLock<tauri::WebviewWindow> = std::sync::OnceLock::new();
+
+/// Register the harvester window so clearance transitions can toggle it.
+pub fn attach_window(window: &tauri::WebviewWindow) {
+    let _ = WINDOW.set(window.clone());
+}
+
+fn sync_visibility(has_clearance: bool) {
+    if let Some(window) = WINDOW.get() {
+        if has_clearance {
+            let _ = window.hide();
+        } else {
+            let _ = window.show();
+            let _ = window.set_focus();
+        }
+    }
 }
 
 static GLOBAL: std::sync::OnceLock<Arc<NuClearanceState>> = std::sync::OnceLock::new();

@@ -153,14 +153,19 @@ pub fn run() {
                     infrastructure::nu_bridge::WINDOW_LABEL,
                     WebviewUrl::External(infrastructure::nu_bridge::TARGET_URL.parse().expect("nu url")),
                 )
-                .visible(false)
+                // MISSION-129: WebView2 can defer script/navigation for never-
+                // shown windows, which starved the harvester entirely. Keep it
+                // visible but tiny; NuClearanceState::store hides it after the
+                // first successful harvest (and shows it again when stale).
+                .inner_size(340.0, 220.0)
                 .initialization_script(init_script)
-                .title("MyLore background")
+                .title("MyLore · NovelUpdates link")
                 .build()
                 {
                     Ok(window) => {
                         infrastructure::nu_bridge::spawn_refresher(app.handle().clone(), nu_state.clone());
                         infrastructure::nu_bridge::spawn_title_diagnostics(app.handle().clone(), nu_state);
+                        infrastructure::nu_bridge::attach_window(&window);
                         tracing::info!(
                             window = %window.label(),
                             "NovelUpdates clearance harvester started"
