@@ -6,6 +6,7 @@ use mylore_lib::domain::provider::Provider;
 use mylore_lib::infrastructure::providers::anilist::{AniListClient, AniListProvider};
 
 #[tokio::test]
+#[ignore = "requires the app webview bridge"]
 async fn live_novelupdates_search() {
     use mylore_lib::infrastructure::providers::novelupdates::{
         NovelUpdatesClient, NovelUpdatesProvider,
@@ -20,7 +21,7 @@ async fn live_novelupdates_search() {
         Ok(html) => println!(
             "RAW GET OK: {} bytes; head: {}",
             html.len(),
-            &html.chars().take(160).collect::<String>()
+            html.chars().take(160).collect::<String>()
         ),
         Err(e) => println!("RAW GET ERR: {e}"),
     }

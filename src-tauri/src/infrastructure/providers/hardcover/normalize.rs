@@ -231,7 +231,7 @@ mod tests {
         let payload = envelope.data.unwrap();
         payload
             .search
-            .results
+            .into_rows()
             .iter()
             .map(|value| serde_json::from_value(value.clone()).unwrap())
             .collect()

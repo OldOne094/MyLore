@@ -140,6 +140,7 @@ impl NovelUpdatesClient {
     }
 }
 
+#[cfg(not(test))]
 fn transport_error(message: String) -> ProviderError {
     ProviderError::Transport {
         provider: PROVIDER_ID.to_string(),
@@ -147,6 +148,7 @@ fn transport_error(message: String) -> ProviderError {
     }
 }
 
+#[cfg(not(test))]
 fn encode_query(params: &[(&str, &str)]) -> String {
     params
         .iter()
@@ -163,6 +165,7 @@ fn encode_query(params: &[(&str, &str)]) -> String {
 
 /// Minimal percent-encoding for the fixed, simple keys/values this adapter
 /// sends (letters, digits and a few safe punctuation marks pass through).
+#[cfg(not(test))]
 fn transport_error_escape(value: &str) -> String {
     let mut out = String::with_capacity(value.len());
     for byte in value.bytes() {

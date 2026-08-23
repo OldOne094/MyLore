@@ -20,18 +20,40 @@ pub(crate) struct GraphError {
     pub message: Option<String>,
 }
 
-/// `data.search` — Typesense-backed search results. `results` is a JSON blob
-/// array (the docs' "huge blob of data" to parse yourself).
+/// `data.search` — Typesense-backed search results. `results` is documented
+/// as a JSON blob array, but Hardcover occasionally answers with an object
+/// wrapper instead (live-observed: "invalid type: map, expected a sequence"),
+/// so the raw shape is kept and normalized by [`SearchResults::into_rows`].
 #[derive(Debug, Deserialize)]
 pub(crate) struct SearchPayload {
     #[serde(rename = "search")]
     pub search: SearchResults,
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Clone, Deserialize)]
 pub(crate) struct SearchResults {
     #[serde(default)]
-    pub results: Vec<Value>,
+    pub results: Value,
+}
+
+impl SearchResults {
+    /// Normalize whatever `results` actually is into candidate rows: a bare
+    /// array passes through; known container keys unwrap one level; any other
+    /// single object is treated as one row; everything else is empty.
+    pub(crate) fn into_rows(self) -> Vec<Value> {
+        match self.results {
+            Value::Array(rows) => rows,
+            Value::Object(map) => {
+                for key in ["results", "hits", "docs"] {
+                    if let Some(Value::Array(rows)) = map.get(key) {
+                        return rows.clone();
+                    }
+                }
+                vec![Value::Object(map)]
+            }
+            _ => Vec::new(),
+        }
+    }
 }
 
 /// One search-result row parsed out of the Typesense blob. Typesense may
@@ -132,4 +154,44 @@ pub(crate) struct Edition {
     pub isbn_10: Option<String>,
     #[serde(rename = "isbn_13", default)]
     pub isbn_13: Option<String>,
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn results_normalize_every_live_shape() {
+        // Documented shape: a bare array.
+        let rows = SearchResults {
+            results: serde_json::json!([{"id": 1}, {"id": 2}]),
+        }
+        .into_rows();
+        assert_eq!(rows.len(), 2);
+
+        // Live-observed regression: an object wrapper around the rows.
+        let rows = SearchResults {
+            results: serde_json::json!({"results": [{"id": 7}]}),
+        }
+        .into_rows();
+        assert_eq!(rows.len(), 1);
+        assert_eq!(rows[0]["id"], 7);
+
+        // Typesense-style container.
+        let rows = SearchResults {
+            results: serde_json::json!({"hits": [{"id": 9}]}),
+        }
+        .into_rows();
+        assert_eq!(rows.len(), 1);
+
+        // A lone object is treated as one row.
+        let rows = SearchResults {
+            results: serde_json::json!({"id": 3}),
+        }
+        .into_rows();
+        assert_eq!(rows.len(), 1);
+
+        // Nothing usable -> empty, never an error.
+        assert!(SearchResults { results: Value::Null }.into_rows().is_empty());
+    }
 }

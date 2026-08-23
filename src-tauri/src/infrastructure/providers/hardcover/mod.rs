@@ -129,9 +129,8 @@ impl Provider for HardcoverProvider {
                 json!({ "query": query, "per_page": 20, "page": 1 }),
             )
             .await?;
-        let candidates = data
-            .search
-            .results
+        let rows = data.search.into_rows();
+        let candidates = rows
             .iter()
             .filter_map(|value| serde_json::from_value::<response::SearchBook>(value.clone()).ok())
             .filter_map(|row| normalize::candidate(&row));

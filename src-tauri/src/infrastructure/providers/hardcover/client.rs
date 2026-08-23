@@ -163,7 +163,7 @@ mod tests {
             .graphql(graphql::SEARCH_QUERY, json!({ "query": "dune" }))
             .await
             .unwrap();
-        assert_eq!(data.search.results.len(), 3);
+        assert_eq!(rows_len(&data.search), 3);
     }
 
     #[tokio::test]
@@ -184,7 +184,7 @@ mod tests {
             .graphql(graphql::SEARCH_QUERY, json!({ "query": "dune" }))
             .await
             .unwrap();
-        assert_eq!(data.search.results.len(), 3);
+        assert_eq!(rows_len(&data.search), 3);
     }
 
     #[tokio::test]
@@ -278,5 +278,9 @@ mod tests {
             .await
             .unwrap_err();
         assert!(matches!(err, ProviderError::InvalidResponse { .. }));
+    }
+    /// Test helper: normalize a search payload into its row count.
+    fn rows_len(search: &crate::infrastructure::providers::hardcover::response::SearchResults) -> usize {
+        crate::infrastructure::providers::hardcover::response::SearchResults::into_rows(search.clone()).len()
     }
 }
