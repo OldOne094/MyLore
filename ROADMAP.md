@@ -349,35 +349,56 @@ Filed from the first real dogfood run of 0.1.0-alpha.1. **All six gate Beta** �
 | MISSION-126 Provider live-debug | **DONE** (2026-08-22) — the root cause of "AniList returns nothing" was the null-type GraphQL bug (fixed in MISSION-124). MangaDex's content-type filtering and format[] params are correct per its wiremock tests. Per-provider error surfacing already exists in DiscoverPage (`data.failures` rendered at the bottom) ✓ · new test: every default provider config declares ≥1 content type (a config with zero types never serves any query) ✓ · remaining caveat: NU's Cloudflare layer may block live scraping (documented since 065); Jikan fallback path is exercised via fixtures but not live-tested from this network · **667 backend tests**, clippy clean ✓ |
 | MISSION-127 | **External-hit detail screen** (StoryGraph/Streamio-style): clicking a Discover result shows a rich detail view — synopsis, cover art, authors/creators, genres/tags, pub status/dates, episode/chapter counts, external links, and the import action. Currently only name + type are shown, making it impossible to judge a title before importing. Reuses `ProviderMedia` from `get_details`; caches via TanStack Query; i18n EN+AR. | 126 | Core | M | **DONE** — see log |
 | MISSION-127 External-hit detail screen | **DONE** (2026-08-22) — clicking a Discover result title opens a rich detail dialog: cover art (from `cover_url`), full synopsis, authors/studios from `people`, genres + theme tags as chips, pub status/year/format, pages/episodes/chapters counts, and an external site link — all fetched live via a new `provider_get_details` command that wraps the coordinator's `get_details` and maps `ProviderMedia` to a flat JSON object ✓ · non-library hits show the detail button on click; in-library hits keep their existing library link ✓ · import button inside the dialog reuses the existing `useImportProvider` flow ✓ · contract: `provider_get_details { provider, id } → unknown`; codegen regenerated ✓ · i18n `discover.detailTitle/detailError/detailAuthors/detailStudios/detailPages/detailEpisodes/detailChapters/detailExternalLink` EN+AR ✓ · gates: **667 backend tests**, clippy clean, **315 frontend tests**, tsc / eslint clean ✓ |
-| MISSION-128 | **UI polish & spacing pass**: audit every screen for consistent button sizing (`--control-height` tokens), logical gap/padding rhythm (4/8/16/24), visual hierarchy (heading sizes, text tiers), and elimination of AI-slop patterns (uniform card grids, generic shadows). Aligns with DESIGN_SYSTEM.md §6 and the restraint principle (MISSION-095). | 031 | Important | M |
-| FIX-IPC-CASE | **camelCase invoke payloads (Tauri v2 arg convention)** — root cause of several dogfooding bugs: Tauri v2 maps camelCase JS payload keys to snake_case Rust command params; snake_case keys were silently dropped (`Option` args → `None`, e.g. `content_type` filters no-op) or rejected as missing fields (e.g. `provider_set_key`'s `api_key` → "key save failed", `import_provider`'s `provider_id`). Codegen now emits camelCase arg names via `toCamelCase()`; every frontend invoke site + test assertion updated; response DTOs stay snake_case (serde contract unchanged). Nested DTO *values* (e.g. `SmartFilter`/`BulkFilter`) also stay snake_case — only top-level command args are converted by Tauri. | 009 | Critical | S |
+| MISSION-128 | **UI polish & spacing pass**: audit every screen for consistent button sizing (`--control-height` tokens), logical gap/padding rhythm (4/8/16/24), visual hierarchy (heading sizes, text tiers), and elimination of AI-slop patterns (uniform card grids, generic shadows). Aligns with DESIGN_SYSTEM.md §6 and the restraint principle (MISSION-095). | 031 | Important | M | **DONE** (2026-08-22) — delivered as a three-pass interface-feel program: presence animations for dialogs/popovers/toasts (interruptible CSS keyframes under Radix data-state), press feedback scale(0.96) with explicit transition properties, theme-aware cover-art hairline outlines + scrollbar styling, card hover lift/zoom language, fade-in covers, status-badge dots, accent empty-state discs, text-balance/pretty typography, tab hit areas, outline+offset focus ring correct over every surface, Segoe UI Variable Text lead on Win11, no-drag cover art, chrome select-none |
+| FIX-IPC-CASE | **camelCase invoke payloads (Tauri v2 arg convention)** — root cause of several dogfooding bugs: Tauri v2 maps camelCase JS payload keys to snake_case Rust command params; snake_case keys were silently dropped (`Option` args → `None`, e.g. `content_type` filters no-op) or rejected as missing fields (e.g. `provider_set_key`'s `api_key` → "key save failed", `import_provider`'s `provider_id`). Codegen now emits camelCase arg names via `toCamelCase()`; every frontend invoke site + test assertion updated; response DTOs stay snake_case (serde contract unchanged). Nested DTO *values* (e.g. `SmartFilter`/`BulkFilter`) also stay snake_case — only top-level command args are converted by Tauri. | 009 | Critical | S | **DONE** (2026-08-23) — commit 11562d1; codegen emits camelCase args, all invoke sites + payload assertions migrated, ROADMAP entry documents the convention |
 | MISSION-129 | **NovelUpdates Cloudflare bypass**: reqwest's TLS fingerprint is detected by Cloudflare as non-browser → 401/403. The project's own `webtest/` proves it works using Python's `curl_cffi` with `impersonate="chrome131"`. Options: (a) switch to a Rust TLS-impersonation HTTP client like `rquest`, (b) proxy through WebView2, or (c) allow users to paste session cookies. | 065 | Core | L |
 | MISSION-130 | **AniList auth + fallback**: AniList intermittently returns 403 from Cloudflare even with correct queries. Add optional AniList OAuth token setting (users paste token from anilist.co/settings/developer), attach as Bearer header on all AniList requests, and implement automatic fallback to Jikan when AniList is unavailable (the coordinator already supports this via per-provider failures). | 054 | Important | M |
 
-### FX · Future Scope (MISSION-101+)
+### FX · Future Scope — ordered execution plan (MISSION-101+)
 
 Post-Stable, behind designed seams. Nothing here blocks M1–M13 (ADR-013 scope discipline).
+Reordered (2026-08-23) around the tracker-first principle: fix what's broken → maximum
+tracking value → privacy → gradual expansions → social as an isolated phase → cloud last.
+**Excluded by product decision**: MISSION-104 (plugins), MISSION-105 (AI), MISSION-106
+(mobile companion) — revisit only on explicit demand.
+
+#### M15 · Provider reliability & tracker core
 
 | Mission | Description | Deps | Pri | Cplx |
 |---------|-------------|------|-----|------|
-| MISSION-101 | Cloud sync: aggregate-level last-write-wins + conflict resolution (`updatedAt` already designed). | 100 | Optional | L |
-| MISSION-102 | Trakt import + scrobble integration. | 100 | Optional | M |
-| MISSION-103 | SIMKL import source. | 100 | Optional | M |
-| MISSION-104 | Plugins: provider-adapter plugin seam (first plugin surface). | 100 | Optional | L |
-| MISSION-105 | AI features (optional, local, disable-able): auto-tag suggestions, summaries. | 100 | Optional | L |
-| MISSION-106 | Mobile companion (read-only or lightweight tracking). | 100 | Optional | L |
-| MISSION-107 | WN/LN chapter-release notifications + release-feed calendar (NovelUpdates-style Normal mode). | 100 | Optional | M |
-| MISSION-108 | Buddy reads with progress-gated spoiler protection (StoryGraph-style; multi-user). | 100 | Optional | L |
-| MISSION-109 | New content types: games, podcasts, music (data-only additions: contentType + progress template). | 100 | Optional | M |
-| MISSION-110 | NoviList import source (WN/LN tracker with API docs; young, watch). | 100 | Optional | M |
-| MISSION-111 | ISBNDB paid enrichment fallback (free tier: 100 req/mo). | 100 | Optional | S |
-| MISSION-112 | SQLCipher encrypted database (opt-in). | 100 | Optional | L |
-| MISSION-113 | Advanced visualizations/chart library for stats. | 100 | Optional | M |
+| MISSION-129 | **NovelUpdates Cloudflare bypass**: reqwest's TLS fingerprint is detected by Cloudflare as non-browser → 401/403. The project's own `webtest/` proves it works using Python's `curl_cffi` with `impersonate="chrome131"`. Options: (a) switch to a Rust TLS-impersonation HTTP client like `rquest`, (b) proxy through WebView2, or (c) allow users to paste session cookies. | 065 | Core | L |
+| MISSION-130 | **AniList auth + fallback**: AniList intermittently returns 403 from Cloudflare even with correct queries. Add optional AniList OAuth token setting (users paste token from anilist.co/settings/developer), attach as Bearer header on all AniList requests, and implement automatic fallback to Jikan when AniList is unavailable (the coordinator already supports this via per-provider failures). | 054 | Important | M |
+| MISSION-107 | WN/LN chapter-release notifications + release-feed calendar (NovelUpdates-style Normal mode). Highest remaining tracking value: know when the next chapter drops without leaving the app. | 100 | Core | M |
+| MISSION-112 | SQLCipher encrypted database (opt-in). Closes the local-first privacy story: data at rest protected even from disk access. | 100 | Important | L |
+
+#### M16 · Tracking expansions & imports
+
+| Mission | Description | Deps | Pri | Cplx |
+|---------|-------------|------|-----|------|
+| MISSION-109 | New content types: **games, podcasts, music, and comics** (data-only additions: contentType + progress template; comics follow the manga chapter/issue template so MangaDex-style node trees apply as-is). | 100 | Important | M |
+| MISSION-102 | Trakt import + scrobble integration. | 109 | Optional | M |
+| MISSION-103 | SIMKL import source. | 102 | Optional | M |
+| MISSION-113 | Advanced visualizations/chart library for stats (current hand-rolled bars stay until this lands). | 080 | Optional | M |
+| MISSION-110 | NoviList import source (WN/LN tracker with API docs; young, watch). | 107 | Optional | M |
+| MISSION-111 | ISBNDB paid enrichment fallback (free tier: 100 req/mo). | 057 | Optional | S |
+
+#### M17 · Reading groups (social — isolated phase)
+
+MISSION-108 (Buddy reads) is absorbed here: its data model lands in 114, its UX in 117.
+
+| Mission | Description | Deps | Pri | Cplx |
+|---------|-------------|------|-----|------|
 | MISSION-114 | **Reading groups — local model**: `reading_group` / `group_member` / `group_note` tables (separate from personal aggregates per ADR-007), stable work identity across devices (provider id or normalized title+author+year hash reusing identity_candidates), manual export/import of `group_state.json` as the first "transport". Realizes MISSION-108's data model. | 100 | Optional | M |
 | MISSION-115 | **Reading groups — CRDT + E2EE engine**: `yrs` behind a `p2p` cargo feature (default build untouched), StateVector sync handshake so only missing updates travel, snapshots/compaction (every N ops or 7 days), XChaCha20-Poly1305 group key in the OS keyring (ADR-011 pattern), QR/link invite carrying `(relays, group_id, group_key)` out-of-band. Ownership model: CRDT only for shared notes; each member's shelf is single-writer (no conflicts); group settings owner-only. | 114 | Optional | M |
 | MISSION-116 | **Reading groups — async Nostr transport**: `nostr-sdk` behind the same feature flag, 3–5 pinned public relays + optional self-hosted relay, outbox-first writes (SQLite before broadcast), event dedup, chunked updates (~64KB events), `TaskKind::GroupSync` on the existing TaskManager (`task-changed` progress). Tests: async member (write → close → later peer receives), offline → auto-sync on reconnect, via an in-memory mock transport and two real pools. | 115 | Optional | L |
 | MISSION-117 | **Reading groups — UI + spoiler gates**: group page with per-member shelves, per-work discussion threads with chapter watermark blur (progress-gated spoilers — MISSION-108's UX), relay/E2EE status badges, explicit opt-in privacy screen stating exactly what leaves the device, manual "Sync now"; i18n EN+AR. | 114 | Optional | M |
 | MISSION-118 | **Reading groups — hardening**: key rotation + epoch bump on member removal (forward secrecy), chaos tests (dropped chunks, duplicate events, clock skew), release-binary size budget check before/after the `p2p` feature. | 116 | Optional | M |
+
+#### M18 · Cloud sync (last)
+
+| Mission | Description | Deps | Pri | Cplx |
+|---------|-------------|------|-----|------|
+| MISSION-101 | Cloud sync: aggregate-level last-write-wins + conflict resolution (`updatedAt` already designed). Deliberately last — local-first remains the contract until every tracker feature above is stable. | 118 | Optional | L |
 
 ---
 
