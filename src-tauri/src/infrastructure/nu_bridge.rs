@@ -15,6 +15,7 @@
 //! back as a challenge page, the client calls [`NuClearanceState::stale`]
 //! and the refresher task reloads the hidden page to re-earn clearance.
 
+use base64::Engine as _;
 use std::collections::HashMap;
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Arc, Mutex};
@@ -131,27 +132,55 @@ pub fn spawn_refresher(app: tauri::AppHandle, state: Arc<NuClearanceState>) {
     });
 }
 
-/// Spawn a short-lived diagnostic poller: while no clearance exists yet, log
-/// the harvester window's document.title (written by the init script's `diag`)
-/// so the IPC-free state of the remote page is visible in the host log.
+/// Spawn a short-lived diagnostic/harvest poller: reads the harvester
+/// window's document.title, which the init script rewrites every few seconds
+/// with either a `NU|…` state marker or a `NUC|<base64url(json)>` payload
+/// carrying {ua, cookie}. This channel is IPC-free by design — remote-page
+/// invoke ACLs never factor in. Stops once a clearance lands.
 pub fn spawn_title_diagnostics(app: tauri::AppHandle, state: Arc<NuClearanceState>) {
     tauri::async_runtime::spawn(async move {
-        for _ in 0..60 {
-            tokio::time::sleep(std::time::Duration::from_secs(5)).await;
-            if state.snapshot().is_some() {
-                tracing::info!("NU diagnostics: clearance present; title poller stopping");
-                return;
-            }
-            if let Some(window) = app.get_webview_window(WINDOW_LABEL) {
-                match window.title() {
-                    Ok(title) => tracing::info!(title = %title, "NU harvester page state"),
-                    Err(e) => tracing::info!(error = %e, "NU harvester title unreadable"),
+        for _ in 0..240 {
+            tokio::time::sleep(std::time::Duration::from_secs(3)).await;
+            let Some(window) = app.get_webview_window(WINDOW_LABEL) else {
+                continue;
+            };
+            let Ok(title) = window.title() else { continue };
+            if let Some(encoded) = title.strip_prefix("NUC|") {
+                match decode_payload(encoded) {
+                    Ok((ua, cookie)) => {
+                        tracing::info!(
+                            cookie_len = cookie.len(),
+                            has_clearance = cookie.contains("cf_clearance"),
+                            "NU title-channel payload decoded"
+                        );
+                        state.store(ua, cookie);
+                    }
+                    Err(error) => {
+                        tracing::warn!(%error, "NU title payload undecodable");
+                    }
                 }
-            } else {
-                tracing::info!("NU harvester window not found by label");
+                continue;
+            }
+            if title.starts_with("NU|") && state.snapshot().is_none() {
+                tracing::info!(title = %title, "NU harvester page state");
             }
         }
     });
+}
+
+/// Decode `NUC|` base64url(JSON {ua, cookie}) payloads.
+fn decode_payload(encoded: &str) -> Result<(String, String), String> {
+    let normalized = encoded.trim().replace("-", "+").replace("_", "/");
+    let bytes = base64::engine::general_purpose::STANDARD
+        .decode(normalized.as_bytes())
+        .map_err(|e| format!("base64: {e}"))?;
+    #[derive(serde::Deserialize)]
+    struct Payload {
+        ua: String,
+        cookie: String,
+    }
+    let payload: Payload = serde_json::from_slice(&bytes).map_err(|e| format!("json: {e}"))?;
+    Ok((payload.ua, payload.cookie))
 }
 
 /// Handle to the live harvester window (for show/hide on clearance changes).

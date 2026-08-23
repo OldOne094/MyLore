@@ -66,11 +66,11 @@ mod transport {
             &self,
             url: &str,
             params: &[(&str, &str)],
-            cookie: Option<&str>,
+            creds: Option<(&str, &str)>,
         ) -> Result<(u16, String), crate::domain::provider::error::ProviderError> {
             let mut request = self.0.get(url).query(params);
-            if let Some(value) = cookie {
-                request = request.header("cookie", value);
+            if let Some((ua, cookie)) = creds {
+                request = request.header("user-agent", ua).header("cookie", cookie);
             }
             let response = request
                 .send()
@@ -84,11 +84,11 @@ mod transport {
             &self,
             url: &str,
             form: &[(&str, &str)],
-            cookie: Option<&str>,
+            creds: Option<(&str, &str)>,
         ) -> Result<(u16, String), crate::domain::provider::error::ProviderError> {
             let mut request = self.0.post(url).form(form);
-            if let Some(value) = cookie {
-                request = request.header("cookie", value);
+            if let Some((ua, cookie)) = creds {
+                request = request.header("user-agent", ua).header("cookie", cookie);
             }
             let response = request
                 .send()
@@ -131,11 +131,11 @@ mod transport {
             &self,
             url: &str,
             params: &[(&str, &str)],
-            cookie: Option<&str>,
+            creds: Option<(&str, &str)>,
         ) -> Result<(u16, String), ProviderError> {
             let mut request = self.0.get(url).query(params);
-            if let Some(value) = cookie {
-                request = request.header("cookie", value);
+            if let Some((ua, cookie)) = creds {
+                request = request.header("user-agent", ua).header("cookie", cookie);
             }
             let response = request
                 .send()
@@ -148,11 +148,11 @@ mod transport {
             &self,
             url: &str,
             form: &[(&str, &str)],
-            cookie: Option<&str>,
+            creds: Option<(&str, &str)>,
         ) -> Result<(u16, String), ProviderError> {
             let mut request = self.0.post(url).form(form);
-            if let Some(value) = cookie {
-                request = request.header("cookie", value);
+            if let Some((ua, cookie)) = creds {
+                request = request.header("user-agent", ua).header("cookie", cookie);
             }
             let response = request
                 .send()
@@ -191,12 +191,13 @@ impl NovelUpdatesClient {
         }
     }
 
-    /// Clearance cookie harvested by the hidden webview (MISSION-129), when a
-    /// report has landed yet.
-    fn clearance_cookie(&self) -> Option<String> {
+    /// Clearance (cookie + harvesting UA) from the hidden webview. The
+    /// cf_clearance cookie is bound to the harvesting browser's UA, so both
+    /// ride every request.
+    fn clearance(&self) -> Option<(String, String)> {
         crate::infrastructure::nu_bridge::global()?
             .snapshot()
-            .map(|c| c.cookie)
+            .map(|c| (c.user_agent, c.cookie))
     }
 
     /// Test hook: point whichever transport is compiled at a local endpoint.
@@ -211,10 +212,11 @@ impl NovelUpdatesClient {
     /// GET `endpoint + path` with query params, returning the raw HTML body.
     pub async fn get(&self, path: &str, params: &[(&str, &str)]) -> Result<String, ProviderError> {
         let url = format!("{}{}", self.endpoint, path);
-        let (status, text) = self
-            .http
-            .get(&url, params, self.clearance_cookie().as_deref())
-            .await?;
+        let creds = self.clearance();
+        let creds_ref = creds
+            .as_ref()
+            .map(|(ua, cookie)| (ua.as_str(), cookie.as_str()));
+        let (status, text) = self.http.get(&url, params, creds_ref).await?;
         self.finish(status, text)
     }
 
@@ -225,10 +227,11 @@ impl NovelUpdatesClient {
         form: &[(&str, &str)],
     ) -> Result<String, ProviderError> {
         let url = format!("{}{}", self.endpoint, path);
-        let (status, text) = self
-            .http
-            .post_form(&url, form, self.clearance_cookie().as_deref())
-            .await?;
+        let creds = self.clearance();
+        let creds_ref = creds
+            .as_ref()
+            .map(|(ua, cookie)| (ua.as_str(), cookie.as_str()));
+        let (status, text) = self.http.post_form(&url, form, creds_ref).await?;
         self.finish(status, text)
     }
 
