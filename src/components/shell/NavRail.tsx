@@ -22,7 +22,7 @@ export function NavRail() {
           end={item.path === "/library"}
           className={({ isActive }) =>
             cn(
-              "flex items-center gap-3 rounded-sm px-3 py-2 text-sm font-medium transition-colors duration-150 ease-out",
+              "flex select-none items-center gap-3 rounded-sm px-3 py-2 text-sm font-medium transition-colors duration-150 ease-out",
               isActive
                 ? "bg-accent-soft text-accent"
                 : "text-text-secondary hover:bg-bg-hover hover:text-text-primary",

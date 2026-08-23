@@ -26,12 +26,14 @@ body {
   height: 100%;
 }
 
-/* Focus ring: 2px accent, 3px transparent gap (DESIGN_SYSTEM.md §4). */
+/* Focus ring: 2px accent with a 3px gap. Implemented as outline+offset so the
+   gap is transparent — the ring reads correctly over every surface (base,
+   raised cards, dialogs) instead of painting a fixed background-colored gap
+   the way a box-shadow pair would. Chromium renders outlines following the
+   element's border-radius, so pills and rounded controls keep their shape. */
 :where(a, button, input, select, textarea, [tabindex]):focus-visible {
-  outline: none;
-  box-shadow:
-    0 0 0 var(--focus-ring-offset) var(--bg-base),
-    0 0 0 calc(var(--focus-ring-offset) + var(--focus-ring-width)) var(--accent);
+  outline: var(--focus-ring-width) solid var(--accent);
+  outline-offset: var(--focus-ring-offset);
 }
 
 /* Motion restraint (DESIGN_SYSTEM.md §7): no transforms under reduced-motion. */
@@ -154,10 +156,14 @@ body {
 }
 
 /* Hairline depth cue drawn over cover art (tokens define the theme-aware
-   color); negative offset keeps the outline inside the artwork bounds. */
+   color); negative offset keeps the outline inside the artwork bounds. Cover
+   art is content, not a draggable asset — kill the native webview drag ghost
+   and accidental selection when dragging across a grid. */
 .cover-art {
   outline: 1px solid var(--img-outline);
   outline-offset: -1px;
+  -webkit-user-drag: none;
+  user-select: none;
 }
 
 /* ---------------------------------------------------------------------------

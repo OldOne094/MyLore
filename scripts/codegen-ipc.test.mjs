@@ -8,9 +8,16 @@ import path from "node:path";
 const script = path.join(process.cwd(), "scripts", "codegen-ipc.mjs");
 
 describe("IPC codegen", () => {
-  it("generated types are in sync with the contract (codegen:check passes)", () => {
-    expect(() =>
-      execFileSync(process.execPath, [script, "--check"], { encoding: "utf8" }),
-    ).not.toThrow();
-  });
+  // The check spawns node + prettier's format loop, which legitimately takes
+  // several seconds — and much more under the full suite's parallel load.
+  // The default 5s testTimeout flakes; this subprocess deserves real headroom.
+  it(
+    "generated types are in sync with the contract (codegen:check passes)",
+    { timeout: 60_000 },
+    () => {
+      expect(() =>
+        execFileSync(process.execPath, [script, "--check"], { encoding: "utf8" }),
+      ).not.toThrow();
+    },
+  );
 });

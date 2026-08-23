@@ -4,9 +4,11 @@
 
 :root {
   /* Fonts (DESIGN_SYSTEM.md §3) */
+  /* Fonts (DESIGN_SYSTEM.md §3). Segoe UI Variable leads on Windows 11 for
+     its optical sizing; every other platform falls through to its native face. */
   --font-ui:
-    "Segoe UI", -apple-system, BlinkMacSystemFont, "SF Pro Text", "SF Pro Display", Roboto,
-    "Noto Sans", "Noto Sans Arabic", "Cairo", system-ui, sans-serif;
+    "Segoe UI Variable Text", "Segoe UI", -apple-system, BlinkMacSystemFont, "SF Pro Text",
+    "SF Pro Display", Roboto, "Noto Sans", "Noto Sans Arabic", "Cairo", system-ui, sans-serif;
   --font-mono: "SF Mono", "Cascadia Code", "JetBrains Mono", Consolas, monospace;
 
   /* Type scale (rem) — DESIGN_SYSTEM.md §3 */

@@ -49,7 +49,7 @@ export function NextUnitButton({
       aria-label={aria}
       title={aria}
       className={cn(
-        "absolute z-10 inline-flex items-center justify-center gap-1 rounded-full border bg-bg-surface/95 shadow-sm transition-colors duration-150 ease-out hover:border-accent hover:text-accent focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-accent disabled:opacity-60",
+        "absolute z-10 inline-flex items-center justify-center gap-1 rounded-full border bg-bg-surface/95 shadow-sm transition-[color,background-color,border-color,scale] duration-150 ease-out hover:border-accent hover:text-accent focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-accent active:scale-[0.96] disabled:pointer-events-none disabled:opacity-60",
         className,
         dense ? "size-6" : "h-6 px-2",
       )}
