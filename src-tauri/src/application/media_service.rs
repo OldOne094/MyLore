@@ -447,7 +447,7 @@ mod tests {
         let service = MediaService::new(pool.clone());
 
         let mut bad = input();
-        bad.content_type = "podcast".into();
+        bad.content_type = "telepathy".into();
         let err = service
             .add_media(bad)
             .await

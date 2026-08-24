@@ -51,6 +51,30 @@ impl ProgressTemplate {
                 weight: UnitWeight::Count,
                 consuming_state: NodeProgressState::Read,
             },
+            Comic => ProgressTemplate {
+                content_type,
+                unit_kind: NodeKind::Chapter,
+                weight: UnitWeight::Count,
+                consuming_state: NodeProgressState::Read,
+            },
+            Game => ProgressTemplate {
+                content_type,
+                unit_kind: NodeKind::Node,
+                weight: UnitWeight::Count,
+                consuming_state: NodeProgressState::Read,
+            },
+            Podcast => ProgressTemplate {
+                content_type,
+                unit_kind: NodeKind::Episode,
+                weight: UnitWeight::Count,
+                consuming_state: NodeProgressState::Watched,
+            },
+            Music => ProgressTemplate {
+                content_type,
+                unit_kind: NodeKind::Node,
+                weight: UnitWeight::Count,
+                consuming_state: NodeProgressState::Read,
+            },
             Book => ProgressTemplate {
                 content_type,
                 unit_kind: NodeKind::Chapter,

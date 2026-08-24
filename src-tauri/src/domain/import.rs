@@ -952,7 +952,7 @@ mod tests {
             .any(|i| i.severity == Severity::Error && i.field == "content_type"));
 
         let mut bad_type = item("Sword");
-        bad_type.content_type = Some("podcast".to_string());
+        bad_type.content_type = Some("telepathy".to_string());
         assert!(validate(&bad_type)
             .iter()
             .any(|i| i.severity == Severity::Error && i.field == "content_type"));

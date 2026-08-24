@@ -74,6 +74,10 @@ string_enum! {
         Anime = "anime",
         Tv = "tv",
         Movie = "movie",
+        Game = "game",
+        Podcast = "podcast",
+        Music = "music",
+        Comic = "comic",
         Other = "other",
     }
 }
@@ -194,7 +198,7 @@ mod tests {
 
     #[test]
     fn unknown_values_are_rejected() {
-        assert!(ContentType::from_str("podcast").is_err());
+        assert!(ContentType::from_str("telepathy").is_err());
         assert!(MediaStatus::from_str("watching").is_err());
         assert!(NodeKind::from_str("arc").is_err());
         assert!(NodeProgressState::from_str("finished").is_err());
@@ -220,6 +224,10 @@ mod tests {
                 "anime",
                 "tv",
                 "movie",
+                "game",
+                "podcast",
+                "music",
+                "comic",
                 "other"
             ]
         );

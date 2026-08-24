@@ -20,9 +20,13 @@ const CONTENT_TYPES = [
   "manga",
   "manhwa",
   "manhua",
+  "comic",
   "anime",
   "tv",
   "movie",
+  "game",
+  "podcast",
+  "music",
   "other",
 ] as const;
 
