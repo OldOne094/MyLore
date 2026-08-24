@@ -1210,7 +1210,9 @@ mod tests {
 
         // A corrupt database cannot be snapshotted; the error surfaces so
         // startup can log it and decide to continue.
-        assert!(BackupService::pre_migration_backup(&corrupt, None).await.is_err());
+        assert!(BackupService::pre_migration_backup(&corrupt, None)
+            .await
+            .is_err());
 
         let _ = std::fs::remove_dir_all(&dir);
     }

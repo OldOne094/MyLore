@@ -102,10 +102,7 @@ pub async fn pending_migrations(db_path: &Path) -> Result<u32, AppError> {
 }
 
 /// [`pending_migrations`] with an optional SQLCipher key (MISSION-112).
-pub async fn pending_migrations_with(
-    db_path: &Path,
-    key: Option<&str>,
-) -> Result<u32, AppError> {
+pub async fn pending_migrations_with(db_path: &Path, key: Option<&str>) -> Result<u32, AppError> {
     if !db_path.exists() {
         return Ok(0);
     }
@@ -1151,11 +1148,10 @@ mod encryption_tests {
         let pool = init_with(&path, Some("correct-horse"))
             .await
             .expect("reopen with the same key");
-        let (title,): (String,) =
-            sqlx::query_as("SELECT title_main FROM media WHERE id = 'm-1'")
-                .fetch_one(&pool)
-                .await
-                .expect("read row");
+        let (title,): (String,) = sqlx::query_as("SELECT title_main FROM media WHERE id = 'm-1'")
+            .fetch_one(&pool)
+            .await
+            .expect("read row");
         assert_eq!(title, "Encrypted Title");
         pool.close().await;
         cleanup_files(&path);
