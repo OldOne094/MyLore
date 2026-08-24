@@ -62,7 +62,7 @@ function OptionChip({
       aria-pressed={active}
       onClick={onClick}
       className={cn(
-        "inline-flex items-center gap-1 rounded-full border border-border-subtle bg-bg-surface px-2.5 py-1 text-sm transition-colors duration-150 ease-out hover:bg-bg-hover",
+        "inline-flex h-[var(--control-height-compact)] items-center gap-1 rounded-full border border-border-subtle bg-bg-surface px-3 text-sm transition-colors duration-150 ease-out hover:bg-bg-hover",
         active && "border-accent bg-accent text-bg-surface hover:bg-accent",
       )}
     >
