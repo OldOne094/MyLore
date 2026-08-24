@@ -36,7 +36,6 @@ fn quote_passphrase(passphrase: &str) -> String {
 
 pub use crate::infrastructure::db::detect_encrypted;
 
-
 /// Snapshot of the current at-rest security posture.
 #[command]
 pub async fn db_security_status(
@@ -141,5 +140,5 @@ mod encryption_command_tests {
 pub fn db_get_passphrase(
     store: State<'_, Arc<dyn SecretStore>>,
 ) -> Result<Option<String>, AppError> {
-    Ok(store.get(DB_KEY_ENTRY).map_err(AppError::internal)?)
+    store.get(DB_KEY_ENTRY).map_err(AppError::internal)
 }

@@ -1354,7 +1354,10 @@ mod tests {
 
         h.pool.close().await;
         let quarantine = h.data_dir.join("quarantine-test");
-        let result = h.service.swap_in(&staged_db, &meta, &quarantine, None).await;
+        let result = h
+            .service
+            .swap_in(&staged_db, &meta, &quarantine, None)
+            .await;
         assert!(
             result.is_err(),
             "the missing staged asset must fail the swap"
