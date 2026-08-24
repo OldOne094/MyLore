@@ -428,13 +428,13 @@
     },
     {
       "name": "backup_validate",
-      "args": { "path": "string" },
+      "args": { "path": "string", "passphrase": "string | null" },
       "returns": "BackupMeta",
-      "doc": "Validate a `.mylore` backup archive without restoring it (MISSION-084): the manifest must parse at the current format version, the embedded database snapshot must pass SQLite's integrity_check, and its media count must match the manifest. Resolves with the BackupMeta or rejects with an AppError string."
+      "doc": "MISSION-112-aware validate: the returned meta carries encrypted=true when the embedded snapshot is SQLCipher-encrypted. passphrase unlocks archives from other machines."
     },
     {
       "name": "backup_restore",
-      "args": { "path": "string" },
+      "args": { "path": "string", "passphrase": "string | null" },
       "returns": "TaskSnapshot",
       "doc": "Restore a `.mylore` backup archive as a background task (MISSION-085): validates the archive, quarantines the current database + cached images under `{data_dir}/quarantine-…`, swaps the restored data into place, repoints asset paths at the restored files, and verifies the result - rolling back the previous data on any failure. The live pool is closed to unlock the files, so the app MUST restart after success (`restart_required` in the RestoreReport). Not cancelable mid-restore by design. Resolves with the initial (queued) snapshot; progress + terminal state stream as `task_changed` events."
     },
@@ -546,6 +546,12 @@
       "args": { "passphrase": "string" },
       "returns": "void",
       "doc": "MISSION-112 - encrypt the live database in place (SQLCipher rekey) and store the passphrase in the secret pipeline. Requires a build with db-encryption and a passphrase of at least 8 characters. Restart the app afterwards."
+    },
+    {
+      "name": "db_get_passphrase",
+      "args": {},
+      "returns": "string | null",
+      "doc": "MISSION-112 - resolve the stored database passphrase for copy-to-clipboard affordances when moving an encrypted archive to another machine. Local only; resolves null when no passphrase is stored."
     },
     {
       "name": "db_disable_encryption",

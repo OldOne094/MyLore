@@ -96,9 +96,29 @@ export function SecuritySection() {
       {!data ? null : !data.available ? (
         <p className="text-xs text-text-tertiary">{t("settings.encryptionUnavailable")}</p>
       ) : data.encrypted ? (
-        <Button variant="secondary" size="sm" disabled={busy} onClick={() => setPhase("disable")}>
-          {t("settings.encryptionDisable")}
-        </Button>
+        <div className="flex flex-wrap items-center gap-2">
+          <Button variant="secondary" size="sm" disabled={busy} onClick={() => setPhase("disable")}>
+            {t("settings.encryptionDisable")}
+          </Button>
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={async () => {
+              const { db_get_passphrase } = await import("@/api");
+              try {
+                const passphrase = await db_get_passphrase();
+                if (passphrase) {
+                  await navigator.clipboard.writeText(passphrase);
+                  toast.info({ title: t("settings.encryptionCopied") });
+                }
+              } catch {
+                /* clipboard unavailable */
+              }
+            }}
+          >
+            {t("settings.encryptionCopyKey")}
+          </Button>
+        </div>
       ) : (
         <Button variant="primary" size="sm" disabled={busy} onClick={openEnable}>
           {t("settings.encryptionEnable")}

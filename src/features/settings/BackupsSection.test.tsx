@@ -175,7 +175,10 @@ describe("BackupsSection", () => {
     await user.click(within(dialog).getByRole("button", { name: "Restore" }));
 
     await waitFor(() =>
-      expect(vi.mocked(invoke)).toHaveBeenCalledWith("backup_restore", { path: NEWEST_PATH }),
+      expect(vi.mocked(invoke)).toHaveBeenCalledWith("backup_restore", {
+        path: NEWEST_PATH,
+        passphrase: null,
+      }),
     );
     expect(await screen.findByText(/restart MyLore/i)).toBeInTheDocument();
   });

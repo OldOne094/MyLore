@@ -34,19 +34,8 @@ fn quote_passphrase(passphrase: &str) -> String {
     format!("'{}'", passphrase.replace('\'', "''"))
 }
 
-/// Heuristic: a plaintext SQLite file starts with the magic header; a
-/// SQLCipher file's first page is indistinguishable from random bytes.
-pub fn detect_encrypted(db_path: &std::path::Path) -> bool {
-    use std::io::Read;
-    let Ok(mut file) = std::fs::File::open(db_path) else {
-        return false;
-    };
-    let mut header = [0u8; 16];
-    if file.read_exact(&mut header).is_err() {
-        return false;
-    }
-    !header.starts_with(b"SQLite format 3\0")
-}
+pub use crate::infrastructure::db::detect_encrypted;
+
 
 /// Snapshot of the current at-rest security posture.
 #[command]
@@ -143,4 +132,14 @@ mod encryption_command_tests {
 
         std::fs::remove_dir_all(&dir).ok();
     }
+}
+
+/// MISSION-112 - the stored database passphrase, for "copy passphrase"
+/// affordances when moving an encrypted archive to another machine. Local
+/// only; the frontend copies it to the clipboard.
+#[command]
+pub fn db_get_passphrase(
+    store: State<'_, Arc<dyn SecretStore>>,
+) -> Result<Option<String>, AppError> {
+    Ok(store.get(DB_KEY_ENTRY).map_err(AppError::internal)?)
 }

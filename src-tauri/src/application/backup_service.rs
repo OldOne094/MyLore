@@ -48,6 +48,11 @@ pub struct BackupMeta {
     pub created_at: String,
     pub media_count: u32,
     pub asset_count: u32,
+    /// MISSION-112 — whether the embedded snapshot is SQLCipher-encrypted.
+    /// Not part of the written manifest; filled in by `validate`.
+    #[serde(default)]
+    #[serde(skip_deserializing)]
+    pub encrypted: bool,
     pub assets: Vec<AssetManifestEntry>,
 }
 
@@ -291,6 +296,7 @@ impl BackupService {
             created_at: Utc::now().to_rfc3339(),
             media_count: media_count as u32,
             asset_count: manifest.len() as u32,
+            encrypted: false,
             assets: manifest,
         };
 
@@ -468,8 +474,18 @@ impl BackupService {
     /// dance is short. The caller must restart the app afterwards — the
     /// managed pool is closed by this call.
     pub async fn restore(&self, path: &Path) -> Result<RestoreReport, AppError> {
+        self.restore_with(path, None).await
+    }
+
+    /// Restore variant with a caller-supplied passphrase override (MISSION-112):
+    /// any machine can open an encrypted archive by typing the passphrase once.
+    pub async fn restore_with(
+        &self,
+        path: &Path,
+        override_key: Option<&str>,
+    ) -> Result<RestoreReport, AppError> {
         // 1. Validate with zero side effects first.
-        let meta = self.validate(path).await?;
+        let meta = self.validate_with(path, override_key).await?;
 
         // 2. Stage the archive's contents under `{data_dir}/.restore-<uid>`.
         let staging = self.data_dir.join(format!(".restore-{}", Uuid::new_v4()));
@@ -488,7 +504,10 @@ impl BackupService {
         let stamp = Utc::now().format("%Y%m%d-%H%M%S");
         let uid = &Uuid::new_v4().simple().to_string()[..6];
         let quarantine = self.data_dir.join(format!("quarantine-{stamp}-{uid}"));
-        match self.swap_in(&staged_db, &meta, &quarantine).await {
+        match self
+            .swap_in(&staged_db, &meta, &quarantine, override_key)
+            .await
+        {
             // Staging is cleaned up by the guard on drop.
             Ok(()) => Ok(RestoreReport {
                 media_count: meta.media_count,
@@ -510,6 +529,7 @@ impl BackupService {
         staged_db: &Path,
         meta: &BackupMeta,
         quarantine: &Path,
+        override_key: Option<&str>,
     ) -> Result<(), AppError> {
         let db_path = self.data_dir.join("mylore.db");
         let images_dir = self.data_dir.join("images");
@@ -546,7 +566,8 @@ impl BackupService {
 
         // Repoint asset rows at the restored files, then verify the swapped
         // database for real.
-        let pool = db::connect_keyed(&db_path, self.encryption_key.as_deref()).await?;
+        let effective = override_key.or(self.encryption_key.as_deref());
+        let pool = db::connect_keyed(&db_path, effective).await?;
         let result = async {
             db::integrity_check(&pool).await?;
             for entry in &meta.assets {
@@ -577,6 +598,16 @@ impl BackupService {
     /// version, the snapshot entry exists, opens as a healthy SQLite
     /// database, and its media count matches the manifest.
     pub async fn validate(&self, path: &Path) -> Result<BackupMeta, AppError> {
+        self.validate_with(path, None).await
+    }
+
+    /// [alidate] with a caller-supplied passphrase override (MISSION-112):
+    /// lets any machine open an encrypted archive by typing the passphrase.
+    pub async fn validate_with(
+        &self,
+        path: &Path,
+        override_key: Option<&str>,
+    ) -> Result<BackupMeta, AppError> {
         let invalid = |message: &'static str| AppError::validation(message);
         let file =
             std::fs::File::open(path).map_err(|_| invalid("backup file cannot be opened"))?;
@@ -589,7 +620,7 @@ impl BackupService {
             .map_err(|_| invalid("backup archive has no manifest"))?
             .read_to_string(&mut meta_json)
             .map_err(|_| invalid("backup manifest cannot be read"))?;
-        let meta: BackupMeta =
+        let mut meta: BackupMeta =
             serde_json::from_str(&meta_json).map_err(|_| invalid("backup manifest is invalid"))?;
         if meta.format_version != FORMAT_VERSION {
             return Err(invalid("backup was made by an incompatible version"));
@@ -609,7 +640,8 @@ impl BackupService {
         }
 
         let check = async {
-            let pool = db::connect_keyed(&temp, self.encryption_key.as_deref()).await?;
+            let effective = override_key.or(self.encryption_key.as_deref());
+            let pool = db::connect_keyed(&temp, effective).await?;
             let result = async {
                 db::integrity_check(&pool).await?;
                 let (count,): (i64,) = sqlx::query_as("SELECT COUNT(*) FROM media")
@@ -627,6 +659,7 @@ impl BackupService {
             result
         }
         .await;
+        meta.encrypted = crate::infrastructure::db::detect_encrypted(&temp);
         let _ = std::fs::remove_file(&temp);
         check?;
 
@@ -1321,7 +1354,7 @@ mod tests {
 
         h.pool.close().await;
         let quarantine = h.data_dir.join("quarantine-test");
-        let result = h.service.swap_in(&staged_db, &meta, &quarantine).await;
+        let result = h.service.swap_in(&staged_db, &meta, &quarantine, None).await;
         assert!(
             result.is_err(),
             "the missing staged asset must fail the swap"

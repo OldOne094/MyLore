@@ -63,11 +63,13 @@ export function useBackupCreate() {
 }
 
 /** Restore an archive over the live library as a background task
-    (rollback-safe; restart required on success). */
+    (rollback-safe; restart required on success). An optional passphrase
+    unlocks encrypted archives coming from another machine (MISSION-112). */
 export function useBackupRestore() {
   const client = useQueryClient();
   return useMutation({
-    mutationFn: (path: string) => backup_restore({ path }),
+    mutationFn: ({ path, passphrase }: { path: string; passphrase?: string }) =>
+      backup_restore({ path, passphrase: passphrase ?? null }),
     onSuccess: () => client.invalidateQueries({ queryKey: queryKeys.backups.all() }),
   });
 }

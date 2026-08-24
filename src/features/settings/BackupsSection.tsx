@@ -60,6 +60,7 @@ export function BackupsSection() {
   const [confirmingDelete, setConfirmingDelete] = useState<string | null>(null);
   const [validity, setValidity] = useState<Record<string, "checking" | "ok" | "bad">>({});
   const [restoreTarget, setRestoreTarget] = useState<BackupEntry | null>(null);
+  const [restorePass, setRestorePass] = useState("");
   const [restoreTaskId, setRestoreTaskId] = useState<string | null>(null);
 
   const createTask = useBackupTask(createTaskId).data;
@@ -97,7 +98,7 @@ export function BackupsSection() {
   const checkArchive = async (entry: BackupEntry) => {
     setValidity((prev) => ({ ...prev, [entry.path]: "checking" }));
     try {
-      await backup_validate({ path: entry.path });
+      await backup_validate({ path: entry.path, passphrase: restorePass || null });
       setValidity((prev) => ({ ...prev, [entry.path]: "ok" }));
     } catch {
       setValidity((prev) => ({ ...prev, [entry.path]: "bad" }));
@@ -106,15 +107,19 @@ export function BackupsSection() {
 
   const closeRestoreDialog = () => {
     setRestoreTarget(null);
+    setRestorePass("");
     setRestoreTaskId(null);
   };
 
   const runRestore = () => {
     if (!restoreTarget || restoreTaskId) return;
-    restoreMutation.mutate(restoreTarget.path, {
-      onSuccess: (snapshot) => setRestoreTaskId(snapshot.id),
-      onError: () => toast.error({ title: t("settings.backupsRestoreFailed") }),
-    });
+    restoreMutation.mutate(
+      { path: restoreTarget.path, passphrase: restorePass || undefined },
+      {
+        onSuccess: (snapshot) => setRestoreTaskId(snapshot.id),
+        onError: () => toast.error({ title: t("settings.backupsRestoreFailed") }),
+      },
+    );
   };
 
   return (
@@ -268,6 +273,22 @@ export function BackupsSection() {
           <DialogDescription>{t("settings.backupsRestoreHint")}</DialogDescription>
           <div className="mt-5 flex flex-col gap-4 text-sm">
             {restoreTarget ? <p className="text-text-primary">{restoreTarget.file_name}</p> : null}
+            {!restoreReport && !restoreTaskId ? (
+              <label className="flex flex-col gap-1.5">
+                <span className="text-text-secondary">
+                  {t("settings.backupsPassphraseOptional")}
+                </span>
+                <input
+                  type="password"
+                  autoComplete="off"
+                  value={restorePass}
+                  onChange={(event) => setRestorePass(event.target.value)}
+                  placeholder={t("settings.backupsPassphrasePlaceholder")}
+                  aria-label={t("settings.backupsPassphraseOptional")}
+                  className="h-[var(--control-height-compact)] rounded-sm border bg-bg-base px-3 text-sm text-text-primary placeholder:text-text-tertiary transition-colors duration-150 ease-out hover:border-accent focus-visible:outline-none"
+                />
+              </label>
+            ) : null}
             {restoreReport ? (
               <p className="text-text-secondary" role="status">
                 {t("settings.backupsRestoreFinished")}

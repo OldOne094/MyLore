@@ -235,6 +235,7 @@ pub fn run() {
             commands::db_security::db_security_status,
             commands::db_security::db_enable_encryption,
             commands::db_security::db_disable_encryption,
+            commands::db_security::db_get_passphrase,
             commands::images::asset_resolve,
             commands::images::assets_resolve,
             commands::dashboard::dashboard_summary,

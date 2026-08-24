@@ -657,13 +657,19 @@ export function backup_create(): Promise<TaskSnapshot> {
   return invoke<TaskSnapshot>("backup_create");
 }
 
-/** Validate a `.mylore` backup archive without restoring it (MISSION-084): the manifest must parse at the current format version, the embedded database snapshot must pass SQLite's integrity_check, and its media count must match the manifest. Resolves with the BackupMeta or rejects with an AppError string. */
-export function backup_validate(args: { path: string }): Promise<BackupMeta> {
+/** MISSION-112-aware validate: the returned meta carries encrypted=true when the embedded snapshot is SQLCipher-encrypted. passphrase unlocks archives from other machines. */
+export function backup_validate(args: {
+  path: string;
+  passphrase: string | null;
+}): Promise<BackupMeta> {
   return invoke<BackupMeta>("backup_validate", args);
 }
 
 /** Restore a `.mylore` backup archive as a background task (MISSION-085): validates the archive, quarantines the current database + cached images under `{data_dir}/quarantine-…`, swaps the restored data into place, repoints asset paths at the restored files, and verifies the result - rolling back the previous data on any failure. The live pool is closed to unlock the files, so the app MUST restart after success (`restart_required` in the RestoreReport). Not cancelable mid-restore by design. Resolves with the initial (queued) snapshot; progress + terminal state stream as `task_changed` events. */
-export function backup_restore(args: { path: string }): Promise<TaskSnapshot> {
+export function backup_restore(args: {
+  path: string;
+  passphrase: string | null;
+}): Promise<TaskSnapshot> {
   return invoke<TaskSnapshot>("backup_restore", args);
 }
 
@@ -755,6 +761,11 @@ export function db_security_status(): Promise<{ available: boolean; encrypted: b
 /** MISSION-112 - encrypt the live database in place (SQLCipher rekey) and store the passphrase in the secret pipeline. Requires a build with db-encryption and a passphrase of at least 8 characters. Restart the app afterwards. */
 export function db_enable_encryption(args: { passphrase: string }): Promise<void> {
   return invoke<void>("db_enable_encryption", args);
+}
+
+/** MISSION-112 - resolve the stored database passphrase for copy-to-clipboard affordances when moving an encrypted archive to another machine. Local only; resolves null when no passphrase is stored. */
+export function db_get_passphrase(): Promise<string | null> {
+  return invoke<string | null>("db_get_passphrase");
 }
 
 /** MISSION-112 - decrypt the live database back to plaintext and drop the stored passphrase. Requires a build with db-encryption. Restart the app afterwards. */

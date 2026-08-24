@@ -6,6 +6,7 @@
 //! migrations (each wrapped in its own transaction by sqlx); `init` runs all
 //! three.
 
+use std::io::Read;
 use std::{path::Path, time::Duration};
 
 use sqlx::migrate::Migrator;
@@ -69,6 +70,19 @@ pub fn encryption_key_from_env() -> Option<String> {
         .ok()
         .map(|k| k.trim().to_string())
         .filter(|k| !k.is_empty())
+}
+
+/// Heuristic: a plaintext SQLite file starts with the magic header; a
+/// SQLCipher file's first page is indistinguishable from random bytes.
+pub fn detect_encrypted(db_path: &Path) -> bool {
+    let Ok(mut file) = std::fs::File::open(db_path) else {
+        return false;
+    };
+    let mut header = [0u8; 16];
+    if file.read_exact(&mut header).is_err() {
+        return false;
+    }
+    !header.starts_with(b"SQLite format 3\0")
 }
 
 /// Run `PRAGMA integrity_check`; returns `Ok(())` when the database is healthy.
