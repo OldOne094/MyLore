@@ -34,6 +34,9 @@ pub fn run() {
             let startup = std::time::Instant::now();
             let data_dir = app.path().app_data_dir()?;
             infrastructure::logging::init(&data_dir.join("logs"));
+            // AniList OAuth client secret lives OUTSIDE the repo (MISSION-130):
+            // `{data_dir}/anilist.client-secret` or ANILIST_CLIENT_SECRET env.
+            application::providers::oauth::init_secret(&data_dir);
 
             let db_path = data_dir.join("mylore.db");
 

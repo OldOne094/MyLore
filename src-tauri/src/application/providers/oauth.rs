@@ -21,7 +21,45 @@ use crate::error::AppError;
 pub const CLIENT_ID: &str = "48606";
 /// Registered per AniList's requirement that code-exchange clients carry it;
 /// embedded desktop apps treat this as public knowledge (RFC 8252 §8.4 note).
-const CLIENT_SECRET: &str = "KgLCvf8Jyu0kc1w6tH7eYuXdaQpxhQvTaBSHJPBz";
+///
+/// **The secret itself is NOT stored in source or git.** It is read at
+/// startup (see [`init_secret`]) from either
+/// `{data_dir}/anilist.client-secret` (a one-line file in the app-data dir,
+/// far outside the repository) or the `ANILIST_CLIENT_SECRET` environment
+/// variable. Without it, only the manual token-paste path works.
+const CLIENT_SECRET_FILE: &str = "anilist.client-secret";
+static CLIENT_SECRET: std::sync::OnceLock<Option<String>> = std::sync::OnceLock::new();
+
+/// Load the OAuth client secret from the app-data dir, falling back to the
+/// environment. Called once during app setup.
+pub fn init_secret(data_dir: &std::path::Path) {
+    let from_file = std::fs::read_to_string(data_dir.join(CLIENT_SECRET_FILE))
+        .ok()
+        .map(|s| s.trim().to_string())
+        .filter(|s| !s.is_empty());
+    let resolved = from_file.or_else(|| std::env::var("ANILIST_CLIENT_SECRET").ok());
+    match &resolved {
+        Some(_) => tracing::info!("AniList OAuth client secret loaded"),
+        None => tracing::warn!(
+            "no AniList client secret found ({file} or ANILIST_CLIENT_SECRET); \
+             browser sign-in disabled, manual token paste still works",
+            file = CLIENT_SECRET_FILE
+        ),
+    }
+    let _ = CLIENT_SECRET.set(resolved);
+}
+
+fn client_secret() -> Result<&'static str, AppError> {
+    CLIENT_SECRET
+        .get()
+        .and_then(|s| s.as_deref())
+        .ok_or_else(|| {
+            AppError::validation(format!(
+                "AniList sign-in needs the client secret in {CLIENT_SECRET_FILE} \
+                 inside the app data folder"
+            ))
+        })
+}
 /// Must match the redirect URL registered on the AniList developer page.
 pub const REDIRECT_URI: &str = "http://127.0.0.1:24110/auth/anilist/callback";
 /// Authorize entry point (implicit-free; we exchange a code server-side).
@@ -59,7 +97,7 @@ async fn exchange_code(code: &str) -> Result<String, AppError> {
         .json(&json!({
             "grant_type": "authorization_code",
             "client_id": CLIENT_ID,
-            "client_secret": CLIENT_SECRET,
+            "client_secret": client_secret()?,
             "redirect_uri": REDIRECT_URI,
             "code": code,
         }))
