@@ -17,6 +17,7 @@ export function PreferencesProvider({ children }: { children: ReactNode }) {
     theme: readPreference(),
     language: readLanguage(),
     density: "comfortable",
+    accent: "classic",
   }));
   const repositoryRef = useRef(getPreferencesRepository());
 
@@ -67,6 +68,24 @@ export function PreferencesProvider({ children }: { children: ReactNode }) {
     });
   }, []);
 
+  const setAccent = useCallback((accent: Preferences["accent"]) => {
+    setPreferences((current) => {
+      const next = { ...current, accent };
+      void repositoryRef.current.save(next);
+      return next;
+    });
+  }, []);
+
+  // Reflect the accent choice on the root so the CSS variable overrides in
+  // tokens.css apply everywhere (MISSION-112 freedom layer).
+  useEffect(() => {
+    if (preferences.accent === "classic") {
+      delete document.documentElement.dataset.accent;
+    } else {
+      document.documentElement.dataset.accent = preferences.accent;
+    }
+  }, [preferences.accent]);
+
   // Reflect the density tier on the root so the CSS variable overrides in
   // tokens.css apply everywhere (MISSION-095).
   useEffect(() => {
@@ -74,8 +93,8 @@ export function PreferencesProvider({ children }: { children: ReactNode }) {
   }, [preferences.density]);
 
   const value = useMemo(
-    () => ({ preferences, setTheme, setLanguage: setLocale, setDensity }),
-    [preferences, setTheme, setLocale, setDensity],
+    () => ({ preferences, setTheme, setLanguage: setLocale, setDensity, setAccent }),
+    [preferences, setTheme, setLocale, setDensity, setAccent],
   );
 
   return <PreferencesContext.Provider value={value}>{children}</PreferencesContext.Provider>;

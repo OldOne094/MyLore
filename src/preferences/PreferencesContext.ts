@@ -1,13 +1,14 @@
 import { createContext } from "react";
 import type { AppLanguage } from "@/i18n";
 import type { ThemePreference } from "@/themes/theme";
-import type { Preferences, UiDensity } from "./types";
+import type { Preferences, UiDensity, AccentChoice } from "./types";
 
 /* MISSION-034 — Context contract for reading and updating app preferences. */
 
 export interface PreferencesContextValue {
   preferences: Preferences;
   setTheme: (preference: ThemePreference) => void;
+  setAccent: (accent: AccentChoice) => void;
   setLanguage: (language: AppLanguage) => void;
   /** Global control density (MISSION-095). */
   setDensity: (density: UiDensity) => void;

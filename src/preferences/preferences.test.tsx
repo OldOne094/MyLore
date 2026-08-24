@@ -53,7 +53,12 @@ afterEach(async () => {
 describe("preferences repository", () => {
   it("round-trips preferences through the localStorage backend", async () => {
     const repo = getPreferencesRepository();
-    const input: Preferences = { theme: "dark", language: "ar", density: "compact" };
+    const input: Preferences = {
+      theme: "dark",
+      language: "ar",
+      density: "compact",
+      accent: "ocean",
+    };
     await repo.save(input);
     await expect(repo.load()).resolves.toEqual(input);
     expect(JSON.parse(localStorage.getItem(PREFERENCES_KEY) ?? "{}")).toEqual(input);
@@ -68,25 +73,30 @@ describe("preferences repository", () => {
     expect(parsePreferences(null)).toBeNull();
     expect(parsePreferences("garbage")).toBeNull();
     expect(parsePreferences({})).toEqual(DEFAULT_PREFERENCES);
+    expect(parsePreferences({ theme: "nope", accent: "nope" })).toEqual(DEFAULT_PREFERENCES);
     expect(parsePreferences({ theme: "nope" })).toEqual({
       theme: "system",
       language: "en",
       density: "comfortable",
+      accent: "classic",
     });
     expect(parsePreferences({ theme: "dark", language: "fr" })).toEqual({
       theme: "dark",
       language: "en",
       density: "comfortable",
+      accent: "classic",
     });
     expect(parsePreferences({ density: "tiny" })).toEqual({
       theme: "system",
       language: "en",
       density: "comfortable",
+      accent: "classic",
     });
     expect(parsePreferences({ density: "compact" })).toEqual({
       theme: "system",
       language: "en",
       density: "compact",
+      accent: "classic",
     });
   });
 });
@@ -145,7 +155,7 @@ describe("settings page", () => {
   it("applies persisted preferences on mount", async () => {
     localStorage.setItem(
       PREFERENCES_KEY,
-      JSON.stringify({ theme: "dark", language: "ar", density: "compact" }),
+      JSON.stringify({ theme: "dark", language: "ar", density: "compact", accent: "ocean" }),
     );
     renderSettings();
     await waitFor(() => {

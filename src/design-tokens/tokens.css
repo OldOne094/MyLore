@@ -132,3 +132,63 @@
   --status-dropped: var(--danger);
   --status-repeat: var(--info);
 }
+
+/* ---------------------------------------------------------------------------
+ * Accent color personalization (user freedom layer).
+ * The classic terracotta is the default; the data-accent attribute swaps the
+ * accent triad per theme with AA-contrast pairs curated by hand.
+ * ------------------------------------------------------------------------- */
+:root[data-accent="ocean"] {
+  --accent: #2563eb;
+  --accent-hover: #1d4ed8;
+  --accent-soft: #dbeafe;
+}
+:root[data-theme="dark"][data-accent="ocean"] {
+  --accent: #60a5fa;
+  --accent-hover: #93c5fd;
+  --accent-soft: #172554;
+}
+
+:root[data-accent="violet"] {
+  --accent: #7c3aed;
+  --accent-hover: #6d28d9;
+  --accent-soft: #ede9fe;
+}
+:root[data-theme="dark"][data-accent="violet"] {
+  --accent: #a78bfa;
+  --accent-hover: #c4b5fd;
+  --accent-soft: #2e1065;
+}
+
+:root[data-accent="emerald"] {
+  --accent: #047857;
+  --accent-hover: #065f46;
+  --accent-soft: #d1fae5;
+}
+:root[data-theme="dark"][data-accent="emerald"] {
+  --accent: #34d399;
+  --accent-hover: #6ee7b7;
+  --accent-soft: #022c22;
+}
+
+:root[data-accent="rose"] {
+  --accent: #be123c;
+  --accent-hover: #9f1239;
+  --accent-soft: #ffe4e6;
+}
+:root[data-theme="dark"][data-accent="rose"] {
+  --accent: #fb7185;
+  --accent-hover: #fda4af;
+  --accent-soft: #4c0519;
+}
+
+:root[data-accent="amber"] {
+  --accent: #b45309;
+  --accent-hover: #92400e;
+  --accent-soft: #fef3c7;
+}
+:root[data-theme="dark"][data-accent="amber"] {
+  --accent: #fbbf24;
+  --accent-hover: #fcd34d;
+  --accent-soft: #451a03;
+}
