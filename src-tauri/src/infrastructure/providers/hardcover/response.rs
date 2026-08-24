@@ -192,6 +192,10 @@ mod tests {
         assert_eq!(rows.len(), 1);
 
         // Nothing usable -> empty, never an error.
-        assert!(SearchResults { results: Value::Null }.into_rows().is_empty());
+        assert!(SearchResults {
+            results: Value::Null
+        }
+        .into_rows()
+        .is_empty());
     }
 }

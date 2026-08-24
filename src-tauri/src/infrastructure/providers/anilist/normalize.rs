@@ -326,7 +326,13 @@ pub(crate) fn people(full: &MediaFull) -> Vec<ProviderPerson> {
     }
     if let Some(edges) = full.staff.as_ref().and_then(|s| s.edges.as_ref()) {
         for edge in edges {
-            let Some(name) = edge.node.name.as_deref().filter(|n| !n.is_empty()) else {
+            let Some(name) = edge
+                .node
+                .name
+                .as_ref()
+                .and_then(|n| n.full.as_deref())
+                .filter(|n| !n.is_empty())
+            else {
                 continue;
             };
             let Some(role) = map_staff_role(edge.role.as_deref()) else {

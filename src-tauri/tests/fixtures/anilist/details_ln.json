@@ -27,7 +27,9 @@
       "genres": ["Drama", "Psychological"],
       "tags": [{ "name": "School" }],
       "studios": null,
-      "staff": { "edges": [{ "role": "Story & Art", "node": { "name": "Syougo Kinugasa" } }] },
+      "staff": {
+        "edges": [{ "role": "Story & Art", "node": { "name": { "full": "Syougo Kinugasa" } } }]
+      },
       "relations": { "edges": [] },
       "externalLinks": [
         { "site": "MAL", "id": 85653, "url": "https://myanimelist.net/manga/85653" }

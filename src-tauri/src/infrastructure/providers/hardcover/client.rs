@@ -280,7 +280,12 @@ mod tests {
         assert!(matches!(err, ProviderError::InvalidResponse { .. }));
     }
     /// Test helper: normalize a search payload into its row count.
-    fn rows_len(search: &crate::infrastructure::providers::hardcover::response::SearchResults) -> usize {
-        crate::infrastructure::providers::hardcover::response::SearchResults::into_rows(search.clone()).len()
+    fn rows_len(
+        search: &crate::infrastructure::providers::hardcover::response::SearchResults,
+    ) -> usize {
+        crate::infrastructure::providers::hardcover::response::SearchResults::into_rows(
+            search.clone(),
+        )
+        .len()
     }
 }

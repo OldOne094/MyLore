@@ -34,9 +34,9 @@
       },
       "staff": {
         "edges": [
-          { "role": "Director", "node": { "name": "Shinichirou Watanabe" } },
-          { "role": "Story & Art", "node": { "name": "Toshihiro Kawamoto" } },
-          { "role": "Character Design", "node": { "name": "Toshihiro Kawamoto" } }
+          { "role": "Director", "node": { "name": { "full": "Shinichirou Watanabe" } } },
+          { "role": "Story & Art", "node": { "name": { "full": "Toshihiro Kawamoto" } } },
+          { "role": "Character Design", "node": { "name": { "full": "Toshihiro Kawamoto" } } }
         ]
       },
       "relations": {

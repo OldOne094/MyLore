@@ -145,7 +145,17 @@ pub(crate) struct StaffEdge {
 #[derive(Debug, Clone, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub(crate) struct StaffNode {
-    pub name: Option<String>,
+    /// Live schema (2026-08): Staff.name became an object
+    /// (`StaffName { full, native, userPreferred }`) — the query selects
+    /// `name { full }` and only the display name is kept here.
+    pub name: Option<StaffName>,
+}
+
+/// Display name of a staff member (`name { full }`).
+#[derive(Debug, Clone, Deserialize)]
+pub(crate) struct StaffName {
+    #[serde(default)]
+    pub full: Option<String>,
 }
 
 #[derive(Debug, Clone, Deserialize)]

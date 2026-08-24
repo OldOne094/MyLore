@@ -81,13 +81,10 @@ impl AniListClient {
         if let Some(token) = &self.token {
             request = request.bearer_auth(token);
         }
-        let response = request
-            .send()
-            .await
-            .map_err(|e| ProviderError::Transport {
-                provider: PROVIDER_ID.to_string(),
-                message: e.to_string(),
-            })?;
+        let response = request.send().await.map_err(|e| ProviderError::Transport {
+            provider: PROVIDER_ID.to_string(),
+            message: e.to_string(),
+        })?;
 
         let status = response.status();
         if !status.is_success() {
@@ -136,12 +133,12 @@ impl AniListClient {
 
 #[cfg(test)]
 mod tests {
-    use serde_json::json;
-    use wiremock::matchers::{body_partial_json, header, method, path};
-    use wiremock::{Mock, MockServer, ResponseTemplate};
     use super::*;
     use crate::infrastructure::providers::anilist::graphql;
     use crate::infrastructure::providers::test_support::fixture;
+    use serde_json::json;
+    use wiremock::matchers::{body_partial_json, header, method, path};
+    use wiremock::{Mock, MockServer, ResponseTemplate};
 
     #[tokio::test]
     async fn sends_bearer_header_when_token_set() {
@@ -152,8 +149,7 @@ mod tests {
         Mock::given(method("POST"))
             .and(header("authorization", "Bearer sekrit-token"))
             .respond_with(
-                ResponseTemplate::new(200)
-                    .set_body_string(fixture("anilist", "search_anime.json")),
+                ResponseTemplate::new(200).set_body_string(fixture("anilist", "search_anime.json")),
             )
             .expect(1)
             .mount(&server)

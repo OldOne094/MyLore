@@ -82,10 +82,7 @@ async fn exchange_code(code: &str) -> Result<String, AppError> {
 /// Kick off the browser flow. Binds the loopback listener synchronously so a
 /// port conflict fails loudly, opens the system browser, then finishes the
 /// capture/exchange/store on a background task.
-pub fn start(
-    app: AppHandle,
-    settings: Arc<ProviderSettingsService>,
-) -> Result<(), AppError> {
+pub fn start(app: AppHandle, settings: Arc<ProviderSettingsService>) -> Result<(), AppError> {
     let expected_state = uuid::Uuid::new_v4().to_string();
     let authorize = format!(
         "{AUTHORIZE_URL}?client_id={CLIENT_ID}&redirect_uri={REDIRECT_URI}&response_type=code&state={expected_state}"

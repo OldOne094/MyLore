@@ -46,7 +46,7 @@ query Details($id: Int) {
     genres
     tags { name }
     studios { edges { isMain node { name } } }
-    staff { edges { role node { name } } }
+    staff { edges { role node { name { full } } } }
     relations { edges { relationType node { id title { romaji } } } }
     externalLinks { site id url }
     siteUrl
