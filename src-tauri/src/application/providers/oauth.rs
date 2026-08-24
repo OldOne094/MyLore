@@ -208,6 +208,25 @@ fn futures_block_on<F: std::future::Future>(future: F) -> F::Output {
 mod tests {
     use super::*;
 
+    /// Regression guard (open-source hygiene): the client secret must never
+    /// be embedded in this file again. It loads from the app-data dir or the
+    /// environment at runtime; anything resembling an embedded literal here
+    /// fails the build.
+    #[test]
+    fn no_client_secret_literal_in_source() {
+        const SOURCE: &str = include_str!("oauth.rs");
+        for line in SOURCE.lines() {
+            let trimmed = line.trim_start();
+            if trimmed.starts_with("//") {
+                continue;
+            }
+            let declares_secret = (trimmed.starts_with("const CLIENT_SECRET:")
+                && trimmed.contains("&str"))
+                || trimmed.contains("\"client_secret\": \"");
+            assert!(!declares_secret, "embedded client secret detected: {line}");
+        }
+    }
+
     #[test]
     fn extracts_code_and_state_from_callback() {
         let (code, state) =
