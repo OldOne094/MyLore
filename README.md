@@ -9,7 +9,7 @@ machine**; the internet is only ever used to *fetch* metadata.
 
 - 🔒 **Private by design** — no account, no telemetry, no cloud. Encrypted-at-rest is opt-in on the roadmap.
 - 🌐 **English + Arabic**, full RTL layout.
-- 🧩 **9 metadata providers** (AniList, MangaDex, NovelUpdates, OpenLibrary, Bangumi, Jikan, TMDB, Google Books, Hardcover) with per-provider failure isolation — one down provider never breaks a search.
+- 🧩 **10 metadata providers** (AniList, MangaDex, NovelUpdates, WTR-LAB, OpenLibrary, Bangumi, Jikan, TMDB, Google Books, Hardcover) with per-provider failure isolation — one down provider never breaks a search.
 - 💾 **Portable backups** (`.mylore` archives), rollback-safe restore, pre-migration auto-backup.
 
 ---

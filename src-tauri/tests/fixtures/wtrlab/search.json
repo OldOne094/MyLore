@@ -1,0 +1,22 @@
+{
+  "success": true,
+  "data": [
+    {
+      "id": 93272,
+      "slug": "emperor-han-tian",
+      "search_text": "emperorhantian?????????",
+      "status": 1,
+      "data": {
+        "title": "Emperor Han Tian",
+        "author": "Test Author",
+        "description": "<p>An immortal emperor returns to a mortal world. <b>Test</b> description.</p>",
+        "raw": {
+          "title": "???????",
+          "author": "????"
+        },
+        "image": "https://img.wtr-lab.com/cdn/series/test.jpg?w=225&h=300"
+      },
+      "chapter_count": 965
+    }
+  ]
+}

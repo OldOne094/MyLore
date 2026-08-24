@@ -107,3 +107,36 @@ async fn live_openlibrary_search() {
         }
     }
 }
+
+#[tokio::test]
+#[ignore = "live network"]
+async fn live_wtrlab_search_and_details() {
+    use mylore_lib::infrastructure::providers::wtrlab::{client::WtrLabClient, WtrLabProvider};
+
+    let provider = WtrLabProvider::new(WtrLabClient::new());
+    println!("Searching WTR-LAB for 'emperor'...");
+    let hits = provider
+        .search(
+            "emperor",
+            Some(mylore_lib::domain::enums::ContentType::WebNovel),
+        )
+        .await
+        .expect("live search");
+    println!("SEARCH OK: {} hits", hits.len());
+    assert!(!hits.is_empty(), "expected results");
+
+    let first = &hits[0];
+    println!("First hit: {} ({})", first.title, first.provider_id);
+    let media = provider
+        .get_details(&first.provider_id)
+        .await
+        .expect("live details");
+    println!(
+        "DETAILS OK: {} | status={:?} | chapters={:?} | genres={} | tags={}",
+        media.title_main,
+        media.pub_status,
+        media.ch_count,
+        media.genres.join("/"),
+        media.tags.join("/")
+    );
+}

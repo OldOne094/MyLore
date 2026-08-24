@@ -18,6 +18,7 @@ pub mod mangadex;
 pub mod novelupdates;
 pub mod openlibrary;
 pub mod tmdb;
+pub mod wtrlab;
 
 pub use anilist::{anilist_config, AniListClient, AniListProvider, PROVIDER_ID};
 pub use bangumi::{
@@ -43,6 +44,8 @@ pub use openlibrary::{
     PROVIDER_ID as OPENLIBRARY_PROVIDER_ID,
 };
 pub use tmdb::{tmdb_config, TmdbClient, TmdbProvider, PROVIDER_ID as TMDB_PROVIDER_ID};
+pub use wtrlab::client::WtrLabClient;
+pub use wtrlab::{wtrlab_config, WtrLabProvider, PROVIDER_ID as WTRLAB_PROVIDER_ID};
 
 use std::sync::Arc;
 
@@ -87,6 +90,7 @@ pub fn build_adapter(id: &str, api_key: Option<&str>) -> Result<Arc<dyn Provider
             }
             Ok(Arc::new(HardcoverProvider::new(client)))
         }
+        wtrlab::PROVIDER_ID => Ok(Arc::new(WtrLabProvider::new(WtrLabClient::new()))),
         other => Err(format!("unknown provider adapter {other:?}")),
     }
 }
@@ -124,6 +128,7 @@ pub fn default_provider_entries() -> Vec<ProviderEntry> {
         jikan_config(),
         googlebooks_config(),
         hardcover_config(),
+        wtrlab_config(),
     ]
     .into_iter()
     .map(|config| {
@@ -147,6 +152,7 @@ pub fn default_provider_configs() -> Vec<ProviderConfig> {
         jikan_config(),
         googlebooks_config(),
         hardcover_config(),
+        wtrlab_config(),
     ]
 }
 

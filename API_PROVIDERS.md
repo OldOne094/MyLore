@@ -250,3 +250,19 @@
   rate-limit awareness, fixture-recorded tests offline (`TESTING.md`).
 - Attribution obligations: TMDB logo/link on movie/TV data; MangaDex credit line in About.
   These are UI requirements, tracked as tasks.
+
+## 15. WTR-LAB (wtr-lab.com) — MISSION-131
+
+Web novels (CN/KR → EN translations). Next.js site; **passes Cloudflare with
+plain clients** (live-verified 2026-08-24 — unlike NovelUpdates).
+
+| Aspect | Value |
+|---|---|
+| Search | `GET /api/search?q=` → JSON `{success, data:[{id, slug, data:{title,author,description,image,raw}}]}` |
+| Details | `GET /en/novel/{id}/{slug}` → HTML; metadata in the embedded `__NEXT_DATA__` JSON at `props.pageProps.serie.serie_data.{data,status,chapter_count,genres}` + `pageProps.tags` |
+| Chapters | `GET /api/chapters/{id}` → JSON `{chapters:[{order,title,name}]}` (`title`=EN, `name`=raw) |
+| Provider id | Composite `{id}/{slug}` — chapters need only `{id}`, details need both |
+| Status mapping | `serie_data.status`: `1`→completed, else ongoing |
+| Genres | Numeric taxonomy (40 ids) mapped to names |
+| Auth | None. Rate: ~2 req/s |
+| Gotchas | `cf_clearance` is HttpOnly here too if a challenge ever appears — treat challenge pages as non-retryable. `document.cookie`/title scraping is useless by design. |

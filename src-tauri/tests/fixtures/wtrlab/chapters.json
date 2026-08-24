@@ -1,0 +1,28 @@
+{
+  "chapters": [
+    {
+      "serie_id": 93272,
+      "id": 48832918,
+      "order": 2,
+      "title": "Chapter 2 The Return",
+      "name": "?2? ????",
+      "updated_at": "2026-08-01"
+    },
+    {
+      "serie_id": 93272,
+      "id": 48832917,
+      "order": 1,
+      "title": "",
+      "name": "?1? ???????",
+      "updated_at": "2026-07-25"
+    },
+    {
+      "serie_id": 93272,
+      "id": 48832919,
+      "order": 3,
+      "title": "Chapter 3 The Sword Trial",
+      "name": "?3? ???????",
+      "updated_at": "2026-08-10"
+    }
+  ]
+}
