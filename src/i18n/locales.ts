@@ -144,6 +144,8 @@ const en = {
     providersHint:
       "Enable metadata providers and manage their API keys. Keys are stored in your operating system's secure keyring.",
     providersKeyRequired: "Uses an API key",
+    providersStateOn: "Enabled",
+    providersStateOff: "Disabled",
     providersKeyField: "{{name}} API key",
     providersKeyPlaceholder: "Enter API key",
     providersKeySave: "Save key",
@@ -1028,6 +1030,8 @@ const ar = {
     providersHint:
       "فعِّل مزوّدي البيانات وأدر مفاتيح API الخاصة بهم. تُخزَّن المفاتيح في نظام تشغيلك (سلسلة المفاتيح الآمنة).",
     providersKeyRequired: "يتطلب مفتاح API",
+    providersStateOn: "مفعّل",
+    providersStateOff: "متوقف",
     providersKeyField: "مفتاح API لـ {{name}}",
     providersKeyPlaceholder: "أدخل مفتاح API",
     providersKeySave: "حفظ المفتاح",

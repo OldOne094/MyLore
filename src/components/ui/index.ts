@@ -12,5 +12,6 @@ export { EmptyState, type EmptyStateProps } from "./empty-state";
 export { InputField, TextareaField, type InputFieldProps, type TextareaFieldProps } from "./field";
 export { Popover, PopoverClose, PopoverContent, PopoverTrigger } from "./popover";
 export { Skeleton } from "./skeleton";
+export { Switch, type SwitchProps } from "./switch";
 export { Tabs, TabsContent, TabsList, TabsTrigger } from "./tabs";
 export { ToastProvider, useToast, type ToastData, type ToastKind } from "./toast";

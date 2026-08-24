@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
-import { Check, X } from "lucide-react";
-import { Button, useToast } from "@/components/ui";
+import { Check, KeyRound, PlugZap, X } from "lucide-react";
+import { Badge, Button, Switch, useToast } from "@/components/ui";
 import { cn } from "@/lib/cn";
 import {
   useAnilistConnect,
@@ -13,11 +13,22 @@ import {
   type ProviderSettingsRow,
 } from "./providers";
 
-/* MISSION-063 — Provider settings. One row per registered provider: an
-   enable/disable switch, an API-key field for key-required providers (keys
-   are stored in a local file by the backend and never returned) and a live
-   "test connection" probe. MISSION-098: save success/failure surfaces as
-   inline feedback so silent keyring failures can't recur. */
+/* MISSION-063 / MISSION-130 — Provider settings, redesigned as self-contained
+   cards. One card per provider: identity + live state chips on the header, a
+   proper Switch on the trailing edge, then the credential controls (uniform
+   control height, grouped) and a test probe with its outcome as a chip.
+   Contracts kept from MISSION-063/098/130: role=switch labels ("Enable/
+   Disable {{name}}"), key field label ("{{name}} API key"), "Save key"
+   button, inline "Key saved" indicator — all covered by tests. */
+
+function StateChip({ enabled }: { enabled: boolean }) {
+  const { t } = useTranslation();
+  return (
+    <Badge variant={enabled ? "inprogress" : "neutral"}>
+      {t(enabled ? "settings.providersStateOn" : "settings.providersStateOff")}
+    </Badge>
+  );
+}
 
 function ProviderRow({
   row,
@@ -61,51 +72,45 @@ function ProviderRow({
   };
 
   return (
-    <li className="flex flex-col gap-3 border-t border-border-subtle py-4 first:border-t-0">
+    <li
+      className={cn(
+        "flex flex-col gap-3 rounded-md border bg-bg-surface p-4",
+        row.enabled ? "border-border-subtle" : "border-border-subtle opacity-80",
+      )}
+    >
+      {/* Identity + state */}
       <div className="flex items-center justify-between gap-4">
-        <div className="min-w-0">
-          <p className="text-sm font-medium text-text-primary">{row.name}</p>
+        <div className="flex min-w-0 flex-wrap items-center gap-2">
+          <p className="text-sm font-semibold text-text-primary">{row.name}</p>
+          <StateChip enabled={row.enabled} />
           {row.requires_key ? (
-            <p className="mt-0.5 text-xs text-text-tertiary">
+            <Badge variant="neutral">
+              <KeyRound size={11} aria-hidden="true" className="-ms-0.5" />
               {t("settings.providersKeyRequired")}
-            </p>
+            </Badge>
           ) : null}
         </div>
-        <button
-          type="button"
-          role="switch"
-          aria-checked={row.enabled}
+        <Switch
+          checked={row.enabled}
+          disabled={toggle.isPending}
           aria-label={t(row.enabled ? "settings.providersDisable" : "settings.providersEnable", {
             name: row.name,
           })}
-          disabled={toggle.isPending}
-          onClick={() => toggle.mutate({ provider: row.provider, enabled: !row.enabled })}
-          className={cn(
-            "relative inline-flex h-5 w-9 shrink-0 items-center rounded-full border transition-colors duration-150 ease-out",
-            "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent",
-            "disabled:pointer-events-none disabled:opacity-50",
-            row.enabled ? "border-accent bg-accent" : "border-border-strong bg-bg-raised",
-          )}
-        >
-          <span
-            aria-hidden="true"
-            className={cn(
-              "inline-block h-3.5 w-3.5 rounded-full bg-bg-surface transition-transform duration-150 ease-out",
-              row.enabled ? "translate-x-[20px]" : "translate-x-0.5",
-            )}
-          />
-        </button>
+          onCheckedChange={(enabled) => toggle.mutate({ provider: row.provider, enabled })}
+        />
       </div>
 
+      {/* Credentials */}
       {row.requires_key ? (
         <div className="flex flex-wrap items-center gap-2">
           {row.provider === "anilist" ? (
             <Button
-              variant="secondary"
+              variant={row.has_key ? "secondary" : "primary"}
               size="sm"
               disabled={connecting}
               onClick={() => connect?.mutate()}
             >
+              <PlugZap size={14} aria-hidden="true" />
               {connecting
                 ? t("settings.providersAnilistConnecting")
                 : t("settings.providersAnilistConnect")}
@@ -118,10 +123,13 @@ function ProviderRow({
             value={keyValue}
             disabled={keyBusy}
             onChange={(event) => setKeyValue(event.target.value)}
+            onKeyDown={(event) => {
+              if (event.key === "Enter") handleSaveKey();
+            }}
             placeholder={row.has_key ? "••••••••" : t("settings.providersKeyPlaceholder")}
             aria-label={t("settings.providersKeyField", { name: row.name })}
             className={cn(
-              "w-52 rounded-sm border bg-bg-base px-3 py-1.5 text-sm text-text-primary",
+              "h-[var(--control-height-compact)] min-w-48 flex-1 rounded-sm border bg-bg-base px-3 text-sm text-text-primary",
               "placeholder:text-text-tertiary transition-colors duration-150 ease-out",
               "hover:border-accent focus-visible:outline-none",
             )}
@@ -135,40 +143,42 @@ function ProviderRow({
             {keyBusy ? t("settings.providersKeySaving") : t("settings.providersKeySave")}
           </Button>
           {keyError ? (
-            <span className="inline-flex items-center gap-1 text-xs text-destructive">
-              <X size={12} aria-hidden="true" />
+            <Badge variant="dropped">
+              <X size={11} aria-hidden="true" className="-ms-0.5" />
               {t("settings.providersKeySaveFailed")}
-            </span>
+            </Badge>
           ) : row.has_key ? (
-            <span className="inline-flex items-center gap-1 text-xs text-status-completed">
-              <Check size={12} aria-hidden="true" />
+            <Badge variant="completed">
+              <Check size={11} aria-hidden="true" className="-ms-0.5" />
               {t("settings.providersKeySaved")}
-            </span>
+            </Badge>
           ) : null}
         </div>
       ) : null}
 
-      <div className="flex items-center gap-3">
+      {/* Probe */}
+      <div className="flex flex-wrap items-center gap-2">
         <Button
-          variant="ghost"
+          variant="secondary"
           size="sm"
           disabled={test.isPending}
           aria-label={t("settings.providersTestAria", { name: row.name })}
           onClick={() => test.mutate({ provider: row.provider })}
         >
+          <PlugZap size={14} aria-hidden="true" className="rtl:-scale-x-100" />
           {test.isPending
             ? t("settings.providersTesting")
             : t("settings.providersTest", { name: row.name })}
         </Button>
         {testResult ? (
           testResult.ok ? (
-            <span className="text-xs text-status-completed">
+            <Badge variant="completed">
               {t("settings.providersTestOk", { count: testResult.results })}
-            </span>
+            </Badge>
           ) : (
-            <span className="text-xs text-danger">
+            <Badge variant="dropped">
               {t("settings.providersTestFailed", { message: testResult.message })}
-            </span>
+            </Badge>
           )
         ) : null}
       </div>
@@ -197,7 +207,7 @@ export function ProvidersSection() {
         aria-label={t("settings.providersLoading")}
       >
         {[0, 1, 2].map((i) => (
-          <div key={i} className="h-12 animate-pulse rounded-sm bg-bg-raised" />
+          <div key={i} className="h-20 animate-pulse rounded-md bg-bg-raised" />
         ))}
       </div>
     );
@@ -219,7 +229,7 @@ export function ProvidersSection() {
   }
 
   return (
-    <ul className="divide-y-0">
+    <ul className="flex flex-col gap-3">
       {data.map((row) => (
         <ProviderRow
           key={row.provider}
