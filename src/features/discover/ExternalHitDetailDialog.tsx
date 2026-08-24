@@ -202,7 +202,7 @@ export function ExternalHitDetailDialog({
 
           <div className="mt-4 flex justify-end gap-2">
             <DialogClose asChild>
-              <Button variant="secondary">{t("discover.close")}</Button>
+              <Button variant="secondary">{t("a11y.close")}</Button>
             </DialogClose>
             {!imported ? (
               <Button onClick={handleImport} disabled={importProvider.isPending}>

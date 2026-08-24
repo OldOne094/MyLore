@@ -129,6 +129,12 @@ pub fn run() {
                     ),
                 )
                 .inner_size(340.0, 220.0)
+                // Parked offscreen rather than hidden: WebView2 never runs
+                // scripts in never-shown windows, but an onscreen-positioned
+                // window outside every monitor keeps the page fully live
+                // while staying out of sight. No taskbar button either.
+                .position(-1600.0, -1200.0)
+                .skip_taskbar(true)
                 .on_navigation(move |url| {
                     infrastructure::nu_bridge::handle_report_navigation(&nav_state, url)
                 })

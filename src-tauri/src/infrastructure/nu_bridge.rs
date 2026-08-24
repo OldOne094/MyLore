@@ -55,6 +55,20 @@ impl BridgeState {
     }
 }
 
+/// A Cloudflare challenge was detected in a response: bring the harvester
+/// window back on-screen (centered enough to notice) and reload so the
+/// interactive challenge can be solved; the next successful fetch hides it
+/// again.
+pub fn on_challenge() {
+    if let Some(window) = WINDOW.get() {
+        let _ = window.show();
+        let _ = window.set_focus();
+        // Pull it back from the offscreen parking position.
+        let _ = window.set_position(tauri::PhysicalPosition::new(120, 120));
+        let _ = window.eval("location.reload();");
+    }
+}
+
 static GLOBAL: std::sync::OnceLock<Arc<BridgeState>> = std::sync::OnceLock::new();
 static WINDOW: std::sync::OnceLock<tauri::WebviewWindow> = std::sync::OnceLock::new();
 
