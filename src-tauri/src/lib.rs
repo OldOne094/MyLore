@@ -132,11 +132,13 @@ pub fn run() {
                     ),
                 )
                 .inner_size(340.0, 220.0)
-                // Parked offscreen rather than hidden: WebView2 never runs
-                // scripts in never-shown windows, but an onscreen-positioned
-                // window outside every monitor keeps the page fully live
-                // while staying out of sight. No taskbar button either.
-                .position(-1600.0, -1200.0)
+                // Lifecycle that actually works (field-tested): the window
+                // must be SHOWN at creation or WebView2 never starts the
+                // page; but it is hidden again on this same setup tick, long
+                // before the first frame paints, so users never see it. A
+                // shown-then-hidden webview keeps executing scripts, fetches
+                // included. skip_taskbar keeps the taskbar clean for the
+                // brief moment and while a challenge re-surfaces it.
                 .skip_taskbar(true)
                 .on_navigation(move |url| {
                     infrastructure::nu_bridge::handle_report_navigation(&nav_state, url)
@@ -146,6 +148,7 @@ pub fn run() {
                 {
                     Ok(window) => {
                         infrastructure::nu_bridge::attach_window(&window);
+                        let _ = window.hide(); // never visible to the user
                         tracing::info!(
                             window = %window.label(),
                             "NovelUpdates bridge window started"
