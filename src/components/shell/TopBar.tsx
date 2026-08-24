@@ -2,11 +2,11 @@ import { useState } from "react";
 import { Search } from "lucide-react";
 import { useLocation, useNavigate, useSearchParams } from "react-router";
 import { useTranslation } from "react-i18next";
+import { Segmented } from "@/components/ui";
 import { NAV_ITEMS } from "@/navigation";
 import { THEME_CHOICES } from "@/themes/preferences";
 import { useTheme } from "@/themes/useTheme";
 import { LanguageSwitcher } from "./LanguageSwitcher";
-import { cn } from "@/lib/cn";
 
 /* DESIGN_SYSTEM.md — Top bar: current page title + global actions (local
    search, locale, theme). Fully translated (MISSION-033). The search field
@@ -68,22 +68,15 @@ export function TopBar() {
 
       <div className="flex shrink-0 items-center gap-2">
         <LanguageSwitcher />
-        <div className="theme-switcher" role="group" aria-label={t("a11y.theme")}>
-          {THEME_CHOICES.map((choice) => (
-            <button
-              key={choice}
-              type="button"
-              className={cn(
-                "rounded-full border-none bg-transparent px-3 py-1 text-sm text-text-secondary transition-colors duration-150 ease-out hover:bg-bg-hover hover:text-text-primary",
-                preference === choice && "bg-accent text-bg-surface hover:bg-accent",
-              )}
-              aria-pressed={preference === choice}
-              onClick={() => setPreference(choice)}
-            >
-              {t(`theme.${choice}`)}
-            </button>
-          ))}
-        </div>
+        <Segmented
+          aria-label={t("a11y.theme")}
+          value={preference}
+          onChange={setPreference}
+          options={THEME_CHOICES.map((choice) => ({
+            value: choice,
+            label: t(`theme.${choice}`),
+          }))}
+        />
       </div>
     </header>
   );

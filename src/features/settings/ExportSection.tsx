@@ -8,10 +8,10 @@ import {
   DialogDescription,
   DialogTitle,
   DialogTrigger,
+  Segmented,
   useToast,
 } from "@/components/ui";
 import { type ExportReport } from "@/api";
-import { cn } from "@/lib/cn";
 import {
   EXPORT_FORMATS,
   pickExportPath,
@@ -90,26 +90,15 @@ export function ExportSection() {
             <DialogDescription>{t("export.dialogHint")}</DialogDescription>
 
             <div className="mt-5 flex flex-col gap-4">
-              <div
-                role="group"
+              <Segmented
                 aria-label={t("export.formatAria")}
-                className="inline-flex items-center gap-1 rounded-full border border-border-subtle bg-bg-raised p-1"
-              >
-                {EXPORT_FORMATS.map((value) => (
-                  <button
-                    key={value}
-                    type="button"
-                    className={cn(
-                      "rounded-full border-none bg-transparent px-3 py-1 text-sm text-text-secondary transition-colors duration-150 ease-out hover:bg-bg-hover hover:text-text-primary",
-                      format === value && "bg-accent text-bg-surface hover:bg-accent",
-                    )}
-                    aria-pressed={format === value}
-                    onClick={() => setFormat(value)}
-                  >
-                    {t(`export.format${value[0].toUpperCase()}${value.slice(1)}`)}
-                  </button>
-                ))}
-              </div>
+                value={format}
+                onChange={setFormat}
+                options={EXPORT_FORMATS.map((value) => ({
+                  value,
+                  label: t(`export.format${value[0].toUpperCase()}${value.slice(1)}`),
+                }))}
+              />
 
               {report ? (
                 <div className="rounded-sm border border-border-subtle p-3 text-sm">

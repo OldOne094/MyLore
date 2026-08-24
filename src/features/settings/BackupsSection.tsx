@@ -8,6 +8,7 @@ import {
   DialogDescription,
   DialogTitle,
   Skeleton,
+  Segmented,
   useToast,
 } from "@/components/ui";
 import { backup_validate, type BackupEntry, type BackupReport } from "@/api";
@@ -124,26 +125,15 @@ export function BackupsSection() {
       <div className="mt-4 flex flex-col gap-4">
         {prefs ? (
           <div className="flex flex-wrap items-end gap-4">
-            <div
-              role="group"
+            <Segmented
               aria-label={t("settings.backupsAuto")}
-              className="inline-flex items-center gap-1 rounded-full border border-border-subtle bg-bg-raised p-1"
-            >
-              {[false, true].map((value) => (
-                <button
-                  key={String(value)}
-                  type="button"
-                  className={cn(
-                    "rounded-full border-none bg-transparent px-3 py-1 text-sm text-text-secondary transition-colors duration-150 ease-out hover:bg-bg-hover hover:text-text-primary",
-                    prefs.auto_enabled === value && "bg-accent text-bg-surface hover:bg-accent",
-                  )}
-                  aria-pressed={prefs.auto_enabled === value}
-                  onClick={() => savePrefs.mutate({ ...prefs, auto_enabled: value })}
-                >
-                  {value ? t("settings.backupsOn") : t("settings.backupsOff")}
-                </button>
-              ))}
-            </div>
+              value={prefs.auto_enabled ? "on" : "off"}
+              onChange={(value) => savePrefs.mutate({ ...prefs, auto_enabled: value === "on" })}
+              options={[
+                { value: "off", label: t("settings.backupsOff") },
+                { value: "on", label: t("settings.backupsOn") },
+              ]}
+            />
             {prefs.auto_enabled ? (
               <label className="flex items-center gap-2 text-sm text-text-secondary">
                 {t("settings.backupsInterval")}

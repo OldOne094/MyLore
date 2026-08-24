@@ -2,7 +2,7 @@ import { useTranslation } from "react-i18next";
 import { THEME_CHOICES } from "@/themes/preferences";
 import { LANGUAGE_SHORT_LABELS, SUPPORTED_LANGUAGES } from "@/i18n";
 import { usePreferences } from "@/preferences/usePreferences";
-import { cn } from "@/lib/cn";
+import { Segmented } from "@/components/ui";
 import { ProvidersSection } from "./ProvidersSection";
 import { ExportSection } from "./ExportSection";
 import { BackupsSection } from "./BackupsSection";
@@ -33,72 +33,39 @@ export function SettingsPage() {
   return (
     <div className="mx-auto flex w-full max-w-3xl flex-col gap-6 p-6">
       <Section title={t("settings.theme")} hint={t("settings.themeHint")}>
-        <div
-          role="group"
+        <Segmented
           aria-label={t("settings.theme")}
-          className="inline-flex items-center gap-1 rounded-full border border-border-subtle bg-bg-raised p-1"
-        >
-          {THEME_CHOICES.map((choice) => (
-            <button
-              key={choice}
-              type="button"
-              className={cn(
-                "rounded-full border-none bg-transparent px-3 py-1 text-sm text-text-secondary transition-colors duration-150 ease-out hover:bg-bg-hover hover:text-text-primary",
-                preferences.theme === choice && "bg-accent text-bg-surface hover:bg-accent",
-              )}
-              aria-pressed={preferences.theme === choice}
-              onClick={() => setTheme(choice)}
-            >
-              {t(`theme.${choice}`)}
-            </button>
-          ))}
-        </div>
+          value={preferences.theme}
+          onChange={setTheme}
+          options={THEME_CHOICES.map((choice) => ({
+            value: choice,
+            label: t(`theme.${choice}`),
+          }))}
+        />
       </Section>
 
       <Section title={t("settings.language")} hint={t("settings.languageHint")}>
-        <div
-          role="group"
+        <Segmented
           aria-label={t("settings.language")}
-          className="inline-flex items-center gap-1 rounded-full border border-border-subtle bg-bg-raised p-1"
-        >
-          {SUPPORTED_LANGUAGES.map((code) => (
-            <button
-              key={code}
-              type="button"
-              className={cn(
-                "rounded-full border-none bg-transparent px-3 py-1 text-sm text-text-secondary transition-colors duration-150 ease-out hover:bg-bg-hover hover:text-text-primary",
-                preferences.language === code && "bg-accent text-bg-surface hover:bg-accent",
-              )}
-              aria-pressed={preferences.language === code}
-              onClick={() => setLanguage(code)}
-            >
-              {LANGUAGE_SHORT_LABELS[code]}
-            </button>
-          ))}
-        </div>
+          value={preferences.language}
+          onChange={setLanguage}
+          options={SUPPORTED_LANGUAGES.map((code) => ({
+            value: code,
+            label: LANGUAGE_SHORT_LABELS[code],
+          }))}
+        />
       </Section>
 
       <Section title={t("settings.density")} hint={t("settings.densityHint")}>
-        <div
-          role="group"
+        <Segmented
           aria-label={t("settings.density")}
-          className="inline-flex items-center gap-1 rounded-full border border-border-subtle bg-bg-raised p-1"
-        >
-          {(["comfortable", "compact"] as const).map((value) => (
-            <button
-              key={value}
-              type="button"
-              className={cn(
-                "rounded-full border-none bg-transparent px-3 py-1 text-sm text-text-secondary transition-colors duration-150 ease-out hover:bg-bg-hover hover:text-text-primary",
-                preferences.density === value && "bg-accent text-bg-surface hover:bg-accent",
-              )}
-              aria-pressed={preferences.density === value}
-              onClick={() => setDensity(value)}
-            >
-              {t(`settings.density_${value}`)}
-            </button>
-          ))}
-        </div>
+          value={preferences.density}
+          onChange={setDensity}
+          options={[
+            { value: "comfortable", label: t("settings.density_comfortable") },
+            { value: "compact", label: t("settings.density_compact") },
+          ]}
+        />
       </Section>
 
       <Section title={t("settings.providers")} hint={t("settings.providersHint")}>
