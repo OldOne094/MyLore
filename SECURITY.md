@@ -10,6 +10,7 @@ structural, never hopeful.
 |---|---|---|---|
 | AniList **OAuth client secret** | App identity — public-knowledge for desktop apps (RFC 8252 §8.4) | `{app_data_dir}/anilist.client-secret` (one line) or `ANILIST_CLIENT_SECRET` env. Never in source. | ❌ never |
 | User **access tokens** (AniList etc.) | User data — highly sensitive | OS-level secret pipeline (`FileSecretStore` under the app-data dir / keyring). Never sent to the frontend, never logged. | ❌ never |
+| `MYLORE_DB_KEY` (optional at-rest passphrase) | Unlocks the whole library | Provided via environment at launch; never persisted, never logged. Lose it = lose the data. | ❌ never (env only) |
 | TMDB / Google Books keys | Per-user, user-entered in Settings | Same secret pipeline as above | ❌ never |
 
 ## 2. The rules (enforced)

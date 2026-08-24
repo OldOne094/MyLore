@@ -76,6 +76,23 @@ cargo clippy --all-targets -- -D warnings   # run inside src-tauri/
 cargo test           # backend unit + integration tests
 ```
 
+#### Optional: encrypt the database at rest (MISSION-112)
+
+Build with SQLCipher and set a passphrase; when present, the library database
+**and every `.mylore` backup made from it** are AES-encrypted:
+
+```bash
+# build with encryption support (needs perl + nasm + cmake, like Tauri's MSVC setup)
+cargo build --features db-encryption
+
+# run with a passphrase
+MYLORE_DB_KEY="your long passphrase" npm run tauri dev
+```
+
+Losing the passphrase means losing the data — there is no recovery path by
+design. Default builds without the feature stay plain SQLite and ignore the
+variable entirely.
+
 > The IPC boundary is generated: edit `scripts/ipc-contract.json`, then run
 > `npm run codegen`. Never hand-edit `src/api/ipc.generated.ts`.
 

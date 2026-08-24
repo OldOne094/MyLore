@@ -25,12 +25,19 @@ const MAX_CONNECTIONS: u32 = 5;
 
 /// Open (creating if missing) the SQLite database with FK, WAL,
 /// busy-timeout and recursive-trigger pragmas applied on every connection.
-///
-/// `recursive_triggers = ON` makes `ON DELETE CASCADE` deletions re-fire the
-/// triggers of child tables, so e.g. deleting media refreshes the FTS index
-/// (0007_media_fts.sql) even when the row is removed by a cascade.
 pub async fn connect(db_path: &Path) -> Result<SqlitePool, AppError> {
-    let options = SqliteConnectOptions::new()
+    connect_keyed(db_path, None).await
+}
+
+/// Same as [`connect`], but when `key` is Some the database is opened through
+/// SQLCipher's key pragma — which must be the FIRST statement on a fresh
+/// handle, hence it is registered before every other pragma (MISSION-112).
+///
+/// With the `db-encryption` cargo feature off this is identical to
+/// [`connect`] regardless of the key: the bundled sqlite3 simply ignores the
+/// unknown pragma, keeping single-build test suites honest.
+pub async fn connect_keyed(db_path: &Path, key: Option<&str>) -> Result<SqlitePool, AppError> {
+    let mut options = SqliteConnectOptions::new()
         .filename(db_path)
         .create_if_missing(true)
         .foreign_keys(true)
@@ -38,12 +45,30 @@ pub async fn connect(db_path: &Path) -> Result<SqlitePool, AppError> {
         .busy_timeout(Duration::from_millis(BUSY_TIMEOUT_MS))
         .synchronous(SqliteSynchronous::Normal)
         .pragma("recursive_triggers", "ON");
+    if let Some(key) = key {
+        // sqlx interpolates pragma values raw, so the passphrase must be a
+        // quoted SQL string (doubled single-quotes) - `PRAGMA key = '…'`
+        // selects the passphrase form rather than raw key bytes.
+        let quoted = format!("'{}'", key.replace('\'', "''"));
+        options = options.pragma("key", quoted);
+    }
 
     SqlitePoolOptions::new()
         .max_connections(MAX_CONNECTIONS)
         .connect_with(options)
         .await
         .map_err(|e| AppError::internal(format!("failed to open database: {e}")))
+}
+
+/// The at-rest encryption passphrase, read once from the environment.
+/// `MYLORE_DB_KEY` present ⇒ the database (and every `.mylore` archive made
+/// from it) is SQLCipher-encrypted; absent ⇒ plaintext as before. The value
+/// itself is never logged.
+pub fn encryption_key_from_env() -> Option<String> {
+    std::env::var("MYLORE_DB_KEY")
+        .ok()
+        .map(|k| k.trim().to_string())
+        .filter(|k| !k.is_empty())
 }
 
 /// Run `PRAGMA integrity_check`; returns `Ok(())` when the database is healthy.
@@ -73,10 +98,18 @@ pub async fn migrate(pool: &SqlitePool) -> Result<(), AppError> {
 /// file or a fresh schema without `_sqlx_migrations` counts as zero pending —
 /// there is no old data to protect on a first run.
 pub async fn pending_migrations(db_path: &Path) -> Result<u32, AppError> {
+    pending_migrations_with(db_path, None).await
+}
+
+/// [`pending_migrations`] with an optional SQLCipher key (MISSION-112).
+pub async fn pending_migrations_with(
+    db_path: &Path,
+    key: Option<&str>,
+) -> Result<u32, AppError> {
     if !db_path.exists() {
         return Ok(0);
     }
-    let pool = connect(db_path).await?;
+    let pool = connect_keyed(db_path, key).await?;
     let result = async {
         let (has_bookkeeping,): (i64,) = sqlx::query_as(
             "SELECT COUNT(*) FROM sqlite_master WHERE type = 'table' AND name = '_sqlx_migrations'",
@@ -103,7 +136,12 @@ pub async fn pending_migrations(db_path: &Path) -> Result<u32, AppError> {
 /// Open the database, verify integrity and apply migrations — the startup
 /// entry point.
 pub async fn init(db_path: &Path) -> Result<SqlitePool, AppError> {
-    let pool = connect(db_path).await?;
+    init_with(db_path, None).await
+}
+
+/// [`init`] with an optional SQLCipher key (MISSION-112).
+pub async fn init_with(db_path: &Path, key: Option<&str>) -> Result<SqlitePool, AppError> {
+    let pool = connect_keyed(db_path, key).await?;
     integrity_check(&pool).await?;
     migrate(&pool).await?;
     Ok(pool)
@@ -1080,6 +1118,77 @@ mod tests {
         assert_eq!(value, "ar", "settings should roundtrip values");
 
         pool.close().await;
+        cleanup_files(&path);
+    }
+}
+
+/// MISSION-112 - only meaningful when the binary is built with SQLCipher
+/// (`--features db-encryption`); without it the key pragma is ignored and the
+/// plain path runs, so these stay skipped in ordinary CI.
+#[cfg(all(test, feature = "db-encryption"))]
+mod encryption_tests {
+    use super::*;
+    use crate::infrastructure::test_support::{cleanup_files, temp_db_path};
+
+    async fn insert_media(pool: &SqlitePool, id: &str) {
+        sqlx::query(
+            "INSERT INTO media (id, content_type, title_main, created_at, updated_at)
+             VALUES (?, 'novel', 'Encrypted Title', '2026-01-01', '2026-01-01')",
+        )
+        .bind(id)
+        .execute(pool)
+        .await
+        .expect("insert media");
+    }
+
+    #[tokio::test]
+    async fn encrypted_roundtrip_with_the_same_key() {
+        let path = temp_db_path("encrypted.db");
+        let pool = init_with(&path, Some("correct-horse")).await.expect("init");
+        insert_media(&pool, "m-1").await;
+        pool.close().await;
+
+        let pool = init_with(&path, Some("correct-horse"))
+            .await
+            .expect("reopen with the same key");
+        let (title,): (String,) =
+            sqlx::query_as("SELECT title_main FROM media WHERE id = 'm-1'")
+                .fetch_one(&pool)
+                .await
+                .expect("read row");
+        assert_eq!(title, "Encrypted Title");
+        pool.close().await;
+        cleanup_files(&path);
+    }
+
+    #[tokio::test]
+    async fn wrong_key_is_rejected_at_startup() {
+        let path = temp_db_path("wrong-key.db");
+        {
+            let pool = init_with(&path, Some("correct-horse")).await.expect("init");
+            pool.close().await;
+        }
+        // A mismatched key decrypts garbage: either the open itself fails or
+        // integrity_check/migrations do - both must surface as an error.
+        let result = init_with(&path, Some("wrong-battery")).await;
+        assert!(
+            result.is_err(),
+            "a wrong passphrase must not yield a usable database"
+        );
+        cleanup_files(&path);
+    }
+
+    #[tokio::test]
+    async fn no_key_on_an_encrypted_database_fails() {
+        let path = temp_db_path("no-key.db");
+        {
+            let pool = init_with(&path, Some("correct-horse")).await.expect("init");
+            pool.close().await;
+        }
+        assert!(
+            init_with(&path, None).await.is_err(),
+            "opening an encrypted database without a key must fail"
+        );
         cleanup_files(&path);
     }
 }

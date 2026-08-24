@@ -30,6 +30,11 @@ tracing = "0.1"
 tracing-appender = "0.2"
 tracing-subscriber = { version = "0.3", features = ["env-filter", "fmt"] }
 sqlx = { version = "0.8", features = ["sqlite", "runtime-tokio", "migrate"] }
+# MISSION-112: activated only via the db-encryption feature above - feature
+# unification swaps sqlx's bundled sqlite3 for SQLCipher.
+libsqlite3-sys = { version = "0.30", optional = true, default-features = false, features = [
+    "bundled-sqlcipher-vendored-openssl",
+] }
 tokio = { version = "1", features = ["macros", "rt-multi-thread", "time", "sync"] }
 async-trait = "0.1"
 reqwest = { version = "0.13", default-features = false, features = ["json", "query", "form", "native-tls"] }
@@ -40,6 +45,12 @@ scraper = "0.27"
 keyring = "3"
 csv = "1"
 zip = { version = "2", default-features = false, features = ["deflate"] }
+
+[features]
+# MISSION-112 - opt-in at-rest encryption. Swaps the bundled SQLite for
+# SQLCipher (OpenSSL vendored); requires perl+nasm+cmake to build. Off by
+# default so ordinary builds and CI are untouched.
+db-encryption = ["dep:libsqlite3-sys"]
 
 [dev-dependencies]
 tokio = { version = "1", features = ["macros", "rt-multi-thread", "test-util"] }

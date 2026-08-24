@@ -134,6 +134,9 @@ impl Drop for PartialGuard {
 pub struct BackupService {
     pool: SqlitePool,
     data_dir: PathBuf,
+    /// SQLCipher passphrase for this environment (MISSION-112); None when
+    /// encryption is not enabled. Threads into every internal re-open.
+    encryption_key: Option<String>,
 }
 
 impl BackupService {
@@ -141,7 +144,15 @@ impl BackupService {
         Self {
             pool,
             data_dir: data_dir.to_path_buf(),
+            encryption_key: None,
         }
+    }
+
+    /// Attach this environment's SQLCipher passphrase (MISSION-112) so every
+    /// internal re-open (validate/restore/verify) uses the same key.
+    pub fn with_encryption_key(mut self, key: Option<String>) -> Self {
+        self.encryption_key = key;
+        self
     }
 
     /// Where archives are written: `{data_dir}/backups`.
@@ -423,17 +434,21 @@ impl BackupService {
     /// Opens its own short-lived pool because the app's pool does not exist
     /// yet at that point in startup; the caller decides whether a failure
     /// blocks startup (the app logs a warning and continues).
-    pub async fn pre_migration_backup(db_path: &Path) -> Result<Option<BackupReport>, AppError> {
-        let pending = db::pending_migrations(db_path).await?;
+    pub async fn pre_migration_backup(
+        db_path: &Path,
+        key: Option<&str>,
+    ) -> Result<Option<BackupReport>, AppError> {
+        let pending = db::pending_migrations_with(db_path, key).await?;
         if pending == 0 {
             return Ok(None);
         }
         let data_dir = db_path
             .parent()
             .ok_or_else(|| AppError::internal("database path has no parent directory"))?;
-        let pool = db::connect(db_path).await?;
+        let pool = db::connect_keyed(db_path, key).await?;
         let result = async {
-            let service = BackupService::new(pool.clone(), data_dir);
+            let mut service = BackupService::new(pool.clone(), data_dir);
+            service.encryption_key = key.map(str::to_string);
             service.create().await.map(Some)
         }
         .await;
@@ -531,7 +546,7 @@ impl BackupService {
 
         // Repoint asset rows at the restored files, then verify the swapped
         // database for real.
-        let pool = db::connect(&db_path).await?;
+        let pool = db::connect_keyed(&db_path, self.encryption_key.as_deref()).await?;
         let result = async {
             db::integrity_check(&pool).await?;
             for entry in &meta.assets {
@@ -594,7 +609,7 @@ impl BackupService {
         }
 
         let check = async {
-            let pool = db::connect(&temp).await?;
+            let pool = db::connect_keyed(&temp, self.encryption_key.as_deref()).await?;
             let result = async {
                 db::integrity_check(&pool).await?;
                 let (count,): (i64,) = sqlx::query_as("SELECT COUNT(*) FROM media")
@@ -1156,12 +1171,12 @@ mod tests {
         seed_media(&h.pool, "m-1").await;
 
         // Fully migrated database (and a missing file): nothing to protect.
-        assert!(BackupService::pre_migration_backup(&h.db_path)
+        assert!(BackupService::pre_migration_backup(&h.db_path, None)
             .await
             .expect("fully migrated")
             .is_none());
         let missing = h.data_dir.join("does-not-exist.db");
-        assert!(BackupService::pre_migration_backup(&missing)
+        assert!(BackupService::pre_migration_backup(&missing, None)
             .await
             .expect("fresh install")
             .is_none());
@@ -1176,7 +1191,7 @@ mod tests {
         .await
         .expect("forget latest migration");
 
-        let report = BackupService::pre_migration_backup(&h.db_path)
+        let report = BackupService::pre_migration_backup(&h.db_path, None)
             .await
             .expect("pending migration")
             .expect("backup created");
@@ -1195,7 +1210,7 @@ mod tests {
 
         // A corrupt database cannot be snapshotted; the error surfaces so
         // startup can log it and decide to continue.
-        assert!(BackupService::pre_migration_backup(&corrupt).await.is_err());
+        assert!(BackupService::pre_migration_backup(&corrupt, None).await.is_err());
 
         let _ = std::fs::remove_dir_all(&dir);
     }

@@ -39,11 +39,18 @@ pub fn run() {
             application::providers::oauth::init_secret(&data_dir);
 
             let db_path = data_dir.join("mylore.db");
+            let db_key = infrastructure::db::encryption_key_from_env();
+            if db_key.is_some() {
+                tracing::info!("database encryption enabled (SQLCipher)");
+            }
 
             // Pre-migration safety backup (MISSION-087): when the schema is
             // about to move forward, snapshot the old database first. Best
             // effort — a failed backup logs a warning and startup continues.
-            match tauri::async_runtime::block_on(BackupService::pre_migration_backup(&db_path)) {
+            match tauri::async_runtime::block_on(BackupService::pre_migration_backup(
+                &db_path,
+                db_key.as_deref(),
+            )) {
                 Ok(Some(report)) => {
                     tracing::info!(path = %report.path, "pre-migration backup created")
                 }
@@ -51,7 +58,10 @@ pub fn run() {
                 Err(error) => tracing::warn!(%error, "pre-migration backup failed; continuing"),
             }
 
-            let pool = tauri::async_runtime::block_on(infrastructure::db::connect(&db_path))?;
+            let pool = tauri::async_runtime::block_on(infrastructure::db::connect_keyed(
+                &db_path,
+                db_key.as_deref(),
+            ))?;
             tracing::info!(
                 db = %db_path.display(),
                 ms = startup.elapsed().as_millis() as u64,
@@ -94,7 +104,7 @@ pub fn run() {
 
             // Backup service (MISSION-084): archives under
             // `{data_dir}/backups`, cached assets from `{data_dir}/images`.
-            let backups = Arc::new(BackupService::new(pool, &data_dir));
+            let backups = Arc::new(BackupService::new(pool, &data_dir).with_encryption_key(db_key));
 
             // Automatic backup check (MISSION-086): shortly after startup,
             // create a backup when the preference is on and the newest
