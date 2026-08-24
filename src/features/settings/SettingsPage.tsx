@@ -6,6 +6,7 @@ import { Segmented } from "@/components/ui";
 import { ProvidersSection } from "./ProvidersSection";
 import { ExportSection } from "./ExportSection";
 import { BackupsSection } from "./BackupsSection";
+import { SecuritySection } from "./SecuritySection";
 
 /* Settings page (MISSION-034) — persistent theme + language preferences. These
    mirror the TopBar switchers but manage the full Preferences store. */
@@ -70,6 +71,10 @@ export function SettingsPage() {
 
       <Section title={t("settings.providers")} hint={t("settings.providersHint")}>
         <ProvidersSection />
+      </Section>
+
+      <Section title={t("settings.security")} hint={t("settings.securityHint")}>
+        <SecuritySection />
       </Section>
 
       <ExportSection />

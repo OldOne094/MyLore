@@ -536,6 +536,24 @@
       "doc": "MISSION-130 - start the AniList OAuth (authorization-code + loopback) flow: binds 127.0.0.1:24110, opens the system browser at the authorize page, then exchanges the returned code and stores the token as the anilist provider key. Completion arrives via the anilist-oauth event. Rejects only if the loopback port is unavailable or the browser cannot be launched."
     },
     {
+      "name": "db_security_status",
+      "args": {},
+      "returns": "{ available: boolean; encrypted: boolean }",
+      "doc": "MISSION-112 - snapshot of at-rest encryption: available=true when this build ships SQLCipher support; encrypted=true when the on-disk library is currently encrypted."
+    },
+    {
+      "name": "db_enable_encryption",
+      "args": { "passphrase": "string" },
+      "returns": "void",
+      "doc": "MISSION-112 - encrypt the live database in place (SQLCipher rekey) and store the passphrase in the secret pipeline. Requires a build with db-encryption and a passphrase of at least 8 characters. Restart the app afterwards."
+    },
+    {
+      "name": "db_disable_encryption",
+      "args": {},
+      "returns": "void",
+      "doc": "MISSION-112 - decrypt the live database back to plaintext and drop the stored passphrase. Requires a build with db-encryption. Restart the app afterwards."
+    },
+    {
       "name": "dashboard_summary",
       "args": { "limit": "number | null" },
       "returns": "DashboardSummary",

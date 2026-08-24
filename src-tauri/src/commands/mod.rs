@@ -11,6 +11,7 @@ pub mod bulk;
 pub mod calendar;
 pub mod collection;
 pub mod dashboard;
+pub mod db_security;
 pub mod discover;
 pub mod enrich;
 pub mod export;

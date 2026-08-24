@@ -747,6 +747,21 @@ export function anilist_oauth_start(): Promise<void> {
   return invoke<void>("anilist_oauth_start");
 }
 
+/** MISSION-112 - snapshot of at-rest encryption: available=true when this build ships SQLCipher support; encrypted=true when the on-disk library is currently encrypted. */
+export function db_security_status(): Promise<{ available: boolean; encrypted: boolean }> {
+  return invoke<{ available: boolean; encrypted: boolean }>("db_security_status");
+}
+
+/** MISSION-112 - encrypt the live database in place (SQLCipher rekey) and store the passphrase in the secret pipeline. Requires a build with db-encryption and a passphrase of at least 8 characters. Restart the app afterwards. */
+export function db_enable_encryption(args: { passphrase: string }): Promise<void> {
+  return invoke<void>("db_enable_encryption", args);
+}
+
+/** MISSION-112 - decrypt the live database back to plaintext and drop the stored passphrase. Requires a build with db-encryption. Restart the app afterwards. */
+export function db_disable_encryption(): Promise<void> {
+  return invoke<void>("db_disable_encryption");
+}
+
 /** Resolve the dashboard widget lists (continue watching, recently completed, recently added). `limit` is optional and clamped per widget (1..=20). Resolves with the DashboardSummary or rejects with an AppError string. */
 export function dashboard_summary(args: { limit: number | null }): Promise<DashboardSummary> {
   return invoke<DashboardSummary>("dashboard_summary", args);

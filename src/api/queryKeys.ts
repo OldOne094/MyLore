@@ -111,6 +111,8 @@ export const queryKeys = {
     providers: () => ["settings", "providers"] as const,
     /** Backup preferences (MISSION-086). */
     backupPrefs: () => ["settings", "backupPrefs"] as const,
+    /** At-rest encryption posture (MISSION-112). */
+    dbSecurity: () => ["settings", "dbSecurity"] as const,
   },
   backups: {
     all: () => ["backups"] as const,

@@ -19,7 +19,7 @@ use crate::application::backup_service::BackupService;
 use crate::application::image_service::ImageService;
 use crate::application::providers::settings::ProviderSettingsService;
 use crate::application::task_service::TaskManager;
-use crate::infrastructure::keyring::FileSecretStore;
+use crate::infrastructure::keyring::{FileSecretStore, SecretStore};
 use crate::infrastructure::providers::StdEntryBuilder;
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
@@ -39,7 +39,16 @@ pub fn run() {
             application::providers::oauth::init_secret(&data_dir);
 
             let db_path = data_dir.join("mylore.db");
-            let db_key = infrastructure::db::encryption_key_from_env();
+            // Shared secret pipeline (provider keys + DB passphrase).
+            let secret_store = Arc::new(FileSecretStore::load(data_dir.join("api_keys.json")));
+            app.manage(secret_store.clone() as Arc<dyn SecretStore>);
+            // Encryption key precedence: env override → stored passphrase.
+            let db_key = infrastructure::db::encryption_key_from_env().or_else(|| {
+                secret_store
+                    .get(commands::db_security::DB_KEY_ENTRY)
+                    .ok()
+                    .flatten()
+            });
             if db_key.is_some() {
                 tracing::info!("database encryption enabled (SQLCipher)");
             }
@@ -92,6 +101,8 @@ pub fn run() {
                 ProviderSettingsService::load(
                     infrastructure::providers::default_provider_configs(),
                     data_dir.join("providers.json"),
+                    // A fresh handle over the same file is fine here; the Arc
+                    // twin above serves the db-security commands.
                     Box::new(FileSecretStore::load(data_dir.join("api_keys.json"))),
                     Arc::new(StdEntryBuilder),
                 )
@@ -221,6 +232,9 @@ pub fn run() {
             commands::providers::provider_set_key,
             commands::providers::provider_test_connection,
             commands::providers::anilist_oauth_start,
+            commands::db_security::db_security_status,
+            commands::db_security::db_enable_encryption,
+            commands::db_security::db_disable_encryption,
             commands::images::asset_resolve,
             commands::images::assets_resolve,
             commands::dashboard::dashboard_summary,
