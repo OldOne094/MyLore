@@ -925,7 +925,7 @@ const en = {
 
 const ar = {
   shell: {
-    brand: "ماي‌لور",
+    brand: "مايلور",
     status: {
       version: "v0.1.0",
       counts_zero: "{{count}} عنوان",
