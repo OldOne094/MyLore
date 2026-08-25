@@ -3,6 +3,42 @@
 All notable changes to MyLore are documented here.
 Format: [Keep a Changelog](https://keepachangelog.com), versions follow [SemVer](https://semver.org).
 
+## [0.1.0-alpha.3] - 2026-08-24
+
+### Added
+
+- feat(providers): WTR-LAB web-novel provider (wtr-lab.com, CN/KR→EN) — search, details, chapter trees (MISSION-131)
+- feat(providers): AniList OAuth sign-in with loopback redirect + Bearer auth (MISSION-130)
+- feat(db): SQLCipher at-rest encryption behind `db-encryption` feature — Settings UI card, in-place rekey, passphrase-aware backups (MISSION-112)
+- feat(domain): new content types — game, podcast, music, comic with progress templates + migration 0013 (MISSION-109)
+- feat(ui): Segmented control primitive replacing all hand-rolled pill groups
+- feat(ui): Switch primitive replacing the cramped toggle
+- feat(settings): provider cards redesign — state chips, uniform controls, accent badges
+- feat(settings): Security section for at-rest encryption management
+- feat(ui): accent color personalization — 6 curated palettes per theme
+- security: path traversal defense for all file-taking IPC commands
+- fix(providers): MangaDex untagged-format rows dropped every hit — now map to manga
+- fix(providers): AniList details query follows new StaffName schema
+- fix(nu-bridge): NovelUpdates Cloudflare bypass via in-page fetch bridge
+- fix(ipc): camelCase invoke payloads per Tauri v2 convention
+- docs: comprehensive README with secrets onboarding + SECURITY.md policy
+
+### Fixed
+
+- fix(images): Bangumi covers blocked by CSP + OpenLibrary blank placeholder covers
+- fix(backup): passphrase-aware restore/validate for encrypted archives from other machines
+
+## [0.1.0-alpha.2] - 2026-08-22
+
+### Added / Changed / Fixed
+
+- feat(search): trigram per-token OR matching for substring and partial input (MISSION-120)
+- feat(search): content_type facet through the full stack (MISSION-121)
+- feat(discover): external-hit detail screen with rich metadata (MISSION-127)
+- feat(providers): live-debug AniList null-type bug + NU captcha detection (MISSION-124/126)
+- fix(library): responsive resize height chain + SettingsPage widening (MISSION-125)
+- feat(ui): UI polish & spacing pass (MISSION-128)
+
 ## [0.1.0-alpha.1] - 2026-08-21
 
 ### Added / Changed / Fixed
