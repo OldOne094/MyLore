@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
+import { ThemeProvider } from "@/themes/ThemeProvider";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { MemoryRouter, Route, Routes } from "react-router";
 import "@/i18n";
@@ -44,12 +45,14 @@ function wrap(response?: YearRecap) {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   return render(
     <QueryClientProvider client={client}>
-      <MemoryRouter initialEntries={["/recap"]}>
-        <Routes>
-          <Route path="/recap" element={<RecapPage />} />
-          <Route path="/library/:id" element={<div>MEDIA_PAGE</div>} />
-        </Routes>
-      </MemoryRouter>
+      <ThemeProvider>
+        <MemoryRouter initialEntries={["/recap"]}>
+          <Routes>
+            <Route path="/recap" element={<RecapPage />} />
+            <Route path="/library/:id" element={<div>MEDIA_PAGE</div>} />
+          </Routes>
+        </MemoryRouter>
+      </ThemeProvider>
     </QueryClientProvider>,
   );
 }

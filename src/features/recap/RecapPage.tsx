@@ -3,7 +3,7 @@ import { useState } from "react";
 import { useTranslation } from "react-i18next";
 import { Link } from "react-router";
 import { Button, EmptyState, Skeleton } from "@/components/ui";
-import { cn } from "@/lib/cn";
+import { MonthlyTrendChart } from "@/features/stats/MonthlyTrendChart";
 import { useRecapYearQuery, type RecapMedia, type YearRecap } from "./api";
 
 /* MISSION-082 — Year-in-review recap (REQ-STAT-001 extension). A celebratory
@@ -77,7 +77,7 @@ function StatCard({
 }
 
 function MonthChart({ recap }: { recap: YearRecap }) {
-  const { t, i18n } = useTranslation();
+  const { t } = useTranslation();
   const max = Math.max(1, ...recap.by_month);
   return (
     <section
@@ -88,31 +88,17 @@ function MonthChart({ recap }: { recap: YearRecap }) {
       {max === 1 && recap.by_month.every((c) => c === 0) ? (
         <p className="mt-2 text-sm text-text-tertiary">{t("recap.noCompletions")}</p>
       ) : (
-        <div className="mt-4 flex h-40 items-end gap-1">
-          {recap.by_month.map((count, index) => {
-            const isBest = recap.best_month === index + 1;
-            return (
-              <div
-                key={index}
-                className="flex h-full min-w-0 flex-1 flex-col items-center justify-end gap-1"
-              >
-                {count > 0 && (
-                  <span className="text-[10px] tabular-nums text-text-secondary">{count}</span>
-                )}
-                <div
-                  className={cn(
-                    "w-full max-w-7 rounded-t-sm transition-[height] duration-150 ease-out",
-                    isBest ? "bg-accent" : "bg-accent/40",
-                  )}
-                  style={{ height: `${(count / max) * 100}%` }}
-                  title={monthName(i18n.language, index, "long")}
-                />
-                <span className="text-[10px] text-text-tertiary">
-                  {monthName(i18n.language, index, "short")}
-                </span>
-              </div>
-            );
-          })}
+        <div className="mt-4">
+          <MonthlyTrendChart
+            height={200}
+            series={[
+              {
+                label: t("recap.chart"),
+                color: "var(--accent)",
+                values: recap.by_month,
+              },
+            ]}
+          />
         </div>
       )}
     </section>

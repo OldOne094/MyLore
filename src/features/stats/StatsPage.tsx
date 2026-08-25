@@ -3,6 +3,7 @@ import { useTranslation } from "react-i18next";
 import { Button, EmptyState, Skeleton } from "@/components/ui";
 import { ReadingSection } from "@/features/reading/ReadingSection";
 import { DistributionChart } from "./DistributionChart";
+import { DonutChart } from "./DonutChart";
 import { useStatsSummaryQuery, type StatsView } from "./api";
 
 /* MISSION-080 — Stats page (REQ-STAT-001). A calm overview of the tracked
@@ -134,12 +135,21 @@ export function StatsPage() {
           emptyLabel={t("stats.noData")}
           format={(key) => t(`coreStatus.${key}`, { defaultValue: key })}
         />
-        <DistributionChart
-          title={t("stats.byType")}
-          rows={stats.content_type_counts}
-          emptyLabel={t("stats.noData")}
-          format={(key) => t(`contentType.${key}`, { defaultValue: key })}
-        />
+        <div className="rounded-md border border-border-subtle bg-bg-surface p-4">
+          <h2 className="text-sm font-semibold text-text-primary">{t("stats.byType")}</h2>
+          {stats.content_type_counts.some((r) => r.count > 0) ? (
+            <DonutChart
+              data={stats.content_type_counts.map((row) => ({
+                key: row.key,
+                label: t(`contentType.${row.key}`, { defaultValue: row.key }),
+                count: row.count,
+              }))}
+              height={180}
+            />
+          ) : (
+            <p className="mt-2 text-sm text-text-tertiary">{t("stats.noData")}</p>
+          )}
+        </div>
         <DistributionChart
           title={t("stats.byRating")}
           rows={stats.rating_counts}
