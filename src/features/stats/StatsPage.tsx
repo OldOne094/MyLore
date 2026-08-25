@@ -1,9 +1,12 @@
-import { BarChart3, RefreshCcw } from "lucide-react";
+import { useState } from "react";
+import { BarChart3, Download, RefreshCcw } from "lucide-react";
 import { useTranslation } from "react-i18next";
-import { Button, EmptyState, Skeleton } from "@/components/ui";
+import { Button, EmptyState, Skeleton, useToast } from "@/components/ui";
 import { ReadingSection } from "@/features/reading/ReadingSection";
 import { DistributionChart } from "./DistributionChart";
 import { DonutChart } from "./DonutChart";
+import { exportStatsCard } from "./ShareableStatsCard";
+import { useProfile } from "@/profile/ProfileContext";
 import { useStatsSummaryQuery, type StatsView } from "./api";
 
 /* MISSION-080 — Stats page (REQ-STAT-001). A calm overview of the tracked
@@ -78,6 +81,9 @@ function StatCard({ label, value, suffix }: { label: string; value: string; suff
 export function StatsPage() {
   const { t } = useTranslation();
   const { data, isLoading, isError, refetch } = useStatsSummaryQuery();
+  const { profile } = useProfile();
+  const toast = useToast();
+  const [exporting, setExporting] = useState(false);
 
   if (isLoading) return <StatsSkeleton />;
 
@@ -99,6 +105,23 @@ export function StatsPage() {
 
   const stats = data ?? EMPTY_STATS;
 
+  const handleExport = async () => {
+    setExporting(true);
+    try {
+      await exportStatsCard({
+        stats,
+        profile,
+        year: new Date().getFullYear(),
+        topGenre: stats.content_type_counts[0]?.key,
+      });
+      toast.success({ title: t("stats.exportSuccess") });
+    } catch {
+      toast.error({ title: t("stats.exportFailed") });
+    } finally {
+      setExporting(false);
+    }
+  };
+
   if (stats.total === 0) {
     return (
       <EmptyState icon={BarChart3} title={t("stats.emptyTitle")} hint={t("stats.emptyHint")} />
@@ -111,6 +134,17 @@ export function StatsPage() {
 
   return (
     <section aria-label={t("nav.stats")} className="px-6 py-5">
+      <div className="mb-4 flex items-center justify-end">
+        <Button
+          variant="secondary"
+          size="sm"
+          disabled={exporting}
+          onClick={() => void handleExport()}
+        >
+          <Download size={14} aria-hidden="true" />
+          {exporting ? t("stats.exporting") : t("stats.exportImage")}
+        </Button>
+      </div>
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
         <StatCard label={t("stats.total")} value={String(stats.total)} />
         <StatCard label={t("stats.completed")} value={String(stats.completed_media)} />

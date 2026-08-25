@@ -3,6 +3,8 @@ import { render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { ThemeProvider } from "@/themes/ThemeProvider";
+import { ProfileProvider } from "@/profile/ProfileContext";
+import { ToastProvider } from "@/components/ui";
 import { MemoryRouter, Route, Routes } from "react-router";
 import "@/i18n";
 import i18n from "@/i18n";
@@ -63,14 +65,18 @@ function wrap(response: unknown) {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   return render(
     <ThemeProvider>
-      <QueryClientProvider client={client}>
-        <MemoryRouter initialEntries={["/stats"]}>
-          <Routes>
-            <Route path="/stats" element={<StatsPage />} />
-            <Route path="*" element={<div>FALLBACK</div>} />
-          </Routes>
-        </MemoryRouter>
-      </QueryClientProvider>
+      <ProfileProvider>
+        <ToastProvider>
+          <QueryClientProvider client={client}>
+            <MemoryRouter initialEntries={["/stats"]}>
+              <Routes>
+                <Route path="/stats" element={<StatsPage />} />
+                <Route path="*" element={<div>FALLBACK</div>} />
+              </Routes>
+            </MemoryRouter>
+          </QueryClientProvider>
+        </ToastProvider>
+      </ProfileProvider>
     </ThemeProvider>,
   );
 }

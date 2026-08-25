@@ -45,6 +45,7 @@ export function ProfileProvider({ children }: { children: ReactNode }) {
   return <ProfileContext.Provider value={value}>{children}</ProfileContext.Provider>;
 }
 
+// eslint-disable-next-line react-refresh/only-export-components
 export function useProfile(): ProfileContextValue {
   const ctx = useContext(ProfileContext);
   // Graceful fallback for test environments without a provider.
