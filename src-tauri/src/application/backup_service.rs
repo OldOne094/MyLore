@@ -220,7 +220,15 @@ impl BackupService {
     /// (MISSION-088 recovery). Returns the quarantine location. Closes the
     /// pool to unlock the files — the caller must restart the app after.
     pub async fn start_fresh(&self) -> Result<String, AppError> {
+        // Flush WAL content into the main DB file before closing so the WAL
+        // sidecar is empty and the main file is self-contained.
+        let _ = sqlx::query("PRAGMA wal_checkpoint(TRUNCATE)")
+            .execute(&self.pool)
+            .await;
         self.pool.close().await;
+        // Windows keeps file handles open briefly after sqlx closes the pool.
+        // A short sleep avoids ERROR_SHARING_VIOLATION on the first rename.
+        tokio::time::sleep(std::time::Duration::from_millis(200)).await;
         let stamp = Utc::now().format("%Y%m%d-%H%M%S");
         let uid = &Uuid::new_v4().simple().to_string()[..6];
         let quarantine = self
@@ -773,12 +781,15 @@ fn remove_any(path: impl AsRef<Path>) {
 /// "file in use".
 async fn rename_with_retry(source: &Path, dest: &Path) -> Result<(), AppError> {
     let mut last_error = None;
-    for _ in 0..20 {
+    // 50 attempts × 100ms = 5s; CI runners (especially Windows) can take
+    // longer than local dev to release SQLite file handles after close.
+    for attempt in 0..50 {
         match std::fs::rename(source, dest) {
             Ok(()) => return Ok(()),
             Err(error) => {
                 last_error = Some(error);
-                tokio::time::sleep(std::time::Duration::from_millis(50)).await;
+                let delay = if attempt < 10 { 50 } else { 100 };
+                tokio::time::sleep(std::time::Duration::from_millis(delay)).await;
             }
         }
     }
