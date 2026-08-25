@@ -7,7 +7,8 @@
 //! three.
 
 use std::io::Read;
-use std::{path::Path, time::Duration};
+use std::path::{Path, PathBuf};
+use std::time::Duration;
 
 use sqlx::migrate::Migrator;
 use sqlx::sqlite::{
@@ -59,6 +60,27 @@ pub async fn connect_keyed(db_path: &Path, key: Option<&str>) -> Result<SqlitePo
         .connect_with(options)
         .await
         .map_err(|e| AppError::internal(format!("failed to open database: {e}")))
+}
+
+/// Validate a user-supplied file path for IPC commands. Rejects:
+/// - empty paths
+/// - paths with null bytes (classic C-string truncation attack)
+/// - relative paths (must be absolute to avoid cwd dependence)
+///
+/// This is defense-in-depth: Tauri's native file dialog produces absolute
+/// paths, so anything else is suspicious.
+pub fn validate_ipc_path(path: &str) -> Result<PathBuf, AppError> {
+    if path.trim().is_empty() {
+        return Err(AppError::validation("path cannot be empty"));
+    }
+    if path.contains('\0') {
+        return Err(AppError::validation("path contains null bytes"));
+    }
+    let buf = PathBuf::from(path);
+    if !buf.is_absolute() {
+        return Err(AppError::validation("path must be absolute"));
+    }
+    Ok(buf)
 }
 
 /// The at-rest encryption passphrase, read once from the environment.

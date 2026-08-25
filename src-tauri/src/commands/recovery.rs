@@ -4,7 +4,6 @@
 //! the pool to unlock the files, so the app must be restarted afterwards.
 //! These commands never touch the (broken) database through the managed pool.
 
-use std::path::PathBuf;
 use std::sync::Arc;
 use tauri::command;
 use tauri::State;
@@ -13,6 +12,7 @@ use tracing::info;
 use crate::application::app_health::AppHealth;
 use crate::application::backup_service::BackupService;
 use crate::error::AppError;
+use crate::infrastructure::db::validate_ipc_path;
 use serde::Serialize;
 
 /// What the UI asks on mount to decide between the normal shell and the
@@ -59,7 +59,8 @@ pub async fn recover_restore(
     path: String,
 ) -> Result<RecoveryOutcome, AppError> {
     info!("recover_restore invoked");
-    let report = backups.inner().restore(&PathBuf::from(&path)).await?;
+    let validated = validate_ipc_path(&path)?;
+    let report = backups.inner().restore(&validated).await?;
     Ok(RecoveryOutcome {
         quarantined_to: report.quarantined_to,
         restart_required: true,

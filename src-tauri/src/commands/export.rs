@@ -11,7 +11,6 @@ use tauri::command;
 use tauri::State;
 use tracing::info;
 
-use std::path::Path;
 use std::sync::Arc;
 
 use crate::application::export_service::ExportService;
@@ -19,6 +18,7 @@ use crate::application::task_service::TaskManager;
 use crate::domain::export::ExportFormat;
 use crate::domain::task::{TaskError, TaskKind, TaskSnapshot};
 use crate::error::AppError;
+use crate::infrastructure::db::validate_ipc_path;
 
 /// Export the whole library to `path` as a background task (MISSION-071).
 /// `format` is `json` | `csv` | `markdown` (the save dialog's chosen
@@ -31,7 +31,8 @@ pub async fn export_media(
     format: String,
     path: String,
 ) -> Result<TaskSnapshot, AppError> {
-    info!(format, path, "export_media invoked");
+    info!(format, "export_media invoked");
+    let validated_path = validate_ipc_path(&path)?;
     let format = format.parse::<ExportFormat>()?;
     let pool = state.inner().clone();
     let title = format!("Export {} library", format.as_str());
@@ -40,7 +41,7 @@ pub async fn export_media(
         let service = ExportService::new(pool);
         reporter.progress(0, Some("Preparing export…".to_string()));
 
-        let stream = service.stream_to_path(Path::new(&path), format, |done, total| {
+        let stream = service.stream_to_path(validated_path.as_path(), format, |done, total| {
             let percent = if total == 0 {
                 100
             } else {

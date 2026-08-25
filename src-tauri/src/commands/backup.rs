@@ -5,7 +5,6 @@
 //! rides the `task-changed` events. A cancelled or failed attempt leaves no
 //! `.partial` archive behind (drop guard in the service).
 
-use std::path::PathBuf;
 use std::sync::Arc;
 use tauri::command;
 use tauri::State;
@@ -15,6 +14,7 @@ use crate::application::backup_service::{BackupEntry, BackupMeta, BackupPrefs, B
 use crate::application::task_service::TaskManager;
 use crate::domain::task::{TaskError, TaskKind, TaskSnapshot};
 use crate::error::AppError;
+use crate::infrastructure::db::validate_ipc_path;
 
 /// Create a validated `.mylore` backup under `{data_dir}/backups`
 /// (MISSION-084). Resolves with the queued snapshot; the `BackupReport`
@@ -58,9 +58,10 @@ pub async fn backup_validate(
     passphrase: Option<String>,
 ) -> Result<BackupMeta, AppError> {
     info!("backup_validate invoked");
+    let validated = validate_ipc_path(&path)?;
     backups
         .inner()
-        .validate_with(&PathBuf::from(&path), passphrase.as_deref())
+        .validate_with(&validated, passphrase.as_deref())
         .await
 }
 
@@ -77,8 +78,14 @@ pub async fn backup_restore(
     passphrase: Option<String>,
 ) -> Result<TaskSnapshot, AppError> {
     info!("backup_restore invoked");
+    let validated = validate_ipc_path(&path)?;
+    if !validated.extension().is_some_and(|ext| ext == "mylore") {
+        return Err(AppError::validation(
+            "restore path must be a .mylore archive",
+        ));
+    }
     let service = backups.inner().clone();
-    let source = PathBuf::from(&path);
+    let source = validated;
 
     let id = tasks.spawn(
         TaskKind::Restore,
