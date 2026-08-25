@@ -6,6 +6,7 @@ import { initTheme } from "@/themes/theme";
 import { ThemeProvider } from "@/themes/ThemeProvider";
 import { ToastProvider } from "@/components/ui";
 import { PreferencesProvider } from "@/preferences/PreferencesProvider";
+import { ProfileProvider } from "@/profile/ProfileContext";
 import { queryClient } from "@/api/queryClient";
 import { router } from "@/router";
 import "@/i18n";
@@ -23,9 +24,11 @@ ReactDOM.createRoot(document.getElementById("root") as HTMLElement).render(
     <QueryClientProvider client={queryClient}>
       <ThemeProvider>
         <PreferencesProvider>
-          <ToastProvider>
-            <RouterProvider router={router} />
-          </ToastProvider>
+          <ProfileProvider>
+            <ToastProvider>
+              <RouterProvider router={router} />
+            </ToastProvider>
+          </ProfileProvider>
         </PreferencesProvider>
       </ThemeProvider>
     </QueryClientProvider>

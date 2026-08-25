@@ -134,6 +134,12 @@ const en = {
   settings: {
     theme: "Theme",
     themeHint: "Light, dark, or follow the system appearance.",
+    profile: "Profile",
+    profileHint: "Your display name and avatar color. Stored locally only.",
+    profileNameLabel: "Display name",
+    profileNamePlaceholder: "Enter your name",
+    profileSave: "Save name",
+    profileColorLabel: "Avatar color",
     accent: "Accent color",
     accent_classic: "Classic",
     accent_ocean: "Ocean",
@@ -1088,6 +1094,13 @@ const ar = {
     providersAnilistConnecting: "بانتظار AniList…",
     providersOauthOk: "تم ربط AniList — حُفظ التوكن بأمان",
     providersOauthFailed: "فشل تسجيل الدخول إلى AniList: {{message}}",
+    profile: "\u0627\u0644\u0645\u0644\u0641 \u0627\u0644\u0634\u062E\u0635\u064A",
+    profileHint:
+      "\u0627\u0633\u0645\u0643 \u0648\u0644\u0648\u0646 \u0627\u0644\u0623\u0641\u0627\u062A\u0627\u0631. \u064A\u064F\u062E\u0632\u064E\u0651\u0646 \u0645\u062D\u0644\u064A\u0627\u064B \u0641\u0642\u0637.",
+    profileNameLabel: "\u0627\u0644\u0627\u0633\u0645 \u0627\u0644\u0645\u0639\u0631\u0648\u0636",
+    profileNamePlaceholder: "\u0623\u062F\u062E\u0644 \u0627\u0633\u0645\u0643",
+    profileSave: "\u062D\u0641\u0638 \u0627\u0644\u0627\u0633\u0645",
+    profileColorLabel: "\u0644\u0648\u0646 \u0627\u0644\u0623\u0641\u0627\u062A\u0627\u0631",
     security: "التشفير",
     securityHint:
       "شفِّر قاعدة مكتبتك على القرص (SQLCipher). النسخ الاحتياطية المأخوذة من مكتبة مشفّرة تكون مشفّرة أيضًا.",

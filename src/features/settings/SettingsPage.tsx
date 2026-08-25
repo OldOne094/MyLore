@@ -9,6 +9,7 @@ import { ProvidersSection } from "./ProvidersSection";
 import { ExportSection } from "./ExportSection";
 import { BackupsSection } from "./BackupsSection";
 import { SecuritySection } from "./SecuritySection";
+import { ProfileSection } from "./ProfileSection";
 
 /* Settings page (MISSION-034) — persistent theme + language preferences. These
    mirror the TopBar switchers but manage the full Preferences store. */
@@ -91,6 +92,10 @@ export function SettingsPage() {
             { value: "compact", label: t("settings.density_compact") },
           ]}
         />
+      </Section>
+
+      <Section title={t("settings.profile")} hint={t("settings.profileHint")}>
+        <ProfileSection />
       </Section>
 
       <Section title={t("settings.providers")} hint={t("settings.providersHint")}>
