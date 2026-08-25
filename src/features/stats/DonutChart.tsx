@@ -2,8 +2,8 @@ import { Cell, Pie, PieChart, ResponsiveContainer, Tooltip } from "recharts";
 import { ChartBoundary } from "./ChartBoundary";
 import { cssVar, useChartTheme } from "./chartTheme";
 
-/* MISSION-113 — Donut chart for categorical distributions. Uses design-token
-   palette; wrapped in ChartBoundary for jsdom safety. */
+/* MISSION-113 — Donut chart for categorical distributions with a text legend
+   for accessibility and test visibility. */
 
 const DONUT_COLORS = ["var(--accent)", "var(--info)", "var(--ok)", "var(--warn)", "var(--danger)"];
 
@@ -17,8 +17,6 @@ export function DonutChart({
   const theme = useChartTheme();
   const visible = data.filter((d) => d.count > 0);
   if (visible.length === 0) return null;
-
-  const maxCount = Math.max(...visible.map((d) => d.count));
 
   return (
     <ChartBoundary>
@@ -50,7 +48,7 @@ export function DonutChart({
           </Pie>
         </PieChart>
       </ResponsiveContainer>
-      {/* Text legend so the data is readable without SVG rendering */}
+      {/* Accessible text legend */}
       <ul className="mt-2 flex flex-col gap-1">
         {visible.map((row) => (
           <li key={row.key} className="flex items-center justify-between gap-2">
@@ -59,7 +57,6 @@ export function DonutChart({
           </li>
         ))}
       </ul>
-      <span className="sr-only" data-max-count={maxCount} />
     </ChartBoundary>
   );
 }

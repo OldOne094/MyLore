@@ -11,7 +11,8 @@ import { ChartBoundary } from "./ChartBoundary";
 import { cssVar, useChartTheme } from "./chartTheme";
 
 /* MISSION-113 — Monthly trend area chart (Recharts). Supports multi-series
-   with localized month labels, RTL axis reversal and theme-aware styling. */
+   with localized month labels, RTL axis reversal and theme-aware styling.
+   Wrapped in ChartBoundary for jsdom/test safety. */
 
 export interface MonthlySeries {
   label: string;
@@ -43,59 +44,61 @@ export function MonthlyTrendChart({
   });
 
   return (
-    <ChartBoundary>
-      <ResponsiveContainer width="100%" height={height}>
-        <AreaChart
-          data={data}
-          margin={{ top: 8, right: 12, bottom: 0, left: 0 }}
-          style={{ direction: "ltr" }}
-        >
-          <defs>
-            {series.map((s) => (
-              <linearGradient
-                key={s.label}
-                id={`grad-${s.label.replace(/\s/g, "")}`}
-                x1="0"
-                y1="0"
-                x2="0"
-                y2="1"
-              >
-                <stop offset="5%" stopColor={s.color} stopOpacity={0.25} />
-                <stop offset="95%" stopColor={s.color} stopOpacity={0.02} />
-              </linearGradient>
-            ))}
-          </defs>
-          <CartesianGrid strokeDasharray="3 3" stroke={theme.grid} vertical={false} />
-          <XAxis
-            dataKey="label"
-            tick={{ ...theme.tick }}
-            axisLine={false}
-            tickLine={false}
-            reversed={theme.isRTL}
-          />
-          <YAxis
-            tick={{ ...theme.tick }}
-            axisLine={false}
-            tickLine={false}
-            width={40}
-            orientation={theme.isRTL ? "right" : "left"}
-          />
-          <Tooltip contentStyle={theme.tooltip} cursor={{ stroke: theme.grid }} />
-          {series.map((s) => (
-            <Area
-              key={s.label}
-              type="monotone"
-              dataKey={s.label}
-              stroke={cssVar(s.color)}
-              fill={`url(#grad-${s.label.replace(/\s/g, "")})`}
-              strokeWidth={2}
-              dot={false}
-              activeDot={{ r: 4 }}
+    <>
+      <ChartBoundary>
+        <ResponsiveContainer width="100%" height={height}>
+          <AreaChart
+            data={data}
+            margin={{ top: 8, right: 12, bottom: 0, left: 0 }}
+            style={{ direction: "ltr" }}
+          >
+            <defs>
+              {series.map((s) => (
+                <linearGradient
+                  key={s.label}
+                  id={`grad-${s.label.replace(/\s/g, "")}`}
+                  x1="0"
+                  y1="0"
+                  x2="0"
+                  y2="1"
+                >
+                  <stop offset="5%" stopColor={cssVar(s.color)} stopOpacity={0.25} />
+                  <stop offset="95%" stopColor={cssVar(s.color)} stopOpacity={0.02} />
+                </linearGradient>
+              ))}
+            </defs>
+            <CartesianGrid strokeDasharray="3 3" stroke={theme.grid} vertical={false} />
+            <XAxis
+              dataKey="label"
+              tick={{ ...theme.tick }}
+              axisLine={false}
+              tickLine={false}
+              reversed={theme.isRTL}
             />
-          ))}
-        </AreaChart>
-      </ResponsiveContainer>
-      {/* Text legend so month labels and values are accessible without SVG */}
+            <YAxis
+              tick={{ ...theme.tick }}
+              axisLine={false}
+              tickLine={false}
+              width={40}
+              orientation={theme.isRTL ? "right" : "left"}
+            />
+            <Tooltip contentStyle={theme.tooltip} cursor={{ stroke: theme.grid }} />
+            {series.map((s) => (
+              <Area
+                key={s.label}
+                type="monotone"
+                dataKey={s.label}
+                stroke={cssVar(s.color)}
+                fill={`url(#grad-${s.label.replace(/\s/g, "")})`}
+                strokeWidth={2}
+                dot={false}
+                activeDot={{ r: 4 }}
+              />
+            ))}
+          </AreaChart>
+        </ResponsiveContainer>
+      </ChartBoundary>
+      {/* Accessible data summary — always visible regardless of SVG rendering */}
       {series.length === 1 && (
         <div className="mt-2 flex flex-wrap items-center gap-x-1 gap-y-0.5">
           {labels.map((label, index) => {
@@ -111,6 +114,6 @@ export function MonthlyTrendChart({
           })}
         </div>
       )}
-    </ChartBoundary>
+    </>
   );
 }

@@ -9,6 +9,22 @@ vi.mock("@tauri-apps/api/event", () => ({
   emit: vi.fn(),
 }));
 
+// MISSION-113 — Recharts stub for jsdom (needs real DOM layout).
+vi.mock("recharts", () => ({
+  ResponsiveContainer: () => null,
+  AreaChart: () => null,
+  BarChart: () => null,
+  PieChart: () => null,
+  Area: () => null,
+  Bar: () => null,
+  Pie: () => null,
+  Cell: () => null,
+  CartesianGrid: () => null,
+  XAxis: () => null,
+  YAxis: () => null,
+  Tooltip: () => null,
+}));
+
 // Radix positioning primitives inquire element size in jsdom.
 class ResizeObserverMock {
   observe() {}

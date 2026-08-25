@@ -1,6 +1,6 @@
 /* MISSION-113 — Shared chart theming. Reads colors from CSS custom properties
-   (design tokens) so every chart automatically follows the active theme +
-   accent without requiring React context. RTL detection uses document.dir. */
+   (design tokens) so charts follow the active theme + accent automatically.
+   No React context dependency — safe for any rendering environment. */
 
 export function useChartTheme() {
   const isDark =
