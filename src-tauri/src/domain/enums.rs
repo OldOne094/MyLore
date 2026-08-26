@@ -230,7 +230,8 @@ mod tests {
                 "comic",
                 "other"
             ]
-        );        assert_eq!(
+        );
+        assert_eq!(
             CoreStatus::ALL
                 .iter()
                 .map(|v| v.as_str())

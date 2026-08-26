@@ -13,6 +13,7 @@ pub mod anilist;
 pub mod bangumi;
 pub mod googlebooks;
 pub mod hardcover;
+pub mod itunes;
 pub mod jikan;
 pub mod mangadex;
 pub mod novelupdates;
@@ -31,6 +32,7 @@ pub use googlebooks::{
 pub use hardcover::{
     hardcover_config, HardcoverClient, HardcoverProvider, PROVIDER_ID as HARDCOVER_PROVIDER_ID,
 };
+pub use itunes::{itunes_config, ItunesProvider, PROVIDER_ID as ITUNES_PROVIDER_ID};
 pub use jikan::{jikan_config, JikanClient, JikanProvider, PROVIDER_ID as JIKAN_PROVIDER_ID};
 pub use mangadex::{
     mangadex_config, MangaDexClient, MangaDexProvider, PROVIDER_ID as MANGADEX_PROVIDER_ID,
@@ -83,6 +85,9 @@ pub fn build_adapter(id: &str, api_key: Option<&str>) -> Result<Arc<dyn Provider
             }
             Ok(Arc::new(GoogleBooksProvider::new(client)))
         }
+        itunes::PROVIDER_ID => Ok(Arc::new(ItunesProvider::new(
+            itunes::client::ItunesClient::new(),
+        ))),
         hardcover::PROVIDER_ID => {
             let mut client = HardcoverClient::new();
             if let Some(key) = api_key {
@@ -129,6 +134,7 @@ pub fn default_provider_entries() -> Vec<ProviderEntry> {
         googlebooks_config(),
         hardcover_config(),
         wtrlab_config(),
+        itunes_config(),
     ]
     .into_iter()
     .map(|config| {
@@ -153,6 +159,7 @@ pub fn default_provider_configs() -> Vec<ProviderConfig> {
         googlebooks_config(),
         hardcover_config(),
         wtrlab_config(),
+        itunes_config(),
     ]
 }
 
