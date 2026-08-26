@@ -30,6 +30,10 @@ const CONTENT_TYPES = [
   "other",
 ] as const;
 
+/** Content types that currently have no serving provider. Shown as a
+    notice in the Discover page so users know why results may be empty. */
+const UNSUPPORTED_TYPES: ReadonlySet<string> = new Set(["game", "podcast", "music"]);
+
 const IDENTITY_VARIANT: Record<string, "accent" | "neutral" | "planned"> = {
   in_library: "accent",
   duplicate: "planned",
@@ -282,11 +286,19 @@ export function DiscoverPage() {
             ))}
 
             {data.groups.length === 0 && data.local.length === 0 ? (
-              <EmptyState
-                icon={SearchX}
-                title={t("discover.noResultsTitle")}
-                hint={t("discover.noResultsHint")}
-              />
+              contentType && UNSUPPORTED_TYPES.has(contentType) ? (
+                <EmptyState
+                  icon={SearchX}
+                  title={t("discover.unsupportedTitle")}
+                  hint={t("discover.unsupportedHint", { type: t(`contentType.${contentType}`) })}
+                />
+              ) : (
+                <EmptyState
+                  icon={SearchX}
+                  title={t("discover.noResultsTitle")}
+                  hint={t("discover.noResultsHint")}
+                />
+              )
             ) : null}
 
             {data.failures.length > 0 ? (

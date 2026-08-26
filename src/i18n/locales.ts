@@ -821,6 +821,9 @@ const en = {
     new: "New",
     noResultsTitle: "No results",
     noResultsHint: "Nothing matched that search. Try a different title or type.",
+    unsupportedTitle: "No providers for this type yet",
+    unsupportedHint:
+      "{{type}} is a valid content type, but no metadata provider currently serves it. You can still add {{type}} titles manually from the Library page.",
     errorTitle: "Couldn't search",
     errorHint: "Something went wrong while searching providers. Try again in a moment.",
     retry: "Retry",
@@ -1804,6 +1807,9 @@ const ar = {
     new: "جديد",
     noResultsTitle: "لا توجد نتائج",
     noResultsHint: "لم يطابق البحث أي شيء. جرّب عنواناً أو نوعاً مختلفاً.",
+    unsupportedTitle: "لا يوجد مزوّد لهذا النوع بعد",
+    unsupportedHint:
+      "{{type}} نوع صحيح، لكن لا يوجد مزوّد بيانات له حالياً. يمكنك إضافة عناوين {{type}} يدوياً من صفحة المكتبة.",
     errorTitle: "تعذّر البحث",
     errorHint: "حدث خطأ أثناء البحث في مزوّدي البيانات. حاول مرة أخرى بعد لحظات.",
     retry: "إعادة المحاولة",
