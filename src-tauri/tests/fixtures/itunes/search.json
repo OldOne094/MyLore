@@ -1,0 +1,29 @@
+{
+  "resultCount": 2,
+  "results": [
+    {
+      "collectionId": 123456,
+      "collectionName": "The Joe Rogan Experience",
+      "artistName": "Joe Rogan",
+      "artworkUrl100": "https://is1-ssl.mzstatic.com/image/thumb/Podcasts/test100.jpg",
+      "artworkUrl600": "https://is1-ssl.mzstatic.com/image/thumb/Podcasts/test600.jpg",
+      "releaseDate": "2023-01-15T08:00:00Z",
+      "trackCount": 2000,
+      "primaryGenreName": "Society & Culture",
+      "collectionViewUrl": "https://podcasts.apple.com/us/podcast/the-joe-rogan-experience/id360084272",
+      "contentAdvisoryRating": "Explicit"
+    },
+    {
+      "collectionId": 789012,
+      "collectionName": "Discovery",
+      "artistName": "Daft Punk",
+      "artworkUrl100": "https://is1-ssl.mzstatic.com/image/thumb/Music/test100.jpg",
+      "artworkUrl600": "https://is1-ssl.mzstatic.com/image/thumb/Music/test600.jpg",
+      "releaseDate": "2001-03-07T00:00:00Z",
+      "trackCount": 14,
+      "primaryGenreName": "Electronic",
+      "collectionViewUrl": "https://music.apple.com/us/album/discovery/123",
+      "contentAdvisoryRating": "Clean"
+    }
+  ]
+}

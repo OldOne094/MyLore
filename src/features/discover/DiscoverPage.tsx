@@ -32,7 +32,7 @@ const CONTENT_TYPES = [
 
 /** Content types that currently have no serving provider. Shown as a
     notice in the Discover page so users know why results may be empty. */
-const UNSUPPORTED_TYPES: ReadonlySet<string> = new Set(["game", "podcast", "music"]);
+const UNSUPPORTED_TYPES: ReadonlySet<string> = new Set<string>([]);
 
 const IDENTITY_VARIANT: Record<string, "accent" | "neutral" | "planned"> = {
   in_library: "accent",

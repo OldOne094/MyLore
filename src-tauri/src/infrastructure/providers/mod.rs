@@ -11,6 +11,7 @@
 
 pub mod anilist;
 pub mod bangumi;
+pub mod gcd;
 pub mod googlebooks;
 pub mod hardcover;
 pub mod itunes;
@@ -26,6 +27,7 @@ pub use anilist::{anilist_config, AniListClient, AniListProvider, PROVIDER_ID};
 pub use bangumi::{
     bangumi_config, BangumiClient, BangumiProvider, PROVIDER_ID as BANGUMI_PROVIDER_ID,
 };
+pub use gcd::{gcd_config, GcdProvider, PROVIDER_ID as GCD_PROVIDER_ID};
 pub use googlebooks::{
     googlebooks_config, GoogleBooksClient, GoogleBooksProvider,
     PROVIDER_ID as GOOGLEBOOKS_PROVIDER_ID,
@@ -105,6 +107,7 @@ pub fn build_adapter(id: &str, api_key: Option<&str>) -> Result<Arc<dyn Provider
             Ok(Arc::new(HardcoverProvider::new(client)))
         }
         wtrlab::PROVIDER_ID => Ok(Arc::new(WtrLabProvider::new(WtrLabClient::new()))),
+        gcd::PROVIDER_ID => Ok(Arc::new(GcdProvider::new(gcd::client::GcdClient::new()))),
         other => Err(format!("unknown provider adapter {other:?}")),
     }
 }
@@ -145,6 +148,7 @@ pub fn default_provider_entries() -> Vec<ProviderEntry> {
         wtrlab_config(),
         itunes_config(),
         rawg_config(),
+        gcd_config(),
     ]
     .into_iter()
     .map(|config| {
@@ -171,6 +175,7 @@ pub fn default_provider_configs() -> Vec<ProviderConfig> {
         wtrlab_config(),
         itunes_config(),
         rawg_config(),
+        gcd_config(),
     ]
 }
 

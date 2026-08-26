@@ -1,0 +1,33 @@
+{
+  "count": 2,
+  "next": null,
+  "previous": null,
+  "results": [
+    {
+      "api_url": "https://www.comics.org/api/series/10814/?format=json",
+      "name": "Batman",
+      "year_began": 2016,
+      "year_ended": null,
+      "country": "us",
+      "language": "en",
+      "publisher": "https://www.comics.org/api/publisher/4/?format=json",
+      "issue_descriptors": ["1", "2", "3"],
+      "active_issues": [
+        "https://www.comics.org/api/issue/1001/?format=json",
+        "https://www.comics.org/api/issue/1002/?format=json",
+        "https://www.comics.org/api/issue/1003/?format=json"
+      ]
+    },
+    {
+      "api_url": "https://www.comics.org/api/series/2001/?format=json",
+      "name": "Saga",
+      "year_began": 2012,
+      "year_ended": null,
+      "country": "us",
+      "language": "en",
+      "publisher": "https://www.comics.org/api/publisher/10/?format=json",
+      "issue_descriptors": ["1"],
+      "active_issues": ["https://www.comics.org/api/issue/2001/?format=json"]
+    }
+  ]
+}
