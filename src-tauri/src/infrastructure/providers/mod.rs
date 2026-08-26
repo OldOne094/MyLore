@@ -18,6 +18,7 @@ pub mod jikan;
 pub mod mangadex;
 pub mod novelupdates;
 pub mod openlibrary;
+pub mod rawg;
 pub mod tmdb;
 pub mod wtrlab;
 
@@ -45,6 +46,7 @@ pub use openlibrary::{
     openlibrary_config, OpenLibraryClient, OpenLibraryProvider,
     PROVIDER_ID as OPENLIBRARY_PROVIDER_ID,
 };
+pub use rawg::{client::RawgClient, rawg_config, RawgProvider, PROVIDER_ID as RAWG_PROVIDER_ID};
 pub use tmdb::{tmdb_config, TmdbClient, TmdbProvider, PROVIDER_ID as TMDB_PROVIDER_ID};
 pub use wtrlab::client::WtrLabClient;
 pub use wtrlab::{wtrlab_config, WtrLabProvider, PROVIDER_ID as WTRLAB_PROVIDER_ID};
@@ -84,6 +86,13 @@ pub fn build_adapter(id: &str, api_key: Option<&str>) -> Result<Arc<dyn Provider
                 client = client.with_api_key(key);
             }
             Ok(Arc::new(GoogleBooksProvider::new(client)))
+        }
+        rawg::PROVIDER_ID => {
+            let mut client = RawgClient::new();
+            if let Some(key) = api_key {
+                client = client.with_api_key(key);
+            }
+            Ok(Arc::new(RawgProvider::new(client)))
         }
         itunes::PROVIDER_ID => Ok(Arc::new(ItunesProvider::new(
             itunes::client::ItunesClient::new(),
@@ -135,6 +144,7 @@ pub fn default_provider_entries() -> Vec<ProviderEntry> {
         hardcover_config(),
         wtrlab_config(),
         itunes_config(),
+        rawg_config(),
     ]
     .into_iter()
     .map(|config| {
@@ -160,6 +170,7 @@ pub fn default_provider_configs() -> Vec<ProviderConfig> {
         hardcover_config(),
         wtrlab_config(),
         itunes_config(),
+        rawg_config(),
     ]
 }
 
