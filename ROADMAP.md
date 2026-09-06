@@ -403,6 +403,33 @@ MISSION-108 (Buddy reads) is absorbed here: its data model lands in 114, its UX 
 
 ---
 
+### M19 · Audit-hardening (added 2026-08-24 — from deep pre-release audit)
+
+Tracker-first ordering within M19. Each mission below was born from the same codebase-wide audit (attacker + critic + senior).
+
+#### M19.1 · Search system hardening & features
+
+| Mission | Description | Deps | Pri | Cplx |
+|---------|-------------|------|-----|------|
+| MISSION-132 | **Search — limits, pagination & wiring** (audit H1/H2): add `limit`/`offset` through `MediaFilter` → `media.rs` FTS (`LIMIT ? OFFSET ?`) + `media_search`/`search_external` commands + contract + UI; fix `itunes` `None`→`Ok([])` short-circuit so "All types" includes podcasts/music; forward Discover's `content_type` to local FTS (`search_media(query, content_type)`); gatekeping `UNSUPPORTED_TYPES` indicator when no provider serves the facet. | 109, 100 | Core | M |
+| MISSION-133 | **Search — result UX** (audit H3/M1–M6): keyboard navigation + `role="listbox"`/`aria-activedescendant` + `Enter`→detail on SearchPage/Discover results; matched-term highlight via `FTS5 highlight/offsets`; optional scope chips (`title`/`people`/`tags`) → `MATCH 'title:query'`; debounced live type-ahead (`useDebouncedValue` 150ms) with `placeholderData`; pagination / "Load more" (`offset` per provider) + virtualization for large result sets. | 132 | Important | M |
+| MISSION-134 | **Search — nice-to-haves** (audit L1–L6/M3/M5): history / recent searches + suggestions (`fts5vocab`/localStorage); empty-query fallback (recent titles or history); result sort/filter after search; unified density-aware skeletons / query-key naming; `dir="auto"` + `ImageService` cover path for external rows; Arabic fold / `icu` transliteration alignment. | 132 | Optional | M |
+
+#### M19.2 · Provider image pipeline hardening
+
+| Mission | Description | Deps | Pri | Cplx |
+|---------|-------------|------|-----|------|
+| MISSION-135 | **Bangumi image pipeline — intermittent display** (audit root causes 1–5): add fallback chain `large → common → medium` in `bangumi/response.rs`; guard `Some("")` empty URLs in `import_service.rs`/`import_pipeline.rs` before asset creation; widen CSP to `https://*.bgm.tv` for legacy `bgm.tv` hosts; shorten/parameterize `ImageService` `failed` cooldown (and/or expose manual retry); refresh `cover_asset_id` on `enrich_service::enrich` instead of `preserve`. | 062, 065 | Important | M |
+
+#### M19.3 · UI / UX polish & smoothness
+
+| Mission | Description | Deps | Pri | Cplx |
+|---------|-------------|------|-----|------|
+| MISSION-136 | **Token & surface polish** (audit MEDIUM/HIGH): enforce radius-token discipline (`rounded-xl` → tokenized), raise `--control-height` / hit-area coverage toward 40–44px, promote faint `elevation` vs border depth, add WCAG contrast regression for `accent`/`accent-soft`/`ok`/`warn`/`danger`/`info` triads (both themes), and move status/badge text generation to keep `accent-soft` readable. | 031 | Important | M |
+| MISSION-137 | **Typography, motion & general smoothness** (audit 11 findings): apply `text-balance`/`text-pretty` to remaining long titles (Detail `h1`, Recap), add `tabular-nums` to Tracking/Bulk dynamic numbers, fix skeleton CLS deltas, widen hit-areas for `Dialog` close / `Switch` / `Tabs` / `NodeTree` / `NextUnitButton` to ≥40px, tune Lucide stroke from 2→~1.75 on `w-4` icons, and audit Backups/Export pill buttons and TopBar dense controls that still use `rounded-full border-none bg-transparent`. Inherently low-risk; reduced-motion respected via the global `0.01ms` rule. | 031, 136 | Important | M |
+
+---
+
 ## 4. Execution workflow (per mission)
 
 1. **Pick up** a mission in the current milestone (only READY/BACKLOG missions; never skip deps).
