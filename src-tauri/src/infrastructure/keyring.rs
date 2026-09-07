@@ -116,3 +116,66 @@ impl Default for InMemoryKeyring {
         Self::new()
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::sync::Arc;
+
+    fn temp_store_file(name: &str) -> PathBuf {
+        let dir = std::env::temp_dir().join(format!("mylore-keyring-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        dir.join(name)
+    }
+
+    #[test]
+    fn twin_instances_lose_writes_to_the_other_twin() {
+        // MISSION-139 regression: two independent FileSecretStore instances
+        // over the same file each hold a stale in-memory map, so a write
+        // through one clobbers a write through the other on flush. This test
+        // documents the failure the Arc-sharing fix eliminates in production.
+        let path = temp_store_file("twins.json");
+        let _ = std::fs::remove_file(&path);
+
+        let twin_a = FileSecretStore::load(path.clone());
+        let twin_b = FileSecretStore::load(path.clone());
+        twin_a.set("tmdb", "key-a").unwrap();
+        twin_b.set("db.encryption", "pass-b").unwrap();
+
+        // Both maps were loaded empty; each flushed only its own entry, so the
+        // file ends with exactly one of the two keys — a silent secret loss.
+        let on_disk = std::fs::read_to_string(&path).unwrap();
+        assert!(
+            !(on_disk.contains("tmdb") && on_disk.contains("db.encryption")),
+            "two twins must not both survive (documents the lost-write bug)"
+        );
+
+        std::fs::remove_file(&path).ok();
+    }
+
+    #[test]
+    fn shared_arc_persists_both_writers() {
+        // The production shape (MISSION-139): one Arc<dyn SecretStore> shared
+        // by the settings service and the db-security commands. A write through
+        // either consumer is visible to — and persisted by — the same map.
+        let path = temp_store_file("shared.json");
+        let _ = std::fs::remove_file(&path);
+
+        let shared: Arc<dyn SecretStore> = Arc::new(FileSecretStore::load(path.clone()));
+        let settings_consumer = shared.clone();
+        let security_consumer = shared.clone();
+
+        settings_consumer.set("tmdb", "key-a").unwrap();
+        security_consumer.set("db.encryption", "pass-b").unwrap();
+
+        assert_eq!(shared.get("tmdb").unwrap().as_deref(), Some("key-a"));
+        assert_eq!(
+            shared.get("db.encryption").unwrap().as_deref(),
+            Some("pass-b")
+        );
+        let on_disk = std::fs::read_to_string(&path).unwrap();
+        assert!(on_disk.contains("tmdb") && on_disk.contains("db.encryption"));
+
+        std::fs::remove_file(&path).ok();
+    }
+}

@@ -42,14 +42,18 @@ pub async fn db_security_status(
     db_path: tauri::State<'_, std::path::PathBuf>,
     store: State<'_, Arc<dyn SecretStore>>,
 ) -> Result<DbSecurityStatus, AppError> {
-    let available = cfg!(feature = "db-encryption");
-    // Blocking file read inside async: tiny (16 bytes), acceptable.
-    let encrypted = detect_encrypted(&db_path);
     let _ = &store; // presence documents where the key would live
-    Ok(DbSecurityStatus {
-        available,
-        encrypted,
-    })
+    Ok(status_at(db_path.inner()))
+}
+
+/// Pure status computation, split out so it is testable without Tauri state.
+/// `db_path` must point at the live library file (`{data_dir}/mylore.db`).
+fn status_at(db_path: &std::path::Path) -> DbSecurityStatus {
+    DbSecurityStatus {
+        available: cfg!(feature = "db-encryption"),
+        // Blocking file read inside async: tiny (16 bytes), acceptable.
+        encrypted: detect_encrypted(db_path),
+    }
 }
 
 /// Encrypt the live database in place and persist the passphrase.
@@ -128,6 +132,36 @@ mod encryption_command_tests {
         let cipher = dir.join("cipher.db");
         std::fs::write(&cipher, [0xDEu8; 64]).unwrap();
         assert!(detect_encrypted(&cipher));
+
+        std::fs::remove_dir_all(&dir).ok();
+    }
+}
+
+/// MISSION-138 regression: status is computed from the *managed* db path
+/// (a missing/mis-typed state used to reject the command at runtime). The
+/// pure split stays testable without Tauri state.
+#[cfg(test)]
+mod status_tests {
+    use super::*;
+
+    #[test]
+    fn status_reports_plaintext_and_encrypted_headers() {
+        let dir = std::env::temp_dir().join(format!("ml-status-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+
+        let plain = dir.join("plain.db");
+        std::fs::write(&plain, b"SQLite format 3\0rest-of-header").unwrap();
+        let status = status_at(&plain);
+        assert!(!status.encrypted, "plaintext header must not read as encrypted");
+
+        let cipher = dir.join("cipher.db");
+        std::fs::write(&cipher, [0xDEu8; 64]).unwrap();
+        let status = status_at(&cipher);
+        assert!(status.encrypted, "random first page must read as encrypted");
+
+        // Missing file: never an error — reads as plaintext/unencrypted.
+        let status = status_at(&dir.join("does-not-exist.db"));
+        assert!(!status.encrypted);
 
         std::fs::remove_dir_all(&dir).ok();
     }

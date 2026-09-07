@@ -72,7 +72,7 @@ struct SettingsState {
 /// settings changes (a coordinator swap) are always observed.
 pub struct ProviderSettingsService {
     settings_file: PathBuf,
-    store: Box<dyn SecretStore>,
+    store: Arc<dyn SecretStore>,
     builder: Arc<dyn EntryBuilder>,
     state: RwLock<SettingsState>,
 }
@@ -80,10 +80,13 @@ pub struct ProviderSettingsService {
 impl ProviderSettingsService {
     /// Build the service from the default configs, layering persisted enabled
     /// flags and keyring keys on top, then building the initial coordinator.
+    /// `store` is shared (an `Arc`) so every secret consumer — provider keys
+    /// here, the db-encryption passphrase commands elsewhere — reads and writes
+    /// the *same* handle and can never lose a key to a stale twin (MISSION-139).
     pub fn load(
         defaults: Vec<ProviderConfig>,
         settings_file: PathBuf,
-        store: Box<dyn SecretStore>,
+        store: Arc<dyn SecretStore>,
         builder: Arc<dyn EntryBuilder>,
     ) -> Result<Self, AppError> {
         let enabled = load_enabled(&settings_file);
@@ -469,7 +472,7 @@ mod tests {
         let service = ProviderSettingsService::load(
             defaults(),
             file,
-            Box::new(InMemoryKeyring::new()),
+            Arc::new(InMemoryKeyring::new()),
             Arc::new(builder),
         )
         .expect("service loads");
@@ -497,7 +500,7 @@ mod tests {
         let service = ProviderSettingsService::load(
             defaults(),
             file.clone(),
-            Box::new(store),
+            Arc::new(store),
             Arc::new(FakeBuilder::default()),
         )
         .expect("service loads");
@@ -554,7 +557,7 @@ mod tests {
         let builder = Arc::new(FakeBuilder::default());
         let (dir, file) = temp_settings_file("set_key.db.json");
         let service =
-            ProviderSettingsService::load(defaults(), file, Box::new(store), builder.clone())
+            ProviderSettingsService::load(defaults(), file, Arc::new(store), builder.clone())
                 .expect("service loads");
 
         let view = service.set_key("tmdb", "abc-123").expect("set key");
@@ -580,7 +583,7 @@ mod tests {
         let builder = Arc::new(FakeBuilder::default());
         let (dir, file) = temp_settings_file("clear_key.db.json");
         let service =
-            ProviderSettingsService::load(defaults(), file, Box::new(store), builder.clone())
+            ProviderSettingsService::load(defaults(), file, Arc::new(store), builder.clone())
                 .expect("service loads");
 
         service.set_key("tmdb", "abc").expect("set");

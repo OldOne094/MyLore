@@ -39,6 +39,9 @@ pub fn run() {
             application::providers::oauth::init_secret(&data_dir);
 
             let db_path = data_dir.join("mylore.db");
+            // Managed so `db_security_status` can locate the file for header
+            // sniffing (MISSION-138): the pool alone doesn't expose its path.
+            app.manage(db_path.clone());
             // Shared secret pipeline (provider keys + DB passphrase).
             let secret_store = Arc::new(FileSecretStore::load(data_dir.join("api_keys.json")));
             app.manage(secret_store.clone() as Arc<dyn SecretStore>);
@@ -101,9 +104,10 @@ pub fn run() {
                 ProviderSettingsService::load(
                     infrastructure::providers::default_provider_configs(),
                     data_dir.join("providers.json"),
-                    // A fresh handle over the same file is fine here; the Arc
-                    // twin above serves the db-security commands.
-                    Box::new(FileSecretStore::load(data_dir.join("api_keys.json"))),
+                    // Shared secret pipeline (MISSION-139): the SAME Arc handle
+                    // the db-security commands use, so a provider-key write and
+                    // a passphrase write can never clobber each other.
+                    secret_store.clone(),
                     Arc::new(StdEntryBuilder),
                 )
                 .map_err(std::io::Error::other)?,
