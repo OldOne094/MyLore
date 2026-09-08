@@ -121,13 +121,13 @@ impl ProviderSettingsService {
     /// The current coordinator. Callers clone the Arc and release the lock
     /// immediately — a settings write may swap it at any time.
     pub fn coordinator(&self) -> Arc<ProviderCoordinator> {
-        self.state.read().unwrap().coordinator.clone()
+        self.read_state().coordinator.clone()
     }
 
     /// Snapshot of every registered provider for the settings UI, in
     /// registration order.
     pub fn list(&self) -> Vec<ProviderSettingsView> {
-        let state = self.state.read().unwrap();
+        let state = self.read_state();
         state
             .coordinator
             .providers()
@@ -152,7 +152,7 @@ impl ProviderSettingsService {
         enabled: bool,
     ) -> Result<ProviderSettingsView, AppError> {
         {
-            let mut state = self.state.write().unwrap();
+            let mut state = self.write_state();
             let config = state
                 .configs
                 .iter_mut()
@@ -178,7 +178,7 @@ impl ProviderSettingsService {
         let trimmed = api_key.trim();
         tracing::debug!(provider, key_len = trimmed.len(), "set_key: starting");
         let (exists, requires_key) = {
-            let state = self.state.read().unwrap();
+            let state = self.read_state();
             (
                 state.configs.iter().any(|c| c.id == provider),
                 state
@@ -199,7 +199,7 @@ impl ProviderSettingsService {
         }
 
         {
-            let mut state = self.state.write().unwrap();
+            let mut state = self.write_state();
             let config = state
                 .configs
                 .iter_mut()
@@ -254,7 +254,7 @@ impl ProviderSettingsService {
     /// Persist the enabled flags. Keys never land here.
     fn persist_enabled(&self) -> Result<(), AppError> {
         let enabled = {
-            let state = self.state.read().unwrap();
+            let state = self.read_state();
             state
                 .configs
                 .iter()
@@ -264,6 +264,22 @@ impl ProviderSettingsService {
         let payload = serde_json::to_vec_pretty(&PersistedSettings { enabled })?;
         atomic_write(&self.settings_file, &payload)?;
         Ok(())
+    }
+
+    /// Read lock that recovers from poisoning instead of panicking a request
+    /// thread (MISSION-141). The guarded `SettingsState` is a plain struct of
+    /// configs + an Arc'd coordinator — no critical section builds a
+    /// half-updated invariant, so `into_inner` is safe recovery.
+    fn read_state(&self) -> std::sync::RwLockReadGuard<'_, SettingsState> {
+        self.state
+            .read()
+            .unwrap_or_else(|poisoned| poisoned.into_inner())
+    }
+
+    fn write_state(&self) -> std::sync::RwLockWriteGuard<'_, SettingsState> {
+        self.state
+            .write()
+            .unwrap_or_else(|poisoned| poisoned.into_inner())
     }
 }
 
@@ -480,12 +496,11 @@ mod tests {
     }
 
     fn temp_settings_file(name: &str) -> (PathBuf, PathBuf) {
+        // Unique per call: several tests share `service_with`'s fixed
+        // "providers.json" name, and their cleanups would race on one path.
         let dir = std::env::temp_dir()
             .join("mylore-test-settings")
-            .join(name)
-            .parent()
-            .unwrap()
-            .to_path_buf();
+            .join(format!("{name}-{}", uuid::Uuid::new_v4()));
         let file = dir.join(name);
         std::fs::create_dir_all(&dir).unwrap();
         (dir, file)

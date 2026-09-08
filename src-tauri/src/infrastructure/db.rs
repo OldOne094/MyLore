@@ -166,6 +166,36 @@ pub async fn pending_migrations_with(db_path: &Path, key: Option<&str>) -> Resul
     result
 }
 
+/// The highest migration version this build embeds (`0` for an empty set —
+/// never the case here, but total for a helper). Callers compare it against a
+/// snapshot's applied level to refuse newer-schema archives (MISSION-142).
+pub fn latest_migration_version() -> i64 {
+    MIGRATOR
+        .iter()
+        .map(|migration| migration.version)
+        .max()
+        .unwrap_or(0)
+}
+
+/// The highest migration version recorded as applied in the database at
+/// `pool`. A fresh database or one without the sqlx bookkeeping table counts
+/// as `0` (nothing applied yet).
+pub async fn applied_migration_version(pool: &SqlitePool) -> Result<i64, AppError> {
+    let (has_bookkeeping,): (i64,) = sqlx::query_as(
+        "SELECT COUNT(*) FROM sqlite_master WHERE type = 'table' AND name = '_sqlx_migrations'",
+    )
+    .fetch_one(pool)
+    .await?;
+    if has_bookkeeping == 0 {
+        return Ok(0);
+    }
+    let (max_version,): (Option<i64>,) =
+        sqlx::query_as("SELECT MAX(version) FROM _sqlx_migrations")
+            .fetch_one(pool)
+            .await?;
+    Ok(max_version.unwrap_or(0))
+}
+
 /// Open the database, verify integrity and apply migrations — the startup
 /// entry point.
 pub async fn init(db_path: &Path) -> Result<SqlitePool, AppError> {

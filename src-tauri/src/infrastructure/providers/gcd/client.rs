@@ -18,7 +18,9 @@ impl Default for GcdClient {
 
 impl GcdClient {
     pub fn new() -> Self {
-        let http = reqwest::Client::builder().build().expect("reqwest client builds");
+        let http = reqwest::Client::builder()
+            .build()
+            .expect("reqwest client builds");
         Self::with_endpoint(http, super::ENDPOINT)
     }
 
@@ -34,16 +36,16 @@ impl GcdClient {
         query: &str,
     ) -> Result<super::response::SearchResponse, ProviderError> {
         self.get_json(
-            &format!("/api/series/?name={}&format=json", urlencoding::encode(query)),
+            &format!(
+                "/api/series/?name={}&format=json",
+                urlencoding::encode(query)
+            ),
             None::<&str>,
         )
         .await
     }
 
-    pub async fn series(
-        &self,
-        id: &str,
-    ) -> Result<super::response::Series, ProviderError> {
+    pub async fn series(&self, id: &str) -> Result<super::response::Series, ProviderError> {
         self.get_json(&format!("/api/series/{id}/"), None::<&str>)
             .await
     }

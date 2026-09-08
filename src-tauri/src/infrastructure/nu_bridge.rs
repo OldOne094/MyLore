@@ -44,12 +44,22 @@ pub struct BridgeState {
 impl BridgeState {
     fn register(self: &Arc<Self>, id: String) -> oneshot::Receiver<PendingResult> {
         let (tx, rx) = oneshot::channel();
-        self.pending.lock().unwrap().insert(id, tx);
+        // Poison recovery (MISSION-141): the map insert is a plain mutation,
+        // no half-built invariant — recover instead of panicking the caller.
+        self.pending
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner())
+            .insert(id, tx);
         rx
     }
 
     fn resolve(self: &Arc<Self>, id: &str, result: PendingResult) {
-        if let Some(tx) = self.pending.lock().unwrap().remove(id) {
+        if let Some(tx) = self
+            .pending
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner())
+            .remove(id)
+        {
             let _ = tx.send(result);
         }
     }
@@ -253,23 +263,31 @@ pub fn handle_report_navigation(state: &Arc<BridgeState>, url: &tauri::Url) -> b
             let total: usize = segments[3].parse().unwrap_or(1);
             let chunk = segments[4].to_string();
 
-            {
-                let mut totals = assembly().totals.lock().unwrap();
-                totals.entry(id.clone()).or_insert(total);
-                let expected = *totals.get(&id).unwrap();
-                let _ = expected;
-                assembly()
-                    .parts
-                    .lock()
-                    .unwrap()
-                    .entry(id.clone())
-                    .or_default()
-                    .insert(index, chunk);
-            }
+            // Poison recovery (MISSION-141): every section here mutates plain
+            // map entries — no half-built invariant — so recover, never panic.
+            assembly()
+                .totals
+                .lock()
+                .unwrap_or_else(|poisoned| poisoned.into_inner())
+                .entry(id.clone())
+                .or_insert(total);
+            assembly()
+                .parts
+                .lock()
+                .unwrap_or_else(|poisoned| poisoned.into_inner())
+                .entry(id.clone())
+                .or_default()
+                .insert(index, chunk);
 
             let complete = {
-                let totals = assembly().totals.lock().unwrap();
-                let parts = assembly().parts.lock().unwrap();
+                let totals = assembly()
+                    .totals
+                    .lock()
+                    .unwrap_or_else(|poisoned| poisoned.into_inner());
+                let parts = assembly()
+                    .parts
+                    .lock()
+                    .unwrap_or_else(|poisoned| poisoned.into_inner());
                 match (totals.get(&id), parts.get(&id)) {
                     (Some(total), Some(parts)) => parts.len() == *total,
                     _ => false,
@@ -280,12 +298,16 @@ pub fn handle_report_navigation(state: &Arc<BridgeState>, url: &tauri::Url) -> b
                 let assembled: String = assembly()
                     .parts
                     .lock()
-                    .unwrap()
+                    .unwrap_or_else(|poisoned| poisoned.into_inner())
                     .remove(&id)
                     .unwrap_or_default()
                     .into_values()
                     .collect();
-                assembly().totals.lock().unwrap().remove(&id);
+                assembly()
+                    .totals
+                    .lock()
+                    .unwrap_or_else(|poisoned| poisoned.into_inner())
+                    .remove(&id);
 
                 let result =
                     decode_response(&assembled).map_err(|e| format!("response decode failed: {e}"));

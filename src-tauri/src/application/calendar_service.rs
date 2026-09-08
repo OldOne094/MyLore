@@ -64,8 +64,9 @@ impl CalendarService {
             return Err(AppError::validation(format!("month out of range: {month}")));
         }
 
-        let start = NaiveDate::from_ymd_opt(year as i32, month as u32, 1).expect("validated month");
-        let next = next_month_start(year, month);
+        let start = NaiveDate::from_ymd_opt(year as i32, month as u32, 1)
+            .ok_or_else(|| AppError::internal("invalid year/month bounds"))?;
+        let next = next_month_start(year, month)?;
         let last_day = (next - Days::new(1)).day();
 
         let mut days: Vec<CalendarDay> = (1..=last_day)
@@ -134,13 +135,14 @@ impl CalendarService {
     }
 }
 
-fn next_month_start(year: u16, month: u8) -> NaiveDate {
+fn next_month_start(year: u16, month: u8) -> Result<NaiveDate, AppError> {
     let (y, m) = if month == 12 {
         (year + 1, 1)
     } else {
         (year, month + 1)
     };
-    NaiveDate::from_ymd_opt(y as i32, m as u32, 1).expect("valid next month")
+    NaiveDate::from_ymd_opt(y as i32, m as u32, 1)
+        .ok_or_else(|| AppError::internal("invalid next-month bounds"))
 }
 
 #[cfg(test)]

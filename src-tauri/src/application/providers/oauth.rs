@@ -179,8 +179,9 @@ MyLore connected to AniList. You can close this tab.</body></html>";
         drop(stream);
 
         let token = match futures_block_on(exchange_code(&code)) {
-            Ok(token) => token,
-            Err(error) => return finish(Err(error.to_string())),
+            Ok(Ok(token)) => token,
+            Ok(Err(error)) => return finish(Err(error.to_string())),
+            Err(error) => return finish(Err(error)),
         };
         if let Err(error) = settings.set_key("anilist", &token) {
             return finish(Err(error.to_string()));
@@ -193,14 +194,18 @@ MyLore connected to AniList. You can close this tab.</body></html>";
 }
 
 /// Run an async future to completion on this dedicated OS thread (the
-/// loopback handler runs off the async runtime by design).
-fn futures_block_on<F: std::future::Future>(future: F) -> F::Output {
+/// loopback handler runs off the async runtime by design). Runtime-creation
+/// failure is reported to the caller (which routes it to the OAuth event)
+/// instead of panicking the worker thread (MISSION-141).
+fn futures_block_on<F: std::future::Future>(future: F) -> Result<F::Output, String> {
     let mut pinned = Box::pin(future);
     match tokio::runtime::Handle::try_current() {
-        Ok(handle) => handle.block_on(pinned.as_mut()),
-        Err(_) => tokio::runtime::Runtime::new()
-            .expect("runtime")
-            .block_on(pinned.as_mut()),
+        Ok(handle) => Ok(handle.block_on(pinned.as_mut())),
+        Err(_) => {
+            let runtime = tokio::runtime::Runtime::new()
+                .map_err(|e| format!("failed to start the OAuth runtime: {e}"))?;
+            Ok(runtime.block_on(pinned.as_mut()))
+        }
     }
 }
 

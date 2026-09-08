@@ -46,7 +46,13 @@ impl RateLimiter {
         if self.interval.is_zero() {
             return Duration::ZERO;
         }
-        let mut state = self.state.lock().expect("rate limiter state poisoned");
+        // Poison recovery (MISSION-141): the critical section only advances a
+        // timestamp, so a poisoned lock carries no half-updated state — recover
+        // rather than panicking the request thread.
+        let mut state = self
+            .state
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner());
         let now = Instant::now();
         let start = now.max(state.next_start);
         state.next_start = start + self.interval;
@@ -131,6 +137,23 @@ mod tests {
         assert_eq!(limiter.reserve(), Duration::ZERO);
         assert_eq!(limiter.reserve(), Duration::ZERO);
         assert_eq!(limiter.reserve(), Duration::ZERO);
+    }
+
+    #[test]
+    fn reserve_recovers_from_a_poisoned_lock() {
+        // MISSION-141: a panic while another thread held the lock must not
+        // turn the next IPC call into a process panic — reserve() recovers.
+        let limiter = RateLimiter::new(2.0);
+        let _ = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+            let _guard = limiter.state.lock().unwrap();
+            panic!("simulated panic while holding the rate-limiter lock");
+        }));
+        // The lock is now poisoned; reserve() must recover, not panic.
+        assert_eq!(
+            limiter.reserve(),
+            Duration::ZERO,
+            "first slot still claimed"
+        );
     }
 
     #[tokio::test(start_paused = true)]

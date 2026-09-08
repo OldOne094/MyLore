@@ -49,10 +49,16 @@ pub struct BackupMeta {
     pub media_count: u32,
     pub asset_count: u32,
     /// MISSION-112 — whether the embedded snapshot is SQLCipher-encrypted.
-    /// Not part of the written manifest; filled in by `validate`.
+    /// Written from `BackupService::encryption_key` at create time (MISSION-140)
+    /// and cross-checked against the snapshot header during validation.
     #[serde(default)]
-    #[serde(skip_deserializing)]
     pub encrypted: bool,
+    /// Highest applied sqlx migration at create time (MISSION-142). `None`
+    /// only on archives written before the field existed — validation falls
+    /// back to reading the snapshot's `_sqlx_migrations` directly, so old
+    /// archives still get a schema-compatibility check.
+    #[serde(default)]
+    pub schema_version: Option<i64>,
     pub assets: Vec<AssetManifestEntry>,
 }
 
@@ -236,10 +242,10 @@ impl BackupService {
             .join(format!("quarantine-corrupt-{stamp}-{uid}"));
         std::fs::create_dir_all(&quarantine)?;
         for suffix in ["", "-wal", "-shm"] {
-            let source = self.data_dir.join(format!("mylore.db{suffix}"));
+            let name = format!("mylore.db{suffix}");
+            let source = self.data_dir.join(&name);
             if source.is_file() {
-                rename_with_retry(&source, &quarantine.join(source.file_name().expect("name")))
-                    .await?;
+                rename_with_retry(&source, &quarantine.join(&name)).await?;
             }
         }
         Ok(quarantine.display().to_string())
@@ -304,7 +310,13 @@ impl BackupService {
             created_at: Utc::now().to_rfc3339(),
             media_count: media_count as u32,
             asset_count: manifest.len() as u32,
-            encrypted: false,
+            // A `VACUUM INTO` from an encrypted connection inherits the key
+            // (SQLCipher keeps encryption/key consistency through vacuum), so
+            // this environment's key is the source of truth for the snapshot.
+            encrypted: self.encryption_key.is_some(),
+            // Schema level of the live database (MISSION-142): restore/validate
+            // refuse snapshots newer than this build understands.
+            schema_version: Some(db::applied_migration_version(&self.pool).await?),
             assets: manifest,
         };
 
@@ -546,10 +558,17 @@ impl BackupService {
         // under `{data_dir}/quarantine-…` using their original names so a
         // rollback is a plain move back.
         std::fs::create_dir_all(quarantine)?;
+        // The sidecar names derive from the live database's file name; a
+        // path built via `join` always carries one, but report instead of
+        // expecting (MISSION-141).
+        let db_name = db_path
+            .file_name()
+            .ok_or_else(|| AppError::validation("the live database path has no file name"))?;
         for sidecar in ["-wal", "-shm"] {
-            let source = PathBuf::from(format!("{}{sidecar}", db_path.display()));
+            let name = format!("{}{sidecar}", db_name.to_string_lossy());
+            let source = db_path.with_file_name(&name);
             if source.is_file() {
-                std::fs::rename(&source, quarantine.join(source.file_name().expect("name")))?;
+                std::fs::rename(&source, quarantine.join(&name))?;
             }
         }
         std::fs::rename(&db_path, quarantine.join("mylore.db"))?;
@@ -660,6 +679,19 @@ impl BackupService {
                         "backup snapshot does not match its manifest",
                     ));
                 }
+                // Schema compatibility (MISSION-142): a snapshot whose highest
+                // applied migration is above this build's embedded level was
+                // made by a *newer* app and must be refused here — otherwise it
+                // would pass validation, swap in, and only then confuse the
+                // next startup's migration run.
+                let snapshot_schema = db::applied_migration_version(&pool).await?;
+                let supported = db::latest_migration_version();
+                if snapshot_schema > supported {
+                    return Err(AppError::validation(format!(
+                        "backup was made by a newer MyLore version \
+                         (snapshot schema v{snapshot_schema}, this build supports up to v{supported})"
+                    )));
+                }
                 Ok(())
             }
             .await;
@@ -667,7 +699,19 @@ impl BackupService {
             result
         }
         .await;
-        meta.encrypted = crate::infrastructure::db::detect_encrypted(&temp);
+        // The snapshot header is the ground truth for encryption state
+        // (MISSION-140). Manifests written before this fix claimed `false`
+        // unconditionally, so a mismatch is corrected — with a warning — rather
+        // than rejecting otherwise-valid archives.
+        let actual = crate::infrastructure::db::detect_encrypted(&temp);
+        if actual != meta.encrypted {
+            tracing::warn!(
+                manifest = meta.encrypted,
+                actual,
+                "backup manifest encryption flag corrected from the snapshot header"
+            );
+            meta.encrypted = actual;
+        }
         let _ = std::fs::remove_file(&temp);
         check?;
 
@@ -780,20 +824,22 @@ fn remove_any(path: impl AsRef<Path>) {
 /// linger briefly after a pool closes, and an immediate rename fails with
 /// "file in use".
 async fn rename_with_retry(source: &Path, dest: &Path) -> Result<(), AppError> {
-    let mut last_error = None;
+    // Last failure is reported if every attempt is exhausted; seeded so no
+    // `expect`/`unwrap` is needed (MISSION-141).
+    let mut last_error = std::io::Error::other("rename failed");
     // 50 attempts × 100ms = 5s; CI runners (especially Windows) can take
     // longer than local dev to release SQLite file handles after close.
     for attempt in 0..50 {
         match std::fs::rename(source, dest) {
             Ok(()) => return Ok(()),
             Err(error) => {
-                last_error = Some(error);
+                last_error = error;
                 let delay = if attempt < 10 { 50 } else { 100 };
                 tokio::time::sleep(std::time::Duration::from_millis(delay)).await;
             }
         }
     }
-    Err(AppError::Io(last_error.expect("at least one attempt")))
+    Err(AppError::Io(last_error))
 }
 
 /// The zero-padded `YYYYMMDDHHMMSS` stamp embedded in an archive file name
@@ -935,6 +981,127 @@ mod tests {
         assert!(names.contains(&"library.db".to_string()));
         assert!(names.iter().any(|n| n.starts_with("assets/a-1")));
 
+        h.cleanup().await;
+    }
+
+    #[tokio::test]
+    async fn manifest_declares_encrypted_false_for_a_plaintext_backup() {
+        // MISSION-140: the written manifest must state the snapshot's real
+        // encryption state (not default to false), and validation must accept
+        // a manifest that matches its snapshot.
+        let h = harness("enc-flag.db").await;
+        seed_media(&h.pool, "m-1").await;
+        let report = h.service.create().await.expect("create backup");
+
+        // The manifest inside the zip carries the flag.
+        let file = std::fs::File::open(&report.path).expect("open archive");
+        let mut archive = ZipArchive::new(file).expect("read archive");
+        let mut meta_json = String::new();
+        archive
+            .by_name(META_ENTRY)
+            .expect("meta entry")
+            .read_to_string(&mut meta_json)
+            .expect("read meta");
+        assert!(
+            meta_json.contains("\"encrypted\": false"),
+            "plaintext backup manifest must declare encrypted:false, got: {meta_json}"
+        );
+
+        // And validation agrees with the snapshot header.
+        let meta = h
+            .service
+            .validate(Path::new(&report.path))
+            .await
+            .expect("validate");
+        assert!(!meta.encrypted);
+        h.cleanup().await;
+    }
+
+    #[tokio::test]
+    async fn manifest_carries_the_schema_version_and_validates() {
+        // MISSION-142: the written manifest records the highest applied
+        // migration, and validation accepts a same-or-older snapshot.
+        let h = harness("schema-ok.db").await;
+        seed_media(&h.pool, "m-1").await;
+        let report = h.service.create().await.expect("create backup");
+
+        let file = std::fs::File::open(&report.path).expect("open archive");
+        let mut archive = ZipArchive::new(file).expect("read archive");
+        let mut meta_json = String::new();
+        archive
+            .by_name(META_ENTRY)
+            .expect("meta entry")
+            .read_to_string(&mut meta_json)
+            .expect("read meta");
+        let meta: BackupMeta = serde_json::from_str(&meta_json).expect("manifest parses");
+        assert_eq!(
+            meta.schema_version,
+            Some(crate::infrastructure::db::latest_migration_version()),
+            "manifest schema_version mirrors this build's migration level"
+        );
+
+        assert!(h.service.validate(Path::new(&report.path)).await.is_ok());
+        h.cleanup().await;
+    }
+
+    #[tokio::test]
+    async fn validate_refuses_a_newer_schema_snapshot() {
+        // MISSION-142: an archive whose snapshot was migrated past this build's
+        // embedded level (made by a newer app) must be refused at validation,
+        // before any swap could run.
+        let h = harness("schema-newer.db").await;
+        seed_media(&h.pool, "m-1").await;
+        let report = h.service.create().await.expect("create backup");
+
+        // Stage the archive, bump the snapshot's migration bookkeeping to a
+        // future version, and re-pack it.
+        let staging = h.data_dir.join("schema-bump");
+        std::fs::create_dir_all(&staging).expect("staging");
+        let file = std::fs::File::open(&report.path).expect("open archive");
+        let mut archive = ZipArchive::new(file).expect("read archive");
+        let mut meta_json = String::new();
+        archive
+            .by_name(META_ENTRY)
+            .expect("meta entry")
+            .read_to_string(&mut meta_json)
+            .expect("read meta");
+        let meta: BackupMeta = serde_json::from_str(&meta_json).expect("manifest parses");
+        let staged_db = extract_archive(Path::new(&report.path), &meta, &staging).expect("extract");
+
+        let future_version = crate::infrastructure::db::latest_migration_version() + 1000;
+        {
+            let pool = crate::infrastructure::db::connect(&staged_db)
+                .await
+                .expect("open snapshot");
+            sqlx::query(
+                "INSERT INTO _sqlx_migrations \
+                 (version, description, installed_on, success, checksum, execution_time) \
+                 VALUES (?, 'future', datetime('now'), 1, x'00', 0)",
+            )
+            .bind(future_version)
+            .execute(&pool)
+            .await
+            .expect("stamp a future migration");
+            pool.close().await;
+        }
+
+        // Re-pack with the manifest unchanged (schema_version still the old
+        // one — validation must trust the snapshot, not the label).
+        let bumped = h.data_dir.join("schema-bumped.mylore");
+        write_archive(&bumped, &meta_json, &staged_db, &[]).expect("re-pack");
+
+        let err = h
+            .service
+            .validate(&bumped)
+            .await
+            .expect_err("newer schema must be refused");
+        let message = err.to_string();
+        assert!(
+            message.contains("newer MyLore version"),
+            "error should explain the newer schema, got: {message}"
+        );
+
+        let _ = std::fs::remove_dir_all(&staging);
         h.cleanup().await;
     }
 
@@ -1390,6 +1557,84 @@ mod tests {
         assert_eq!(media, 2, "the mutated live data survived intact");
 
         let _ = std::fs::remove_dir_all(&staging);
+        h.cleanup().await;
+    }
+}
+
+/// MISSION-140 - encryption-aware manifest round-trip. Only meaningful with
+/// SQLCipher built in; without the feature the key pragma is inert so this
+/// stays skipped in ordinary CI (same convention as `db.rs::encryption_tests`).
+#[cfg(all(test, feature = "db-encryption"))]
+mod encryption_manifest_tests {
+    use super::*;
+    use crate::infrastructure::db::init_with;
+
+    struct EncHarness {
+        service: BackupService,
+        pool: SqlitePool,
+        data_dir: PathBuf,
+    }
+
+    async fn enc_harness(name: &str, key: &str) -> EncHarness {
+        let data_dir =
+            std::env::temp_dir().join(format!("mylore-backup-enc-{name}-{}", Uuid::new_v4()));
+        std::fs::create_dir_all(&data_dir).expect("data dir");
+        let db_path = data_dir.join("mylore.db");
+        let pool = init_with(&db_path, Some(key))
+            .await
+            .expect("encrypted init");
+        let service =
+            BackupService::new(pool.clone(), &data_dir).with_encryption_key(Some(key.to_string()));
+        EncHarness {
+            service,
+            pool,
+            data_dir,
+        }
+    }
+
+    impl EncHarness {
+        async fn cleanup(self) {
+            self.pool.close().await;
+            let _ = std::fs::remove_dir_all(&self.data_dir);
+        }
+    }
+
+    #[tokio::test]
+    async fn encrypted_backup_manifest_declares_true_and_validates() {
+        let h = enc_harness("flag.db", "correct-horse").await;
+        sqlx::query(
+            "INSERT INTO media (id, content_type, title_main, created_at, updated_at)
+             VALUES ('m-1', 'novel', 'Encrypted Title', '2026-01-01', '2026-01-01')",
+        )
+        .execute(&h.pool)
+        .await
+        .expect("seed media");
+
+        let report = h.service.create().await.expect("create encrypted backup");
+
+        // The written manifest says encrypted:true (MISSION-140).
+        let file = std::fs::File::open(&report.path).expect("open archive");
+        let mut archive = ZipArchive::new(file).expect("read archive");
+        let mut meta_json = String::new();
+        archive
+            .by_name(META_ENTRY)
+            .expect("meta entry")
+            .read_to_string(&mut meta_json)
+            .expect("read meta");
+        assert!(
+            meta_json.contains("\"encrypted\": true"),
+            "encrypted backup manifest must declare encrypted:true, got: {meta_json}"
+        );
+
+        // Validation cross-checks the flag against the snapshot header and
+        // opens the snapshot with the environment key.
+        let meta = h
+            .service
+            .validate(Path::new(&report.path))
+            .await
+            .expect("validate encrypted backup");
+        assert!(meta.encrypted);
+
         h.cleanup().await;
     }
 }

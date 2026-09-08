@@ -58,20 +58,29 @@ impl FileSecretStore {
 
 impl SecretStore for FileSecretStore {
     fn get(&self, user: &str) -> Result<Option<String>, String> {
-        Ok(self.inner.lock().unwrap().get(user).cloned())
+        let inner = self
+            .inner
+            .lock()
+            .map_err(|_| "secret store lock poisoned".to_string())?;
+        Ok(inner.get(user).cloned())
     }
 
     fn set(&self, user: &str, secret: &str) -> Result<(), String> {
-        self.inner
+        let mut inner = self
+            .inner
             .lock()
-            .unwrap()
-            .insert(user.into(), secret.into());
-        self.flush(&self.inner.lock().unwrap())
+            .map_err(|_| "secret store lock poisoned".to_string())?;
+        inner.insert(user.into(), secret.into());
+        self.flush(&inner)
     }
 
     fn delete(&self, user: &str) -> Result<(), String> {
-        self.inner.lock().unwrap().remove(user);
-        self.flush(&self.inner.lock().unwrap())
+        let mut inner = self
+            .inner
+            .lock()
+            .map_err(|_| "secret store lock poisoned".to_string())?;
+        inner.remove(user);
+        self.flush(&inner)
     }
 }
 
@@ -177,5 +186,29 @@ mod tests {
         assert!(on_disk.contains("tmdb") && on_disk.contains("db.encryption"));
 
         std::fs::remove_file(&path).ok();
+    }
+
+    #[test]
+    fn operations_report_errors_on_a_poisoned_lock() {
+        // MISSION-141: a poisoned lock must surface as an error, never panic
+        // the request thread. Poison by panicking while holding the guard.
+        let store = FileSecretStore::load(temp_store_file("poisoned.json"));
+        let _ = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+            let _guard = store.inner.lock().unwrap();
+            panic!("simulated panic while holding the secret-store lock");
+        }));
+
+        assert!(
+            store.set("tmdb", "key").is_err(),
+            "set on a poisoned store returns an error"
+        );
+        assert!(
+            store.get("tmdb").is_err(),
+            "get on a poisoned store returns an error"
+        );
+        assert!(
+            store.delete("tmdb").is_err(),
+            "delete on a poisoned store returns an error"
+        );
     }
 }

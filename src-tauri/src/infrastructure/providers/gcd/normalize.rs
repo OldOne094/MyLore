@@ -91,10 +91,7 @@ pub(crate) fn media(series: &Series, provider_id: &str) -> Option<ProviderMedia>
 }
 
 pub(crate) fn nodes(series: &Series) -> Vec<ProviderNode> {
-    let descriptors = series
-        .issue_descriptors
-        .as_deref()
-        .unwrap_or_default();
+    let descriptors = series.issue_descriptors.as_deref().unwrap_or_default();
     descriptors
         .iter()
         .enumerate()

@@ -157,6 +157,13 @@ pub struct TaskManager {
     emit: Arc<dyn Fn(TaskSnapshot) + Send + Sync>,
 }
 
+/// Retention cap for terminal (finished) tasks (MISSION-143). A long-lived
+/// session otherwise grows the task map without bound — every import/export/
+/// backup snapshot (including its full typed result payload) stays resident
+/// forever. Running/queued tasks are never pruned; only the newest terminal
+/// tasks survive beyond this count.
+const MAX_TERMINAL_TASKS: usize = 50;
+
 impl TaskManager {
     /// Build a manager that pushes every change through `emit`. The app wires
     /// this to the `task_changed` Tauri event; tests collect the snapshots.
@@ -172,7 +179,11 @@ impl TaskManager {
 
     /// Register a task and run `run` off the command path. Returns the task id;
     /// the caller can `get` the initial (queued) snapshot immediately.
-    pub fn spawn<F, Fut>(&self, kind: TaskKind, title: String, run: F) -> String
+    ///
+    /// Takes `&Arc<Self>` so the runner can prune terminal tasks *after* it
+    /// finishes (MISSION-143); production calls through Tauri's
+    /// `State<Arc<TaskManager>>`, tests wrap the manager in an `Arc`.
+    pub fn spawn<F, Fut>(self: &Arc<Self>, kind: TaskKind, title: String, run: F) -> String
     where
         F: FnOnce(TaskReporter) -> Fut + Send + 'static,
         Fut: Future<Output = Result<Value, TaskError>> + Send + 'static,
@@ -180,9 +191,14 @@ impl TaskManager {
         let id = format!("t-{}", Uuid::new_v4());
         let (cancel_tx, cancel_rx) = watch::channel(false);
         let entry = Arc::new(TaskEntry::new(id.clone(), kind, title, cancel_tx));
-        self.tasks.lock().unwrap().insert(id.clone(), entry.clone());
+        {
+            let mut tasks = self.tasks.lock().unwrap();
+            tasks.insert(id.clone(), entry.clone());
+            prune_locked(&mut tasks);
+        }
 
         let reporter = TaskReporter::new(entry.clone(), cancel_rx, self.emit.clone());
+        let manager = self.clone();
         tauri::async_runtime::spawn(async move {
             reporter.start();
             match run(reporter.clone()).await {
@@ -193,6 +209,9 @@ impl TaskManager {
                     reporter.finish(TaskState::Failed, None, Some(message));
                 }
             }
+            // The task is terminal now; keep the map bounded even if no new
+            // task spawns for a while.
+            prune(&manager);
         });
 
         id
@@ -229,17 +248,46 @@ impl TaskManager {
     }
 }
 
+/// Evict the oldest terminal tasks beyond the retention cap (MISSION-143).
+/// Terminal tasks are ranked by their `updated_at` stamp; running/queued
+/// entries are never touched.
+fn prune(manager: &TaskManager) {
+    let mut tasks = manager.tasks.lock().unwrap();
+    prune_locked(&mut tasks);
+}
+
+/// Lock-held half of [`prune`].
+fn prune_locked(tasks: &mut HashMap<String, Arc<TaskEntry>>) {
+    // Collect terminal entries; if they fit under the cap nothing is pruned
+    // even when live tasks push the total count past it.
+    let mut terminal: Vec<(String, String)> = tasks
+        .iter()
+        .filter(|(_, entry)| entry.state.read().unwrap().is_terminal())
+        .map(|(id, entry)| (id.clone(), entry.updated_at.read().unwrap().clone()))
+        .collect();
+    if terminal.len() <= MAX_TERMINAL_TASKS {
+        return;
+    }
+    terminal.sort_by(|a, b| a.1.cmp(&b.1)); // oldest last-updated first
+    let excess = terminal.len() - MAX_TERMINAL_TASKS;
+    for (id, _) in terminal.into_iter().take(excess) {
+        tasks.remove(&id);
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
     use crate::domain::task::TaskKind;
     use serde_json::json;
 
-    fn collecting_manager() -> (TaskManager, Arc<Mutex<Vec<TaskSnapshot>>>) {
+    fn collecting_manager() -> (Arc<TaskManager>, Arc<Mutex<Vec<TaskSnapshot>>>) {
         let seen = Arc::new(Mutex::new(Vec::new()));
         let sink = seen.clone();
         (
-            TaskManager::with_emitter(move |snapshot| sink.lock().unwrap().push(snapshot)),
+            Arc::new(TaskManager::with_emitter(move |snapshot| {
+                sink.lock().unwrap().push(snapshot)
+            })),
             seen,
         )
     }
@@ -344,5 +392,77 @@ mod tests {
         assert_eq!(list.len(), 1);
         assert_eq!(list[0].id, id);
         assert_eq!(manager.get("t-missing"), None);
+    }
+
+    #[tokio::test]
+    async fn terminal_tasks_are_pruned_to_the_retention_cap() {
+        // MISSION-143: a session that finishes many tasks must not grow the
+        // task map without bound. Spawn far past the cap, waiting each to
+        // finish (each finish prunes), then assert only the newest terminal
+        // tasks survive and the oldest are gone.
+        let (manager, _seen) = collecting_manager();
+        let mut ids = Vec::new();
+        for _ in 0..(MAX_TERMINAL_TASKS + 20) {
+            let id = manager.spawn(
+                TaskKind::ImportFile,
+                "fill".to_string(),
+                |_reporter| async move { Ok(json!(null)) },
+            );
+            wait_terminal(&manager, &id).await;
+            ids.push(id);
+        }
+
+        let remaining = manager.list();
+        assert_eq!(
+            remaining.len(),
+            MAX_TERMINAL_TASKS,
+            "only the newest terminal tasks survive the cap"
+        );
+        // The newest spawned task must still be present; the very first must
+        // have been evicted.
+        assert!(
+            manager.get(ids.last().unwrap()).is_some(),
+            "the newest task survives pruning"
+        );
+        assert!(
+            manager.get(&ids[0]).is_none(),
+            "the oldest task was evicted"
+        );
+        // `list` is newest-first, so the head is the most recently finished.
+        assert_eq!(remaining[0].id, *ids.last().unwrap());
+    }
+
+    #[tokio::test]
+    async fn running_tasks_are_never_pruned() {
+        // MISSION-143: the retention cap applies to *terminal* tasks only — a
+        // running task must never be evicted to make room.
+        let (manager, _seen) = collecting_manager();
+        let (release_tx, release_rx) = tokio::sync::oneshot::channel::<()>();
+        let running_id = manager.spawn(
+            TaskKind::ImportFile,
+            "long runner".to_string(),
+            move |_reporter| async move {
+                let _ = release_rx.await;
+                Ok(json!(null))
+            },
+        );
+
+        // Fill well past the cap with fast tasks; the long runner is still
+        // alive the whole time.
+        for _ in 0..(MAX_TERMINAL_TASKS + 10) {
+            let id = manager.spawn(
+                TaskKind::ImportFile,
+                "fill".to_string(),
+                |_reporter| async move { Ok(json!(null)) },
+            );
+            wait_terminal(&manager, &id).await;
+        }
+        assert!(
+            manager.get(&running_id).is_some(),
+            "a running task survives pruning"
+        );
+
+        release_tx.send(()).ok();
+        wait_terminal(&manager, &running_id).await;
     }
 }

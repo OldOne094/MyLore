@@ -152,7 +152,10 @@ mod status_tests {
         let plain = dir.join("plain.db");
         std::fs::write(&plain, b"SQLite format 3\0rest-of-header").unwrap();
         let status = status_at(&plain);
-        assert!(!status.encrypted, "plaintext header must not read as encrypted");
+        assert!(
+            !status.encrypted,
+            "plaintext header must not read as encrypted"
+        );
 
         let cipher = dir.join("cipher.db");
         std::fs::write(&cipher, [0xDEu8; 64]).unwrap();
