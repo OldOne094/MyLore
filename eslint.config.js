@@ -6,7 +6,11 @@ import reactRefresh from "eslint-plugin-react-refresh";
 import prettier from "eslint-config-prettier";
 
 export default tseslint.config(
-  { ignores: ["dist", "dist-ssr", "src-tauri/target", "node_modules"] },
+  {
+    // `.freebuff` holds local worktree scratch copies of the repo — its nested
+    // tsconfigs would break the TS parser and it must never be linted.
+    ignores: ["dist", "dist-ssr", "src-tauri/target", "node_modules", ".freebuff/**"],
+  },
   js.configs.recommended,
   ...tseslint.configs.recommended,
   {

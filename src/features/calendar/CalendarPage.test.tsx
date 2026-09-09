@@ -114,7 +114,10 @@ describe("CalendarPage", () => {
     expect(screen.getByRole("status")).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "1" })).not.toBeInTheDocument();
 
-    resolveMonth?.(monthData(2026, 8));
+    // Resolve with the *current* month (the page opens on today's month, so a
+    // fixed past month would never render).
+    const now = new Date();
+    resolveMonth?.(monthData(now.getFullYear(), now.getMonth() + 1));
     expect(await screen.findByRole("button", { name: "1" })).toBeInTheDocument();
   });
 

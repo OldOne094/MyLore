@@ -50,6 +50,8 @@ export const queryKeys = {
   review: {
     all: () => ["review"] as const,
     forMedia: (mediaId: string) => ["review", "media", mediaId] as const,
+    /** Aggregate Reviews hub listing (MISSION-144). */
+    list: () => ["review", "list"] as const,
   },
   collection: {
     all: () => ["collection"] as const,

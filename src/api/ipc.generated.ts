@@ -51,6 +51,24 @@ export interface ReviewView {
   created_at: string;
   updated_at: string;
 }
+export interface ReviewListItemView {
+  media_id: string;
+  rating: number | null;
+  review: string | null;
+  short_review: string | null;
+  notes: string | null;
+  favorite: boolean;
+  is_spoiler: boolean;
+  moods: string[];
+  pace: string | null;
+  content_warnings: string[];
+  warnings_acknowledged_at: string | null;
+  created_at: string;
+  updated_at: string;
+  title: string;
+  content_type: string;
+  cover_asset_id: string | null;
+}
 export interface MediaTagView {
   id: string;
   name: string;
@@ -574,6 +592,11 @@ export function media_remove_tag(args: {
 /** Read a media's review. Resolves with the row or null when the user hasn't reviewed it; rejects with an AppError string. */
 export function review_get(args: { mediaId: string }): Promise<ReviewView | null> {
   return invoke<ReviewView | null>("review_get", args);
+}
+
+/** Every review in the library with its media's display fields (title, content type, cover), most recently updated first - the aggregate Reviews hub (MISSION-144). Resolves with the list or rejects with an AppError string. */
+export function review_list(): Promise<ReviewListItemView[]> {
+  return invoke<ReviewListItemView[]>("review_list");
 }
 
 /** Save (create or update) a media's review. Resolves with the stored row (an entirely empty review clears the row and resolves with an empty view) or rejects with an AppError string. */

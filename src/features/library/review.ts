@@ -13,6 +13,7 @@ import {
   review_acknowledge_warnings,
   review_delete,
   review_get,
+  review_list,
   review_save,
   type MediaTagView,
 } from "@/api";
@@ -44,6 +45,15 @@ export function useReviewQuery(mediaId: string, enabled = true) {
   });
 }
 
+/** Every review in the library with its media's display fields, newest first
+    (MISSION-144) — feeds the aggregate Reviews hub. */
+export function useReviewsQuery() {
+  return useQuery({
+    queryKey: queryKeys.review.list(),
+    queryFn: () => review_list(),
+  });
+}
+
 /** Save (create or update) a media's review; seeds the review cache. */
 export function useSaveReview() {
   const queryClient = useQueryClient();
@@ -63,6 +73,7 @@ export function useSaveReview() {
       }),
     onSuccess: (view) => {
       queryClient.setQueryData(queryKeys.review.forMedia(view.media_id), view);
+      void queryClient.invalidateQueries({ queryKey: queryKeys.review.list() });
       void queryClient.invalidateQueries({ queryKey: queryKeys.media.details() });
       void queryClient.invalidateQueries({ queryKey: queryKeys.dashboard.all() });
     },
@@ -76,6 +87,7 @@ export function useAcknowledgeWarnings() {
     mutationFn: (mediaId: string) => review_acknowledge_warnings({ mediaId: mediaId }),
     onSuccess: (view) => {
       queryClient.setQueryData(queryKeys.review.forMedia(view.media_id), view);
+      void queryClient.invalidateQueries({ queryKey: queryKeys.review.list() });
     },
   });
 }
@@ -87,6 +99,7 @@ export function useDeleteReview() {
     mutationFn: (mediaId: string) => review_delete({ mediaId: mediaId }),
     onSuccess: (_void, mediaId) => {
       queryClient.setQueryData(queryKeys.review.forMedia(mediaId), null);
+      void queryClient.invalidateQueries({ queryKey: queryKeys.review.list() });
       void queryClient.invalidateQueries({ queryKey: queryKeys.media.details() });
       void queryClient.invalidateQueries({ queryKey: queryKeys.dashboard.all() });
     },

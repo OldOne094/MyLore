@@ -7,8 +7,22 @@ use tauri::command;
 use tauri::State;
 use tracing::info;
 
-use crate::application::review_service::{ReviewService, ReviewView, SaveReviewInput};
+use crate::application::review_service::{
+    ReviewListItemView, ReviewService, ReviewView, SaveReviewInput,
+};
 use crate::error::AppError;
+
+/// Every review in the library with its media's display fields (title, type,
+/// cover), most recently updated first — the aggregate Reviews page
+/// (MISSION-144). Resolves with the list or rejects with an AppError string.
+#[command]
+pub async fn review_list(
+    state: State<'_, SqlitePool>,
+) -> Result<Vec<ReviewListItemView>, AppError> {
+    info!("review_list invoked");
+    let service = ReviewService::new(state.inner().clone());
+    service.list().await
+}
 
 /// Read a media's review. Resolves with the row or null when the user hasn't
 /// reviewed it; rejects with an AppError string.

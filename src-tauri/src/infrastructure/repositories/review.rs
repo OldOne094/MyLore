@@ -25,6 +25,34 @@ pub struct ReviewRecord {
     pub updated_at: String,
 }
 
+/// A review joined with its media's display fields (the aggregate Reviews
+/// surface, MISSION-144). The review row always exists when listed.
+#[derive(Debug, Clone)]
+pub struct ReviewWithMedia {
+    pub review: ReviewRecord,
+    /// Media display title (`title_main`).
+    pub title: String,
+    pub content_type: String,
+    pub cover_asset_id: Option<String>,
+}
+
+/// Every review in the library joined with its media, most recently updated
+/// first (MISSION-144).
+pub async fn list_with_media(pool: &SqlitePool) -> Result<Vec<ReviewWithMedia>, AppError> {
+    let rows = sqlx::query(
+        "SELECT r.media_id, r.rating, r.review, r.short_review, r.notes, r.favorite, \
+                r.is_spoiler, r.moods, r.pace, r.content_warnings, \
+                r.warnings_acknowledged_at, r.created_at, r.updated_at, \
+                m.title_main, m.content_type, m.cover_asset_id \
+         FROM review r \
+         JOIN media m ON m.id = r.media_id \
+         ORDER BY r.updated_at DESC",
+    )
+    .fetch_all(pool)
+    .await?;
+    Ok(rows.into_iter().map(row_to_review_with_media).collect())
+}
+
 /// Insert or update the review for a media, preserving the original created_at.
 pub async fn upsert(pool: &SqlitePool, r: &ReviewRecord) -> Result<(), AppError> {
     sqlx::query(
@@ -160,6 +188,33 @@ fn row_to_review(row: SqliteRow) -> ReviewRecord {
     }
 }
 
+/// [`row_to_review`] over the first 13 columns, with the media display fields
+/// (title_main, content_type, cover_asset_id) read from columns 13-15.
+fn row_to_review_with_media(row: SqliteRow) -> ReviewWithMedia {
+    let get = |idx: usize| -> Option<String> { row.get(idx) };
+    let review = ReviewRecord {
+        media_id: get(0).expect("media_id"),
+        rating: row.get(1),
+        review: get(2),
+        short_review: get(3),
+        notes: get(4),
+        favorite: row.get::<i64, _>(5) != 0,
+        is_spoiler: row.get::<i64, _>(6) != 0,
+        moods: parse_keys(get(7)),
+        pace: get(8),
+        content_warnings: parse_keys(get(9)),
+        warnings_acknowledged_at: get(10),
+        created_at: get(11).expect("created_at"),
+        updated_at: get(12).expect("updated_at"),
+    };
+    ReviewWithMedia {
+        review,
+        title: get(13).expect("title_main"),
+        content_type: get(14).expect("content_type"),
+        cover_asset_id: get(15),
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -246,6 +301,45 @@ mod tests {
         assert!(got.pace.is_none());
         assert!(got.content_warnings.is_empty());
         assert!(got.warnings_acknowledged_at.is_none());
+        pool.close().await;
+        cleanup_files(&path);
+    }
+
+    #[tokio::test]
+    async fn list_with_media_joins_display_fields_newest_first() {
+        let (pool, path) = migrated_pool("review_repo_list.db").await;
+        for (id, title) in [("m-1", "Alpha"), ("m-2", "Beta"), ("m-3", "Gamma")] {
+            sqlx::query(
+                "INSERT INTO media (id, content_type, title_main, created_at, updated_at)
+                 VALUES (?, 'novel', ?, '2026-01-01', '2026-01-01')",
+            )
+            .bind(id)
+            .bind(title)
+            .execute(&pool)
+            .await
+            .expect("seed media");
+        }
+        // Seed reviews for m-1 and m-2 only; m-3 stays out of the list.
+        let mut r1 = review("m-1");
+        r1.rating = Some(8);
+        r1.favorite = true;
+        r1.updated_at = "2026-01-03".into();
+        upsert(&pool, &r1).await.expect("upsert m1");
+        let mut r2 = review("m-2");
+        r2.rating = Some(5);
+        r2.updated_at = "2026-01-05".into();
+        upsert(&pool, &r2).await.expect("upsert m2");
+
+        let rows = list_with_media(&pool).await.expect("list");
+        assert_eq!(rows.len(), 2, "only reviewed media appear");
+        assert_eq!(rows[0].review.media_id, "m-2", "newest updated first");
+        assert_eq!(rows[0].title, "Beta");
+        assert_eq!(rows[0].content_type, "novel");
+        assert!(rows[0].cover_asset_id.is_none());
+        assert_eq!(rows[1].review.media_id, "m-1");
+        assert_eq!(rows[1].title, "Alpha");
+        assert_eq!(rows[1].review.rating, Some(8));
+        assert!(rows[1].review.favorite);
         pool.close().await;
         cleanup_files(&path);
     }

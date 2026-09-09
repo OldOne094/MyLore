@@ -20,7 +20,9 @@ export default defineConfig(async () => ({
     setupFiles: ["./src/test/setup.ts"],
     css: false,
     // Playwright specs live in e2e/ and are run by `npm run e2e`, not Vitest.
-    exclude: [...configDefaults.exclude, "**/e2e/**"],
+    // `.freebuff/**` is a local worktree scratch dir (a full stale copy of the
+    // repo) that must not double-run the suites or fail on older code.
+    exclude: [...configDefaults.exclude, "**/e2e/**", "**/.freebuff/**"],
   },
 
   // Vite options tailored for Tauri development and only applied in `tauri dev` or `tauri build`

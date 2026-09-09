@@ -62,6 +62,18 @@ pub struct SaveReviewInput {
     pub content_warnings: Vec<String>,
 }
 
+/// One row of the aggregate Reviews surface (MISSION-144): the media's review
+/// plus its display fields (title, type, cover) for the listing row.
+#[derive(Debug, Clone, serde::Serialize)]
+pub struct ReviewListItemView {
+    #[serde(flatten)]
+    pub review: ReviewView,
+    /// Media display title (`title_main`).
+    pub title: String,
+    pub content_type: String,
+    pub cover_asset_id: Option<String>,
+}
+
 /// Review use-cases for a single media.
 pub struct ReviewService {
     pool: SqlitePool,
@@ -70,6 +82,21 @@ pub struct ReviewService {
 impl ReviewService {
     pub fn new(pool: SqlitePool) -> Self {
         Self { pool }
+    }
+
+    /// Every review in the library with its media's display fields, most
+    /// recently updated first (MISSION-144).
+    pub async fn list(&self) -> Result<Vec<ReviewListItemView>, AppError> {
+        let rows = review::list_with_media(&self.pool).await?;
+        Ok(rows
+            .into_iter()
+            .map(|row| ReviewListItemView {
+                review: view_from_record(&row.review),
+                title: row.title,
+                content_type: row.content_type,
+                cover_asset_id: row.cover_asset_id,
+            })
+            .collect())
     }
 
     /// Read a media's review (`None` when the user hasn't reviewed it).
@@ -632,6 +659,46 @@ mod tests {
                 .expect_err("no warnings"),
             AppError::Validation(_)
         ));
+
+        pool.close().await;
+        cleanup_files(&path);
+    }
+
+    #[tokio::test]
+    async fn list_returns_every_review_with_media_display_fields() {
+        let (pool, path) = migrated_pool("review_service_list.db").await;
+        let service = ReviewService::new(pool.clone());
+        for (id, title) in [("m-1", "Alpha"), ("m-2", "Beta")] {
+            sqlx::query(
+                "INSERT INTO media (id, content_type, title_main, created_at, updated_at)
+                 VALUES (?, 'novel', ?, '2026-01-01', '2026-01-01')",
+            )
+            .bind(id)
+            .bind(title)
+            .execute(&pool)
+            .await
+            .expect("seed media");
+        }
+
+        assert!(service.list().await.expect("empty list").is_empty());
+
+        service.save(input("m-1")).await.expect("save m1");
+        let mut m2 = input("m-2");
+        m2.rating = Some(9);
+        m2.review = Some("Brilliant".into());
+        service.save(m2).await.expect("save m2");
+
+        let items = service.list().await.expect("list");
+        assert_eq!(items.len(), 2);
+        // Flattened DTO serializes review + media fields side by side (the
+        // `review` field is a compile-time grouping only).
+        assert_eq!(items[0].title, "Beta", "newest updated first");
+        assert_eq!(items[0].content_type, "novel");
+        assert_eq!(items[0].review.media_id, "m-2");
+        assert_eq!(items[0].review.rating, Some(9));
+        assert_eq!(items[1].title, "Alpha");
+        assert_eq!(items[1].review.media_id, "m-1");
+        assert_eq!(items[1].review.review.as_deref(), Some("A sweeping epic"));
 
         pool.close().await;
         cleanup_files(&path);

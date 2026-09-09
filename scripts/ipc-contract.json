@@ -19,6 +19,10 @@
       "shape": "media_id: string; rating: number | null; review: string | null; short_review: string | null; notes: string | null; favorite: boolean; is_spoiler: boolean; moods: string[]; pace: string | null; content_warnings: string[]; warnings_acknowledged_at: string | null; created_at: string; updated_at: string"
     },
     {
+      "name": "ReviewListItemView",
+      "shape": "media_id: string; rating: number | null; review: string | null; short_review: string | null; notes: string | null; favorite: boolean; is_spoiler: boolean; moods: string[]; pace: string | null; content_warnings: string[]; warnings_acknowledged_at: string | null; created_at: string; updated_at: string; title: string; content_type: string; cover_asset_id: string | null"
+    },
+    {
       "name": "MediaTagView",
       "shape": "id: string; name: string; scope: string"
     },
@@ -328,6 +332,11 @@
       "args": { "media_id": "string" },
       "returns": "ReviewView | null",
       "doc": "Read a media's review. Resolves with the row or null when the user hasn't reviewed it; rejects with an AppError string."
+    },
+    {
+      "name": "review_list",
+      "returns": "ReviewListItemView[]",
+      "doc": "Every review in the library with its media's display fields (title, content type, cover), most recently updated first - the aggregate Reviews hub (MISSION-144). Resolves with the list or rejects with an AppError string."
     },
     {
       "name": "review_save",
