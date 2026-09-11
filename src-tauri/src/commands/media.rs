@@ -102,6 +102,15 @@ pub async fn media_facets(
     service.list_facets().await
 }
 
+/// Total number of titles in the library — the live status-bar count
+/// (MISSION-146). Resolves with the count or rejects with an AppError string.
+#[command]
+pub async fn media_count(state: State<'_, SqlitePool>) -> Result<i64, AppError> {
+    info!("media_count invoked");
+    let service = MediaService::new(state.inner().clone());
+    service.total().await
+}
+
 /// Read the full aggregate for one media (MISSION-042).
 #[command]
 pub async fn media_get(

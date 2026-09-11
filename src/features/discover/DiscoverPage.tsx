@@ -5,6 +5,8 @@ import { Link, useNavigate } from "react-router";
 import { Badge, Button, EmptyState, Skeleton } from "@/components/ui";
 import { useToast } from "@/components/ui";
 import { MediaRow } from "@/features/library/MediaRow";
+import { CONTENT_TYPES, unsupportedContentTypes } from "@/features/library/contentTypes";
+import { useProvidersQuery } from "@/features/settings/providers";
 import { useDiscoverSearchQuery, useImportProvider } from "./api";
 import { ExternalHitDetailDialog } from "./ExternalHitDetailDialog";
 
@@ -12,27 +14,6 @@ import { ExternalHitDetailDialog } from "./ExternalHitDetailDialog";
    through the coordinator, groups hits by provider, and flags each hit as
    already-in-library / duplicate / new via the identity service. Local library
    matches for the same query are listed above the provider groups. */
-
-const CONTENT_TYPES = [
-  "book",
-  "novel",
-  "web_novel",
-  "manga",
-  "manhwa",
-  "manhua",
-  "comic",
-  "anime",
-  "tv",
-  "movie",
-  "game",
-  "podcast",
-  "music",
-  "other",
-] as const;
-
-/** Content types that currently have no serving provider. Shown as a
-    notice in the Discover page so users know why results may be empty. */
-const UNSUPPORTED_TYPES: ReadonlySet<string> = new Set<string>([]);
 
 const IDENTITY_VARIANT: Record<string, "accent" | "neutral" | "planned"> = {
   in_library: "accent",
@@ -154,7 +135,8 @@ function ExternalHitRow({ hit }: { hit: import("@/api").ExternalHit }) {
           hit={hit}
           open={detailOpen}
           onClose={() => setDetailOpen(false)}
-          onImported={() => setDetailOpen(false)}
+          onImport={onImport}
+          importing={importProvider.isPending}
         />
       ) : null}
     </div>
@@ -169,6 +151,10 @@ export function DiscoverPage() {
 
   const trimmed = query.trim();
   const { data, isLoading, isError, refetch } = useDiscoverSearchQuery(trimmed, contentType);
+  // Data-driven "no provider serves this type" notice (MISSION-145): derived
+  // from the enabled providers' declared content types, never a hardcoded set.
+  const providers = useProvidersQuery();
+  const unsupported = unsupportedContentTypes(providers.data ?? []);
 
   function submit(event: FormEvent) {
     event.preventDefault();
@@ -286,7 +272,7 @@ export function DiscoverPage() {
             ))}
 
             {data.groups.length === 0 && data.local.length === 0 ? (
-              contentType && UNSUPPORTED_TYPES.has(contentType) ? (
+              contentType && unsupported.has(contentType) ? (
                 <EmptyState
                   icon={SearchX}
                   title={t("discover.unsupportedTitle")}

@@ -203,6 +203,7 @@ export interface ProviderSettingsView {
   enabled: boolean;
   requires_key: boolean;
   has_key: boolean;
+  content_types: string[];
 }
 export interface ProviderTestView {
   ok: boolean;
@@ -494,6 +495,11 @@ export function media_facets(): Promise<{
     tags: { id: string; name: string }[];
     years: number[];
   }>("media_facets");
+}
+
+/** Total number of titles in the library - the live status-bar count (MISSION-146). Resolves with the count or rejects with an AppError string. */
+export function media_count(): Promise<number> {
+  return invoke<number>("media_count");
 }
 
 /** Read the full aggregate for one media. Resolves with the record or null when not found; rejects with an AppError string. */

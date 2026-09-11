@@ -88,6 +88,11 @@ impl MediaService {
         Self { pool }
     }
 
+    /// Total number of titles in the library (the status-bar count, MISSION-146).
+    pub async fn total(&self) -> Result<i64, AppError> {
+        media_repo::count_all(&self.pool).await
+    }
+
     /// Create a media entry from manual input; resolves with the new media id.
     pub async fn add_media(&self, input: AddMediaInput) -> Result<MediaId, AppError> {
         let now = Utc::now().to_rfc3339();

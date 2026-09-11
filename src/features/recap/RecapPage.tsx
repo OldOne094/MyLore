@@ -191,11 +191,11 @@ export function RecapPage() {
       <EmptyState
         icon={Trophy}
         title={t("recap.errorTitle")}
-        hint={t("library.errorHint")}
+        hint={t("recap.errorHint")}
         action={
           <Button variant="secondary" onClick={() => void refetch()}>
             <RefreshCcw size={16} aria-hidden="true" />
-            {t("library.retry")}
+            {t("recap.retry")}
           </Button>
         }
       />

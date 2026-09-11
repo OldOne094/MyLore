@@ -6,19 +6,10 @@
    shape (`AddMediaInput`). */
 
 import { z } from "zod";
+import { CONTENT_TYPES } from "./contentTypes";
 
-export const CONTENT_TYPE_VALUES = [
-  "anime",
-  "manga",
-  "manhwa",
-  "manhua",
-  "novel",
-  "web_novel",
-  "book",
-  "tv",
-  "movie",
-  "other",
-] as const;
+/** Valid content types — the shared schema-order list (MISSION-145). */
+export const CONTENT_TYPE_VALUES = CONTENT_TYPES;
 
 export const PUBLICATION_STATUS_VALUES = [
   "announced",

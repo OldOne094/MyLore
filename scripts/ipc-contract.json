@@ -104,7 +104,7 @@
     },
     {
       "name": "ProviderSettingsView",
-      "shape": "provider: string; name: string; enabled: boolean; requires_key: boolean; has_key: boolean"
+      "shape": "provider: string; name: string; enabled: boolean; requires_key: boolean; has_key: boolean; content_types: string[]"
     },
     {
       "name": "ProviderTestView",
@@ -290,6 +290,12 @@
       "args": {},
       "returns": "{ formats: string[]; genres: { id: string; name: string }[]; tags: { id: string; name: string }[]; years: number[] }",
       "doc": "Distinct filter values present in the library. Resolves with facet options or rejects with an AppError string."
+    },
+    {
+      "name": "media_count",
+      "args": {},
+      "returns": "number",
+      "doc": "Total number of titles in the library - the live status-bar count (MISSION-146). Resolves with the count or rejects with an AppError string."
     },
     {
       "name": "media_get",

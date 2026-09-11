@@ -13,6 +13,7 @@ import {
   useToast,
 } from "@/components/ui";
 import { type CsvMapping, type ImportPlan, type ImportReport, type PreviewItem } from "@/api";
+import { CONTENT_TYPES } from "@/features/library/contentTypes";
 import {
   PROFILE_KINDS,
   useCsvHeaders,
@@ -44,19 +45,6 @@ const CSV_DELIMITERS = [
   { value: "\t", label: "Tab (\\t)" },
   { value: ";", label: "Semicolon (;)" },
   { value: "|", label: "Pipe (|)" },
-];
-
-const CONTENT_TYPES = [
-  "book",
-  "novel",
-  "web_novel",
-  "manga",
-  "manhwa",
-  "manhua",
-  "anime",
-  "tv",
-  "movie",
-  "other",
 ];
 
 const PREVIEW_ROW_SIZE = 48;

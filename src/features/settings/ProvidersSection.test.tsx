@@ -20,8 +20,22 @@ import type { ProviderSettingsRow } from "./providers";
 let current: ProviderSettingsRow[];
 
 const PROVIDERS: ProviderSettingsRow[] = [
-  { provider: "tmdb", name: "TMDB", enabled: false, requires_key: true, has_key: false },
-  { provider: "anilist", name: "AniList", enabled: true, requires_key: false, has_key: false },
+  {
+    provider: "tmdb",
+    name: "TMDB",
+    enabled: false,
+    requires_key: true,
+    has_key: false,
+    content_types: ["movie", "tv"],
+  },
+  {
+    provider: "anilist",
+    name: "AniList",
+    enabled: true,
+    requires_key: false,
+    has_key: false,
+    content_types: ["anime", "manga"],
+  },
 ];
 
 function renderSection() {

@@ -662,6 +662,15 @@ pub async fn list_ids(pool: &SqlitePool) -> Result<Vec<String>, AppError> {
     Ok(rows.into_iter().map(|row| row.get(0)).collect())
 }
 
+/// Total number of media rows — the live library count for the status bar
+/// (MISSION-146). Cheap (`COUNT(*)`), no filter or join.
+pub async fn count_all(pool: &SqlitePool) -> Result<i64, AppError> {
+    let (count,): (i64,) = sqlx::query_as("SELECT COUNT(*) FROM media")
+        .fetch_one(pool)
+        .await?;
+    Ok(count)
+}
+
 /// Count rows matching a filter (for pagination).
 pub async fn count(pool: &SqlitePool, filter: &MediaFilter) -> Result<i64, AppError> {
     let mut qb = QueryBuilder::new("SELECT COUNT(DISTINCT m.id) FROM media m");
@@ -1440,6 +1449,21 @@ mod tests {
             vec!["m-a", "m-b", "m-c"],
             "case-insensitive title order"
         );
+        pool.close().await;
+        cleanup_files(&path);
+    }
+
+    #[tokio::test]
+    async fn count_all_tracks_library_size() {
+        let (pool, path) = migrated_pool("media_repo_count_all.db").await;
+        assert_eq!(count_all(&pool).await.expect("empty count"), 0);
+        create(&pool, &sample_media("m-1", "Alpha"))
+            .await
+            .expect("create");
+        create(&pool, &sample_media("m-2", "Beta"))
+            .await
+            .expect("create");
+        assert_eq!(count_all(&pool).await.expect("count"), 2);
         pool.close().await;
         cleanup_files(&path);
     }

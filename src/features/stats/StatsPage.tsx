@@ -92,11 +92,11 @@ export function StatsPage() {
       <EmptyState
         icon={BarChart3}
         title={t("stats.errorTitle")}
-        hint={t("library.errorHint")}
+        hint={t("stats.errorHint")}
         action={
           <Button variant="secondary" onClick={() => void refetch()}>
             <RefreshCcw size={16} aria-hidden="true" />
-            {t("library.retry")}
+            {t("stats.retry")}
           </Button>
         }
       />

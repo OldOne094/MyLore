@@ -4,23 +4,15 @@
    year descending; `null` release years land in an "Unknown" bucket last. */
 
 import type { MediaListItem } from "./api";
+import { CONTENT_TYPES } from "./contentTypes";
 
 export type LibraryGroupBy = "none" | "content_type" | "pub_status" | "year";
 
 export const LIBRARY_GROUP_BY: LibraryGroupBy[] = ["none", "content_type", "pub_status", "year"];
 
-export const CONTENT_TYPE_ORDER = [
-  "book",
-  "novel",
-  "web_novel",
-  "manga",
-  "manhwa",
-  "manhua",
-  "anime",
-  "tv",
-  "movie",
-  "other",
-] as const;
+/** Group order for the content-type grouping: the shared schema-order list
+    (MISSION-145), so grouping, filters and the add-media picker agree. */
+export const CONTENT_TYPE_ORDER = CONTENT_TYPES;
 
 export const PUB_STATUS_ORDER = [
   "announced",

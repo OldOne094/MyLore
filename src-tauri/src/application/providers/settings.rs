@@ -43,6 +43,9 @@ pub struct ProviderSettingsView {
     pub requires_key: bool,
     /// Whether a key is currently stored (never the key itself).
     pub has_key: bool,
+    /// Content types this provider serves (MISSION-145): lets the UI know which
+    /// types have no enabled provider instead of guessing.
+    pub content_types: Vec<String>,
 }
 
 /// Result of a `test_connection` ping.
@@ -133,13 +136,17 @@ impl ProviderSettingsService {
             .providers()
             .into_iter()
             .map(|info| {
-                let has_key = state
-                    .configs
-                    .iter()
-                    .find(|c| c.id == info.id)
-                    .and_then(|c| c.api_key.as_ref())
-                    .is_some();
-                to_view(info, has_key)
+                let config = state.configs.iter().find(|c| c.id == info.id);
+                let has_key = config.and_then(|c| c.api_key.as_ref()).is_some();
+                let content_types = config
+                    .map(|c| {
+                        c.content_types
+                            .iter()
+                            .map(|t| t.as_str().to_string())
+                            .collect()
+                    })
+                    .unwrap_or_default();
+                to_view(info, has_key, content_types)
             })
             .collect()
     }
@@ -283,14 +290,15 @@ impl ProviderSettingsService {
     }
 }
 
-/// One settings row from coordinator info + keyring presence.
-fn to_view(info: ProviderInfo, has_key: bool) -> ProviderSettingsView {
+/// One settings row from coordinator info + keyring presence + served domains.
+fn to_view(info: ProviderInfo, has_key: bool, content_types: Vec<String>) -> ProviderSettingsView {
     ProviderSettingsView {
         provider: info.id,
         name: info.name,
         enabled: info.enabled,
         requires_key: info.capabilities.auth == AuthKind::Key,
         has_key,
+        content_types,
     }
 }
 
@@ -338,7 +346,9 @@ mod tests {
     use crate::infrastructure::test_support::cleanup_files;
 
     fn tmdb_config() -> ProviderConfig {
-        ProviderConfig::new("tmdb").with_requests_per_sec(0.0)
+        ProviderConfig::new("tmdb")
+            .with_requests_per_sec(0.0)
+            .with_content_types(vec![ContentType::Movie, ContentType::Tv])
     }
 
     fn openlibrary_config() -> ProviderConfig {
@@ -532,6 +542,25 @@ mod tests {
         // The coordinator must reflect the persisted disabled flag.
         let providers = service.coordinator().providers();
         assert!(!providers.iter().find(|p| p.id == "tmdb").unwrap().enabled);
+        cleanup_files(&dir);
+    }
+
+    #[test]
+    fn view_reports_each_provider_served_content_types() {
+        // MISSION-145 — the UI needs providers' declared domains to know which
+        // content types have no serving provider.
+        let (service, dir) = service_with(FakeBuilder::default());
+
+        let tmdb = service.view("tmdb").unwrap();
+        assert_eq!(tmdb.content_types, vec!["movie", "tv"]);
+        assert!(
+            service
+                .view("openlibrary")
+                .unwrap()
+                .content_types
+                .is_empty(),
+            "a provider with no declared domains reports an empty list"
+        );
         cleanup_files(&dir);
     }
 

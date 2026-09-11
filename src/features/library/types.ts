@@ -2,17 +2,10 @@
    (ContentType / MediaStatus in src-tauri/src/domain/enums.rs) and the flat
    IPC arg shape for `media_create`. */
 
-export type ContentType =
-  | "book"
-  | "novel"
-  | "web_novel"
-  | "manga"
-  | "manhwa"
-  | "manhua"
-  | "anime"
-  | "tv"
-  | "movie"
-  | "other";
+/* MISSION-145 — ContentType now comes from the single shared source so this
+   union can never drift behind the domain enum again. */
+import type { ContentType } from "./contentTypes";
+export type { ContentType };
 
 export type PublicationStatus =
   "announced" | "ongoing" | "completed" | "hiatus" | "cancelled" | "unknown";

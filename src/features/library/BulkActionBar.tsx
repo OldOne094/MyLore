@@ -57,9 +57,17 @@ export interface BulkActionBarProps {
   matchingCount?: number;
   /** Called after a successful action so the page can leave select mode. */
   onDone: () => void;
+  /** Opens the export surface (Settings owns the full export flow). */
+  onExport?: () => void;
 }
 
-export function BulkActionBar({ ids, filter, matchingCount, onDone }: BulkActionBarProps) {
+export function BulkActionBar({
+  ids,
+  filter,
+  matchingCount,
+  onDone,
+  onExport,
+}: BulkActionBarProps) {
   const { t } = useTranslation();
   const toast = useToast();
   const [tagOpen, setTagOpen] = useState(false);
@@ -354,11 +362,11 @@ export function BulkActionBar({ ids, filter, matchingCount, onDone }: BulkAction
           </>
         )}
 
-        <span title={t("bulk.exportSoon")}>
+        <span title={t("bulk.exportInSettings")}>
           <Button
             variant="ghost"
             size="sm"
-            disabled
+            onClick={() => onExport?.()}
             aria-label={t("bulk.export")}
             className="h-[var(--control-height-compact)] px-3 text-sm"
           >

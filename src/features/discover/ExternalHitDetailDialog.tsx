@@ -1,4 +1,3 @@
-import { useState } from "react";
 import { useTranslation } from "react-i18next";
 import {
   Button,
@@ -10,14 +9,17 @@ import {
   Skeleton,
 } from "@/components/ui";
 import type { ExternalHit } from "@/api";
-import { useImportProvider } from "@/features/discover/api";
 import { useProviderGetDetails } from "./detail-api";
 
 /* MISSION-127 — External-hit detail screen. Opens as a dialog when a
    Discover result is clicked, fetching full ProviderMedia metadata from the
    provider. Shows synopsis, cover, authors/creators, genres/tags, status,
    dates, counts and external links — everything needed to judge a title
-   before importing. */
+   before importing.
+
+   MISSION-146 — importing from here runs the *same* flow as the row's import
+   button (passed in via `onImport`): one place owns the toast, the navigate
+   and the error surface, so the two entry points can't diverge. */
 
 function DetailSkeleton() {
   return (
@@ -50,32 +52,27 @@ export interface ExternalHitDetailDialogProps {
   hit: ExternalHit;
   open: boolean;
   onClose: () => void;
-  onImported: () => void;
+  /** Runs the shared import flow (toast + navigate + error handling). */
+  onImport: () => void;
+  /** Whether that flow is in flight (disables the button). */
+  importing: boolean;
 }
 
 export function ExternalHitDetailDialog({
   hit,
   open,
   onClose,
-  onImported,
+  onImport,
+  importing,
 }: ExternalHitDetailDialogProps) {
   const { t } = useTranslation();
-  const importProvider = useImportProvider();
-  const [imported, setImported] = useState(false);
 
   const detail = useProviderGetDetails(hit.provider, hit.provider_id, open);
   const data = detail.data;
 
   const handleImport = () => {
-    importProvider.mutate(
-      { provider: hit.provider, providerId: hit.provider_id },
-      {
-        onSuccess: () => {
-          setImported(true);
-          onImported();
-        },
-      },
-    );
+    onImport();
+    onClose();
   };
 
   const genres = data?.genres ?? [];
@@ -204,13 +201,9 @@ export function ExternalHitDetailDialog({
             <DialogClose asChild>
               <Button variant="secondary">{t("a11y.close")}</Button>
             </DialogClose>
-            {!imported ? (
-              <Button onClick={handleImport} disabled={importProvider.isPending}>
-                {importProvider.isPending ? t("discover.importing") : t("discover.import")}
-              </Button>
-            ) : (
-              <Button disabled>{t("discover.imported")}</Button>
-            )}
+            <Button onClick={handleImport} disabled={importing}>
+              {importing ? t("discover.importing") : t("discover.import")}
+            </Button>
           </div>
         </div>
       </DialogContent>

@@ -22,6 +22,8 @@ export interface ProviderSettingsRow {
   enabled: boolean;
   requires_key: boolean;
   has_key: boolean;
+  /** Content types this provider serves (MISSION-145). */
+  content_types: string[];
 }
 
 export function useProvidersQuery() {

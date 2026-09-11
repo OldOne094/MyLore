@@ -7,6 +7,7 @@ import { useMemo } from "react";
 import { useTranslation } from "react-i18next";
 import {
   assets_resolve,
+  media_count,
   media_create,
   media_enrich,
   media_facets,
@@ -173,6 +174,16 @@ export function useMediaFacetsQuery() {
   return useQuery({
     queryKey: queryKeys.media.facets(),
     queryFn: () => media_facets(),
+  });
+}
+
+/** Live total of titles in the library (MISSION-146), for the status bar.
+    Keyed under the `media.list` family so every existing list invalidation
+    (add / delete / import / merge / bulk) refreshes it automatically. */
+export function useMediaCountQuery() {
+  return useQuery({
+    queryKey: queryKeys.media.count(),
+    queryFn: () => media_count(),
   });
 }
 

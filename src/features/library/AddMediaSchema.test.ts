@@ -27,8 +27,16 @@ describe("addMediaSchema", () => {
   });
 
   it("rejects an unknown content type", () => {
-    const result = addMediaSchema.safeParse({ title: "X", contentType: "comic" });
+    const result = addMediaSchema.safeParse({ title: "X", contentType: "fanfic" });
     expect(result.success).toBe(false);
+  });
+
+  it("accepts the content types added by MISSION-109", () => {
+    // Regression guard (MISSION-145): the add-media picker must not drift
+    // behind the domain enum again.
+    for (const contentType of ["game", "podcast", "music", "comic"] as const) {
+      expect(addMediaSchema.safeParse({ title: "X", contentType }).success).toBe(true);
+    }
   });
 
   it("normalizes an empty numeric field to undefined", () => {

@@ -82,11 +82,11 @@ export function DashboardPage() {
       <EmptyState
         icon={LayoutDashboard}
         title={t("dashboard.errorTitle")}
-        hint={t("library.errorHint")}
+        hint={t("dashboard.errorHint")}
         action={
           <Button variant="secondary" onClick={() => void refetch()}>
             <RefreshCcw size={16} aria-hidden="true" />
-            {t("library.retry")}
+            {t("dashboard.retry")}
           </Button>
         }
       />

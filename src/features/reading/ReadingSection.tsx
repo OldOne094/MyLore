@@ -178,7 +178,7 @@ export function ReadingSection() {
           <p className="text-sm text-text-secondary">{t("reading.errorTitle")}</p>
           <Button variant="secondary" onClick={() => void refetch()}>
             <RefreshCcw size={16} aria-hidden="true" />
-            {t("library.retry")}
+            {t("reading.retry")}
           </Button>
         </div>
       ) : isLoading || !yearReady ? (

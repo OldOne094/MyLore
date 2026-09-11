@@ -1,6 +1,7 @@
 ﻿import { useState } from "react";
 import { CheckSquare, Library, Plus, RefreshCcw, SlidersHorizontal, Upload, X } from "lucide-react";
 import { useTranslation } from "react-i18next";
+import { useNavigate } from "react-router";
 import { Button, EmptyState, Skeleton } from "@/components/ui";
 import { useMediaFacetsQuery, useMediaListQuery } from "./api";
 import { AddMediaDialog } from "./AddMediaDialog";
@@ -111,6 +112,7 @@ function EmptyLibrary() {
 
 export function LibraryPage() {
   const { t } = useTranslation();
+  const navigate = useNavigate();
   const [view, setView] = useState<LibraryView>("grid");
   const [filters, setFilters] = useState<LibraryFilters>(DEFAULT_FILTERS);
   const [sort, setSort] = useState<LibrarySort>(DEFAULT_SORT);
@@ -249,6 +251,7 @@ export function LibraryPage() {
               filter={hasActiveFilters ? filters : null}
               matchingCount={items.length}
               onDone={exitSelect}
+              onExport={() => navigate("/settings")}
             />
           ) : null}
         </>

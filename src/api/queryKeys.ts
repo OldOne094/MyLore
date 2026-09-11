@@ -29,6 +29,9 @@ export const queryKeys = {
     all: () => ["media"] as const,
     lists: () => ["media", "list"] as const,
     list: (filters: MediaListFilters) => ["media", "list", filters] as const,
+    /** Live library title count for the status bar (MISSION-146). Nested under
+        `list` so the existing `lists()` invalidations refresh it for free. */
+    count: () => ["media", "list", "count"] as const,
     facets: () => ["media", "facets"] as const,
     details: () => ["media", "detail"] as const,
     detail: (id: string) => ["media", "detail", id] as const,

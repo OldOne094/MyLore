@@ -138,11 +138,11 @@ export function CalendarPage() {
       <EmptyState
         icon={Calendar}
         title={t("calendar.errorTitle")}
-        hint={t("library.errorHint")}
+        hint={t("calendar.errorHint")}
         action={
           <Button variant="secondary" onClick={() => void refetch()}>
             <RefreshCcw size={16} aria-hidden="true" />
-            {t("library.retry")}
+            {t("calendar.retry")}
           </Button>
         }
       />
