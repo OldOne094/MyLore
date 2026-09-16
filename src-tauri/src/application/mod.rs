@@ -23,6 +23,7 @@ pub mod merge_service;
 pub mod node_service;
 pub mod progress_service;
 pub mod providers;
+pub mod reading_group_p2p;
 pub mod reading_group_service;
 pub mod reading_recap_service;
 pub mod recap_service;

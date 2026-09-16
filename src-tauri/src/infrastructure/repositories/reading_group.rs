@@ -57,6 +57,19 @@ pub struct NoteRecord {
     pub updated_at: String,
 }
 
+/// A CRDT document snapshot for one (group, work) — MISSION-115.
+#[derive(Debug, Clone)]
+pub struct DocRecord {
+    pub group_id: String,
+    pub work_key: String,
+    /// Encoded yrs document state.
+    pub state: Vec<u8>,
+    /// Updates applied since the last compaction.
+    pub pending_ops: i64,
+    pub compacted_at: Option<String>,
+    pub updated_at: String,
+}
+
 // ---------------------------------------------------------------- groups
 
 pub async fn create_group<'e, E>(executor: E, g: &GroupRecord) -> Result<(), AppError>
@@ -355,6 +368,47 @@ pub async fn delete_note(pool: &SqlitePool, id: &str) -> Result<bool, AppError> 
     Ok(result.rows_affected() > 0)
 }
 
+// ----------------------------------------------------------- crdt documents
+
+/// One (group, work) CRDT document, or `None` when never touched.
+pub async fn get_doc(
+    pool: &SqlitePool,
+    group_id: &str,
+    work_key: &str,
+) -> Result<Option<DocRecord>, AppError> {
+    let row = sqlx::query(
+        "SELECT group_id, work_key, state, pending_ops, compacted_at, updated_at
+         FROM group_doc WHERE group_id = ? AND work_key = ?",
+    )
+    .bind(group_id)
+    .bind(work_key)
+    .fetch_optional(pool)
+    .await?;
+    Ok(row.map(row_to_doc))
+}
+
+/// Insert or overwrite a (group, work) document snapshot.
+pub async fn upsert_doc(pool: &SqlitePool, d: &DocRecord) -> Result<(), AppError> {
+    sqlx::query(
+        "INSERT INTO group_doc (group_id, work_key, state, pending_ops, compacted_at, updated_at)
+         VALUES (?, ?, ?, ?, ?, ?)
+         ON CONFLICT(group_id, work_key) DO UPDATE SET
+           state = excluded.state,
+           pending_ops = excluded.pending_ops,
+           compacted_at = excluded.compacted_at,
+           updated_at = excluded.updated_at",
+    )
+    .bind(&d.group_id)
+    .bind(&d.work_key)
+    .bind(&d.state)
+    .bind(d.pending_ops)
+    .bind(&d.compacted_at)
+    .bind(&d.updated_at)
+    .execute(pool)
+    .await?;
+    Ok(())
+}
+
 // --------------------------------------------------------------- mapping
 
 fn row_to_group(row: SqliteRow) -> GroupRecord {
@@ -404,6 +458,18 @@ fn row_to_note(row: SqliteRow) -> NoteRecord {
         body: get(4).expect("body"),
         created_at: get(5).expect("created_at"),
         updated_at: get(6).expect("updated_at"),
+    }
+}
+
+fn row_to_doc(row: SqliteRow) -> DocRecord {
+    let get = |idx: usize| -> Option<String> { row.get(idx) };
+    DocRecord {
+        group_id: get(0).expect("group_id"),
+        work_key: get(1).expect("work_key"),
+        state: row.get(2),
+        pending_ops: row.get(3),
+        compacted_at: get(4),
+        updated_at: get(5).expect("updated_at"),
     }
 }
 

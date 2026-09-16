@@ -373,6 +373,20 @@ has no type column. `delimiter` is the CSV field delimiter, `separator` splits m
     last-write-wins on `updated_at`, idempotent) as the first transport. `epoch` bumps on member
     removal as the seam MISSION-118's key rotation consumes. Still pending: 115 (CRDT + E2EE),
     116 (Nostr transport), 117 (UI + spoiler gates + opt-in privacy screen), 118 (hardening).
+  - **Shipped (MISSION-115):** the **CRDT + E2EE engine**, behind a default-off `p2p` cargo
+    feature (`--features p2p`; `yrs` + `chacha20poly1305` + `getrandom`). `application/`
+    `reading_group_p2p.rs` owns: the group key (XChaCha20-Poly1305, minted on first use, stored in
+    the shared secret store under `readingGroup.key.<group_id>`), envelope sealing with
+    `group_id|epoch` as AAD (so a removed-member epoch bump invalidates old envelopes), the
+    out-of-band **invite** (`mylore://group-invite#…` link + QR JSON carrying group id, key and
+    relays; accept creates the local replica and imports the key), and the **notes document** — a
+    `yrs` map of note id → body with a state-vector handshake so only missing updates travel
+    (`reading_group_note_sync` returns the peer's diff, encrypted), plus a size/time compaction
+    policy (`pending_ops`/`compacted_at` on `group_doc`). A build without the feature exposes the
+    same IPC surface and returns a clear "compiled without p2p" error. Transport (116) drives
+    these primitives over relays; the UI (117) surfaces them.
+  - **What E2EE covers:** envelopes leaving the device are encrypted; the locally stored document
+    is plaintext like the rest of the DB (at-rest protection is SQLCipher, MISSION-112).
   - **Threat model (explicit):** E2EE (XChaCha20-Poly1305, group key in the OS keyring, shared
     only via out-of-band QR/link invite) protects payloads, but public relays still observe
     metadata — IP address, pubkey, timing, packet sizes, group size. The feature is therefore

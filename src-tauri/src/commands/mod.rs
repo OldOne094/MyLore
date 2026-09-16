@@ -18,6 +18,7 @@ pub mod node;
 pub mod providers;
 pub mod reading;
 pub mod reading_group;
+pub mod reading_group_p2p;
 pub mod recap;
 pub mod recovery;
 pub mod review;

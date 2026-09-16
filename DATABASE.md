@@ -408,6 +408,7 @@ The v1 DDL above is the baseline (0001–0007). Later migrations are recorded he
 | `0012_reading.sql` | MISSION-083 | Index-only: `node_progress(read_at)` for the reading recap. |
 | `0013_new_content_types.sql` | MISSION-109 | Widens the `media.content_type` CHECK via `PRAGMA writable_schema` (adds `game`, `podcast`, `music`, `comic`) — no table rebuild. |
 | `0014_reading_groups.sql` | MISSION-114 | Reading-group aggregate (separate from user data, ADR-007): `reading_group`, `group_member`, `group_shelf`, `group_note`. References works by a stable cross-device work key, never `media.id`. |
+| `0015_reading_group_p2p.sql` | MISSION-115 | `group_doc` — one encoded CRDT (yrs) document per (group, work) holding the shared notes, with a `pending_ops`/`compacted_at` compaction policy. Additive; the plain `group_note` table stays the non-p2p source of truth. |
 
 - Migrations 0010–0012 are index-only (no schema/column change), so they are invisible in the v1
   DDL above; 0008/0009 add columns to `tracking`/`review`; 0013 rewrites the `media` CHECK; 0014

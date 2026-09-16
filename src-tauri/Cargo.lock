@@ -2795,6 +2795,7 @@ dependencies = [
  "chrono",
  "criterion",
  "csv",
+ "getrandom 0.4.3",
  "libsqlite3-sys",
  "reqwest",
  "scraper",

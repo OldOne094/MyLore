@@ -265,6 +265,22 @@
     {
       "name": "GroupImportReport",
       "shape": "groups: number; members: number; shelf: number; notes: number; skipped: number"
+    },
+    {
+      "name": "GroupKeyStatus",
+      "shape": "has_key: boolean; key_id: string | null"
+    },
+    {
+      "name": "GroupInviteView",
+      "shape": "group_id: string; group_name: string; epoch: number; relays: string[]; link: string; qr_payload: string; key_id: string"
+    },
+    {
+      "name": "GroupNoteEntry",
+      "shape": "note_id: string; body: string"
+    },
+    {
+      "name": "GroupNoteSyncView",
+      "shape": "group_id: string; work_key: string; state_vector: string; update: string; notes: GroupNoteEntry[]; compacted: boolean"
     }
   ],
   "commands": [
@@ -963,6 +979,47 @@
       "args": { "source": "string" },
       "returns": "GroupImportReport",
       "doc": "MISSION-114 - merge a group_state.json payload (read in the webview) into the library; idempotent last-write-wins by updated_at. Resolves with the report or rejects with an AppError string."
+    },
+    {
+      "name": "reading_group_key_status",
+      "args": { "group_id": "string" },
+      "returns": "GroupKeyStatus",
+      "doc": "MISSION-115 (p2p) - whether this group has a shared key on this device, plus a short fingerprint. Requires a build with the `p2p` feature. Resolves with the status or rejects with an AppError string."
+    },
+    {
+      "name": "reading_group_invite_create",
+      "args": { "group_id": "string", "relays": "string[]" },
+      "returns": "GroupInviteView",
+      "doc": "MISSION-115 (p2p) - create an out-of-band invite (generates the group key on first use) carrying the relays, group id and key. Resolves with the link + QR payload or rejects with an AppError string."
+    },
+    {
+      "name": "reading_group_invite_accept",
+      "args": { "link": "string" },
+      "returns": "string",
+      "doc": "MISSION-115 (p2p) - accept an invite: create the local group replica and import the shared key. Resolves with the group id or rejects with an AppError string."
+    },
+    {
+      "name": "reading_group_note_state",
+      "args": { "group_id": "string", "work_key": "string" },
+      "returns": "GroupNoteEntry[]",
+      "doc": "MISSION-115 (p2p) - a group's notes for a work, materialized from the conflict-free document. Resolves with the notes or rejects with an AppError string."
+    },
+    {
+      "name": "reading_group_note_edit",
+      "args": { "group_id": "string", "work_key": "string", "note_id": "string", "body": "string" },
+      "returns": "GroupNoteSyncView",
+      "doc": "MISSION-115 (p2p) - apply a local note edit to the CRDT document; returns the encrypted update envelope to hand to peers plus the materialized notes. Resolves with the sync view or rejects with an AppError string."
+    },
+    {
+      "name": "reading_group_note_sync",
+      "args": {
+        "group_id": "string",
+        "work_key": "string",
+        "remote_state_vector": "string | null",
+        "remote_update": "string | null"
+      },
+      "returns": "GroupNoteSyncView",
+      "doc": "MISSION-115 (p2p) - one sync round-trip: merge an optional encrypted remote update and produce the update the peer is missing (diffed against its state vector). Resolves with the sync view or rejects with an AppError string."
     }
   ],
   "events": [

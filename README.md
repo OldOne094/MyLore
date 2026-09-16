@@ -93,6 +93,20 @@ Losing the passphrase means losing the data — there is no recovery path by
 design. Default builds without the feature stay plain SQLite and ignore the
 variable entirely.
 
+#### Optional: enable the reading-groups p2p engine (MISSION-115)
+
+Reading groups are local-first and future-gated. Their conflict-free notes +
+end-to-end encryption engine compiles only with the `p2p` feature (a default
+build stays dependency-light and the commands return a clear "unsupported"
+error):
+
+```bash
+cargo build --features p2p
+```
+
+Nothing leaves the device at this stage — the transport (Nostr) and the UI land
+in later missions. See `ARCHITECTURE.md §6` for the threat model.
+
 > The IPC boundary is generated: edit `scripts/ipc-contract.json`, then run
 > `npm run codegen`. Never hand-edit `src/api/ipc.generated.ts`.
 

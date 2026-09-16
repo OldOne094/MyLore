@@ -494,6 +494,31 @@ export interface GroupImportReport {
   notes: number;
   skipped: number;
 }
+export interface GroupKeyStatus {
+  has_key: boolean;
+  key_id: string | null;
+}
+export interface GroupInviteView {
+  group_id: string;
+  group_name: string;
+  epoch: number;
+  relays: string[];
+  link: string;
+  qr_payload: string;
+  key_id: string;
+}
+export interface GroupNoteEntry {
+  note_id: string;
+  body: string;
+}
+export interface GroupNoteSyncView {
+  group_id: string;
+  work_key: string;
+  state_vector: string;
+  update: string;
+  notes: GroupNoteEntry[];
+  compacted: boolean;
+}
 
 /** Create a media entry from manual input. Resolves with the new media id or rejects with an AppError string. */
 export function media_create(args: {
@@ -1204,6 +1229,52 @@ export function reading_group_export(args: {
 /** MISSION-114 - merge a group_state.json payload (read in the webview) into the library; idempotent last-write-wins by updated_at. Resolves with the report or rejects with an AppError string. */
 export function reading_group_import(args: { source: string }): Promise<GroupImportReport> {
   return invoke<GroupImportReport>("reading_group_import", args);
+}
+
+/** MISSION-115 (p2p) - whether this group has a shared key on this device, plus a short fingerprint. Requires a build with the `p2p` feature. Resolves with the status or rejects with an AppError string. */
+export function reading_group_key_status(args: { groupId: string }): Promise<GroupKeyStatus> {
+  return invoke<GroupKeyStatus>("reading_group_key_status", args);
+}
+
+/** MISSION-115 (p2p) - create an out-of-band invite (generates the group key on first use) carrying the relays, group id and key. Resolves with the link + QR payload or rejects with an AppError string. */
+export function reading_group_invite_create(args: {
+  groupId: string;
+  relays: string[];
+}): Promise<GroupInviteView> {
+  return invoke<GroupInviteView>("reading_group_invite_create", args);
+}
+
+/** MISSION-115 (p2p) - accept an invite: create the local group replica and import the shared key. Resolves with the group id or rejects with an AppError string. */
+export function reading_group_invite_accept(args: { link: string }): Promise<string> {
+  return invoke<string>("reading_group_invite_accept", args);
+}
+
+/** MISSION-115 (p2p) - a group's notes for a work, materialized from the conflict-free document. Resolves with the notes or rejects with an AppError string. */
+export function reading_group_note_state(args: {
+  groupId: string;
+  workKey: string;
+}): Promise<GroupNoteEntry[]> {
+  return invoke<GroupNoteEntry[]>("reading_group_note_state", args);
+}
+
+/** MISSION-115 (p2p) - apply a local note edit to the CRDT document; returns the encrypted update envelope to hand to peers plus the materialized notes. Resolves with the sync view or rejects with an AppError string. */
+export function reading_group_note_edit(args: {
+  groupId: string;
+  workKey: string;
+  noteId: string;
+  body: string;
+}): Promise<GroupNoteSyncView> {
+  return invoke<GroupNoteSyncView>("reading_group_note_edit", args);
+}
+
+/** MISSION-115 (p2p) - one sync round-trip: merge an optional encrypted remote update and produce the update the peer is missing (diffed against its state vector). Resolves with the sync view or rejects with an AppError string. */
+export function reading_group_note_sync(args: {
+  groupId: string;
+  workKey: string;
+  remoteStateVector: string | null;
+  remoteUpdate: string | null;
+}): Promise<GroupNoteSyncView> {
+  return invoke<GroupNoteSyncView>("reading_group_note_sync", args);
 }
 
 export function listenAnilistOauth(
