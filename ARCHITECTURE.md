@@ -80,18 +80,21 @@ design system. Pages compose features.
 ## 4. Provider architecture (capability-based)
 
 ```
-Provider interface (Rust trait + TS mirror types):
-  search(query) → Candidate[]
-  getDetails(id) → MediaMeta
-  getNodes(id)   → NodeTree   (episodes/chapters/volumes)
-  getRelated(id) → Relation[]
-  getReviews(id) → ExternalReview[]   (optional)
-  lookupExternalId(id) → ExternalId[]
-  enrich(mediaId) → MediaMeta diff
+Provider interface (Rust trait + TS mirror types) — `domain/provider/trait_.rs`:
+  search(query, content_type?) → Candidate[]
+  get_details(id)   → MediaMeta
+  get_nodes(id)     → NodeTree   (episodes/chapters/volumes)
+  get_related(id)   → Relation[]
+  get_external_ids(id) → ExternalId[]
 
-ProviderCapabilities: { search:bool, details:bool, nodes:bool, related:bool,
-                        reviews:bool, images:bool, seasonal:bool, auth:'none'|'key'|'oauth' }
+ProviderCapabilities (all default off; an adapter declares what it implements):
+  { search, details, nodes, related, images, auth: 'none'|'key'|'oauth' }
 ```
+
+Reserved-but-unused flags: `reviews` and `seasonal` still exist on `ProviderCapabilities` but no
+adapter sets them and no surface consumes them — they are placeholders for a possible reviews feed
+and seasonal charts, not a shipped feature (MISSION-147). Enrichment is an *application* concern
+(`EnrichService` re-fetches `get_details` and diffs provider-owned fields), not a trait method.
 
 - Each provider declares capabilities; the app and the UI adapt (a "search only" provider never
   claims to enrich nodes) — spec §44.
@@ -103,25 +106,28 @@ ProviderCapabilities: { search:bool, details:bool, nodes:bool, related:bool,
   redesign.
 - Provider fixtures/recorded responses enable offline tests (`TESTING.md`).
 
-### Provider matrix (verified August 2026 — full detail in `API_PROVIDERS.md`)
+### Provider matrix (verified September 2026 — full detail in `API_PROVIDERS.md`)
 
-| Provider | Content | Auth | Free? | Notes |
-|----------|---------|------|-------|-------|
-| AniList (GraphQL) | anime+manga | none (public data) | yes | ~90 req/min; rich; external ids incl. MAL/TMDB/AniDB/IMDb |
-| Jikan (REST v4) | anime+manga | none | yes | 3 rps / 60 rpm; mirrors MAL |
-| MangaDex | manga (incl. manhwa/manhua) | none (public) | yes | chapters, covers, tags; must credit |
-| TMDB | movies+TV | free API key | yes (non-commercial) | ~40 req/10s; attribution required |
-| TVDB v4 | TV | free key (JWT) | yes | episodes, translations, artwork |
-| OpenLibrary | books | none | yes | 1 rps (3 rps with UA+email); works/editions/covers |
-| Google Books | books | free key | yes | ~100 req/min/user default |
-| Trakt | movies+TV (scrobble) | key; free tier limits | yes (personal) | 2026 free caps: 250 watchlist, 5 lists, 100k history |
-| BookBrainz | books (open data) | none | yes | bibliographic + relationships |
-| SIMKL | anime+TV+movies | key | yes | aggregate source; has import API |
-| Annict | anime (JP) | OAuth | yes | niche; optional |
-| NovelUpdates | web novels+light novels | none (HTML scrape) | yes | no API; LNReader-plugin selectors (NU-moderator project); ~1 rps self-throttled; search/details/chapter-tree only (MISSION-065) |
-| Hardcover | books (indie) | none (public read) | yes | GraphQL; optional third book provider |
-| Bangumi | CN ACGN | none | yes | ~1 rps; optional LN/WN/CN metadata + cross-ids |
-| ISBNDB | books (ISBN lookup) | API key | free tier | 100 req/mo; optional paid fallback |
+This is the **shipped** adapter set in `infrastructure/providers/` (13 adapters). Providers that
+appear in older design notes but were never built (TVDB, Trakt, BookBrainz, SIMKL, Annict, ISBNDB)
+are listed as research only — see `API_PROVIDERS.md §16`; none has a mission.
+
+| Provider | id | Content | Auth | Free? | Notes |
+|----------|----|---------|------|-------|-------|
+| AniList (GraphQL) | `anilist` | anime, manga, manhwa, manhua, novel | none (public) / Bearer token | yes | ~90 req/min; external ids incl. MAL/TMDB/AniDB/IMDb; optional OAuth sign-in (MISSION-130) |
+| Jikan (REST v4) | `jikan` | anime, movie | none | yes | 3 rps / 60 rpm; mirrors MAL; anime/manga fallback |
+| MangaDex | `mangadex` | manga, manhwa, manhua, novel | none (public) | yes | ~5 rps; chapters, covers, tags; must credit |
+| Bangumi | `bangumi` | anime, manga, novel, web_novel, book | none | yes | CN ACGN; ~1 rps; cross-ids |
+| WTR-LAB | `wtrlab` | web_novel | none | yes | CN/KR→EN translated web novels; ~2 rps; `__NEXT_DATA__` scrape (MISSION-131) |
+| NovelUpdates | `novelupdates` | novel, web_novel | none (HTML scrape via webview bridge) | yes | LNReader-plugin selectors; ~1 rps; search/details/chapter-tree only (MISSION-065/129) |
+| TMDB | `tmdb` | movie, tv | free API key | yes (non-commercial) | ~40 req/10s; attribution required |
+| OpenLibrary | `openlibrary` | book | none | yes | 1 rps (3 rps with UA+email); works/editions/covers |
+| Google Books | `googlebooks` | book | free key (optional) | yes | ~100 req/min/user default |
+| Hardcover | `hardcover` | book, novel, web_novel | bearer token (public reads now require one) | yes | GraphQL (Hasura); indie |
+| iTunes Search | `itunes` | podcast, music | none | yes | keyless; ~3 rps self-throttled; search-only (no details/nodes) |
+| RAWG | `rawg` | game | free API key (optional) | yes | ~1 rps self-throttled; games database |
+| GCD (Grand Comics DB) | `gcd` | comic | none | yes | ~2 rps self-throttled; comics/issues |
+
 
 ## 5. Search architecture
 
@@ -350,13 +356,23 @@ has no type column. `delimiter` is the CSV field delimiter, `separator` splits m
   charts reusing the shared `DistributionChart`, extracted from StatsPage for reuse).
 - **Reading groups (MISSION-114–118, planned seam):** decentralized friend groups for tracking
   novels/books together — local-first, no central server. Design constraints fixed up front:
-  group data lives in its own tables (`reading_group` / `group_member` / `group_note`), never in
-  the personal aggregates ADR-007 protects; cross-device references use a stable *work identity*
-  (provider id or normalized title+author+year hash via the existing identity_candidates logic),
-  since each device's `media` UUIDs differ. Conflict policy by ownership: CRDT (`yrs`) only for
-  shared notes; each member's shelf is single-writer; group settings owner-only with an epoch.
-  Transport is async store-and-forward over Nostr relays behind a `p2p` cargo feature (default
-  build stays dependency-free), outbox-first so nothing is lost offline.
+  group data lives in its own tables (`reading_group` / `group_member` / `group_shelf` /
+  `group_note`), never in the personal aggregates ADR-007 protects; cross-device references use a
+  stable *work identity* (provider id or normalized title+author+year hash via the existing
+  identity_candidates logic), since each device's `media` UUIDs differ. Conflict policy by
+  ownership: CRDT (`yrs`) only for shared notes; each member's shelf is single-writer; group
+  settings owner-only with an epoch. Transport is async store-and-forward over Nostr relays behind
+  a `p2p` cargo feature (default build stays dependency-free), outbox-first so nothing is lost
+  offline.
+  - **Shipped (MISSION-114):** the **local model** — migration `0014_reading_groups.sql` adds the
+    four tables (a `group_shelf` table is included beyond the original parenthetical list because
+    per-member shelves are core to MISSION-108/117); `domain/reading_group.rs` holds the pure
+    entities + `work_key`; `ReadingGroupService` provides group/member/shelf/note CRUD, the local
+    opt-in prefs (`readingGroup.*` in `settings`, opt-in **off** by default, member id minted on
+    first read), and the manual **`group_state.json`** export/import (merge by primary key,
+    last-write-wins on `updated_at`, idempotent) as the first transport. `epoch` bumps on member
+    removal as the seam MISSION-118's key rotation consumes. Still pending: 115 (CRDT + E2EE),
+    116 (Nostr transport), 117 (UI + spoiler gates + opt-in privacy screen), 118 (hardening).
   - **Threat model (explicit):** E2EE (XChaCha20-Poly1305, group key in the OS keyring, shared
     only via out-of-band QR/link invite) protects payloads, but public relays still observe
     metadata — IP address, pubkey, timing, packet sizes, group size. The feature is therefore

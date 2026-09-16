@@ -1,13 +1,15 @@
-//! Secret storage for provider API keys (MISSION-063, hardened MISSION-098).
+//! Secret storage for provider API keys and the database passphrase
+//! (MISSION-063, hardened MISSION-098/112).
 //!
-//! `SecretStore` is the port; two implementations exist:
-//!   - `OsKeyring` — the OS credential store. Known to silently drop
-//!     credentials on some Windows configurations (CredWrite succeeds but
-//!     CredRead returns NOT_FOUND), so it is no longer the default.
-//!   - `FileSecretStore` — a base64-obfuscated JSON file inside the app's
-//!     data directory. MyLore is local-first: the SQLite DB already stores
-//!     viewing history in plaintext, and MISSION-112 (SQLCipher) will encrypt
-//!     everything together when it ships.
+//! `SecretStore` is the port; the production implementation is
+//! `FileSecretStore`, which persists a **plaintext JSON map** inside the app's
+//! data directory (`api_keys.json`). It is deliberately not cryptographic — the
+//! library DB is also plaintext by default, and when SQLCipher encryption is
+//! enabled (MISSION-112) the passphrase that unlocks it lives in this same
+//! store. An OS-keyring-backed implementation was tried and retired: the
+//! Windows Credential Manager round-trip proved unreliable (CredWrite succeeds
+//! but CredRead returns NOT_FOUND on some configurations). `InMemoryKeyring`
+//! backs tests.
 
 use std::collections::HashMap;
 use std::path::PathBuf;

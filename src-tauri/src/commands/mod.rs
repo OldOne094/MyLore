@@ -1,11 +1,6 @@
 //! Thin IPC command handlers. Commands carry no business logic (spec §83);
 //! they validate input and delegate to `application` services.
 
-use tauri::command;
-use tracing::info;
-
-use crate::error::AppError;
-
 pub mod backup;
 pub mod bulk;
 pub mod calendar;
@@ -22,6 +17,7 @@ pub mod merge;
 pub mod node;
 pub mod providers;
 pub mod reading;
+pub mod reading_group;
 pub mod recap;
 pub mod recovery;
 pub mod review;
@@ -29,10 +25,3 @@ pub mod stats;
 pub mod tasks;
 pub mod tracking;
 pub mod trash;
-
-/// Placeholder greeting command from the create-tauri-app scaffold.
-#[command]
-pub fn greet(name: &str) -> Result<String, AppError> {
-    info!(name, "greet command invoked");
-    Ok(format!("Hello, {name}! You've been greeted from Rust!"))
-}

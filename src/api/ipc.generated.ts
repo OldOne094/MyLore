@@ -439,10 +439,60 @@ export interface ReadingRecap {
   pace_counts: StatCount[];
   format_counts: StatCount[];
 }
-
-/** Placeholder greeting command (create-tauri-app scaffold). Resolves with the greeting or rejects with an AppError string. */
-export function greet(args: { name: string }): Promise<string> {
-  return invoke<string>("greet", args);
+export interface GroupMemberView {
+  member_id: string;
+  display_name: string;
+  role: string;
+  joined_at: string;
+}
+export interface GroupShelfEntryView {
+  group_id: string;
+  member_id: string;
+  work_key: string;
+  title: string;
+  content_type: string;
+  status: string;
+  progress: number;
+  updated_at: string;
+}
+export interface GroupNoteView {
+  id: string;
+  group_id: string;
+  work_key: string;
+  author_id: string;
+  body: string;
+  created_at: string;
+  updated_at: string;
+}
+export interface GroupView {
+  id: string;
+  name: string;
+  owner_id: string;
+  epoch: number;
+  created_at: string;
+  updated_at: string;
+  members: GroupMemberView[];
+  shelf_count: number;
+  note_count: number;
+}
+export interface GroupPrefs {
+  enabled: boolean;
+  member_id: string;
+  display_name: string;
+}
+export interface GroupExportReport {
+  path: string;
+  groups: number;
+  members: number;
+  shelf: number;
+  notes: number;
+}
+export interface GroupImportReport {
+  groups: number;
+  members: number;
+  shelf: number;
+  notes: number;
+  skipped: number;
 }
 
 /** Create a media entry from manual input. Resolves with the new media id or rejects with an AppError string. */
@@ -1033,6 +1083,127 @@ export function recap_year(args: { year: number }): Promise<YearRecap> {
 /** Resolve the reading recap for one year: pages and chapters consumed per month (book pages weighed by page count, all bucketed by local time), the year totals including distinct finished reading media, plus all-time taste distributions - mood set, pace and format - built from review metadata and tracked reading media. Resolves with the ReadingRecap or rejects with an AppError string. */
 export function reading_recap(args: { year: number }): Promise<ReadingRecap> {
   return invoke<ReadingRecap>("reading_recap", args);
+}
+
+/** MISSION-114 - the local reading-group opt-in flag and this install's identity (a member id is minted and persisted on first read). Resolves with the prefs or rejects with an AppError string. */
+export function reading_group_prefs_get(): Promise<GroupPrefs> {
+  return invoke<GroupPrefs>("reading_group_prefs_get");
+}
+
+/** MISSION-114 - persist the reading-group opt-in flag and display name. Resolves with the updated prefs or rejects with an AppError string. */
+export function reading_group_prefs_set(args: {
+  enabled: boolean;
+  displayName: string;
+}): Promise<GroupPrefs> {
+  return invoke<GroupPrefs>("reading_group_prefs_set", args);
+}
+
+/** MISSION-114 - every reading group with its members and row counts. Resolves with the list or rejects with an AppError string. */
+export function reading_group_list(): Promise<GroupView[]> {
+  return invoke<GroupView[]>("reading_group_list");
+}
+
+/** MISSION-114 - create a reading group (seeds the local owner membership). Resolves with the group view or rejects with an AppError string. */
+export function reading_group_create(args: { name: string }): Promise<GroupView> {
+  return invoke<GroupView>("reading_group_create", args);
+}
+
+/** MISSION-114 - rename a reading group. Resolves with the updated group view or rejects with an AppError string. */
+export function reading_group_rename(args: { groupId: string; name: string }): Promise<GroupView> {
+  return invoke<GroupView>("reading_group_rename", args);
+}
+
+/** MISSION-114 - delete a reading group; its members, shelf rows and notes cascade. Resolves or rejects with an AppError string. */
+export function reading_group_delete(args: { groupId: string }): Promise<void> {
+  return invoke<void>("reading_group_delete", args);
+}
+
+/** MISSION-114 - one reading group with its members and row counts. Resolves with the group view or rejects with an AppError string. */
+export function reading_group_view(args: { groupId: string }): Promise<GroupView> {
+  return invoke<GroupView>("reading_group_view", args);
+}
+
+/** MISSION-114 - add (or update) a group member. Role is `owner` or `member`. Resolves with the updated group view or rejects with an AppError string. */
+export function reading_group_add_member(args: {
+  groupId: string;
+  memberId: string;
+  displayName: string;
+  role: string;
+}): Promise<GroupView> {
+  return invoke<GroupView>("reading_group_add_member", args);
+}
+
+/** MISSION-114 - remove a member (the owner can never be removed); bumps the group epoch. Resolves with the updated group view or rejects with an AppError string. */
+export function reading_group_remove_member(args: {
+  groupId: string;
+  memberId: string;
+}): Promise<GroupView> {
+  return invoke<GroupView>("reading_group_remove_member", args);
+}
+
+/** MISSION-114 - a group's shelf rows, optionally narrowed to one member. Resolves with the rows or rejects with an AppError string. */
+export function reading_group_shelf(args: {
+  groupId: string;
+  memberId: string | null;
+}): Promise<GroupShelfEntryView[]> {
+  return invoke<GroupShelfEntryView[]>("reading_group_shelf", args);
+}
+
+/** MISSION-114 - upsert one member's shelf entry for a work (single-writer). Status is a core status string. Resolves with the row or rejects with an AppError string. */
+export function reading_group_set_shelf(args: {
+  groupId: string;
+  memberId: string;
+  workKey: string;
+  title: string;
+  contentType: string;
+  status: string;
+  progress: number;
+}): Promise<GroupShelfEntryView> {
+  return invoke<GroupShelfEntryView>("reading_group_set_shelf", args);
+}
+
+/** MISSION-114 - a group's shared notes, optionally narrowed to one work. Resolves with the rows or rejects with an AppError string. */
+export function reading_group_notes(args: {
+  groupId: string;
+  workKey: string | null;
+}): Promise<GroupNoteView[]> {
+  return invoke<GroupNoteView[]>("reading_group_notes", args);
+}
+
+/** MISSION-114 - add a shared note (the author must be a member). Resolves with the note or rejects with an AppError string. */
+export function reading_group_add_note(args: {
+  groupId: string;
+  workKey: string;
+  authorId: string;
+  body: string;
+}): Promise<GroupNoteView> {
+  return invoke<GroupNoteView>("reading_group_add_note", args);
+}
+
+/** MISSION-114 - update a shared note's body. Resolves with the updated note or rejects with an AppError string. */
+export function reading_group_update_note(args: {
+  noteId: string;
+  body: string;
+}): Promise<GroupNoteView> {
+  return invoke<GroupNoteView>("reading_group_update_note", args);
+}
+
+/** MISSION-114 - delete a shared note. Resolves or rejects with an AppError string. */
+export function reading_group_delete_note(args: { noteId: string }): Promise<void> {
+  return invoke<void>("reading_group_delete_note", args);
+}
+
+/** MISSION-114 - write group_state.json (one group when group_id is given, else all) to a caller-chosen path. Resolves with the report or rejects with an AppError string. */
+export function reading_group_export(args: {
+  path: string;
+  groupId: string | null;
+}): Promise<GroupExportReport> {
+  return invoke<GroupExportReport>("reading_group_export", args);
+}
+
+/** MISSION-114 - merge a group_state.json payload (read in the webview) into the library; idempotent last-write-wins by updated_at. Resolves with the report or rejects with an AppError string. */
+export function reading_group_import(args: { source: string }): Promise<GroupImportReport> {
+  return invoke<GroupImportReport>("reading_group_import", args);
 }
 
 export function listenAnilistOauth(

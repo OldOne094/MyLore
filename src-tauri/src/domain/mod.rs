@@ -18,6 +18,7 @@
 //!   - `task`         — background task model: states, snapshot, task error
 //!   - `stats`        — dashboard statistics (counts, hours, completion, rating)
 //!   - `merge`        — merge plans: conflict report, re-parenting, before-image
+//!   - `reading_group`— reading groups (local model): group/member/shelf/note + work identity
 //!   - `value_objects`/`enums` — immutable values and `CHECK`-aligned enums
 
 pub mod content_node;
@@ -31,6 +32,7 @@ pub mod merge;
 pub mod normalize;
 pub mod progress;
 pub mod provider;
+pub mod reading_group;
 pub mod review;
 pub mod stats;
 pub mod status;

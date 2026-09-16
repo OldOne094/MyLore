@@ -45,6 +45,7 @@ async fn live_novelupdates_search() {
 }
 
 #[tokio::test]
+#[ignore = "live network"]
 async fn live_anilist_search_berserk() {
     let client = AniListClient::new();
     let provider = AniListProvider::new(client);
@@ -69,6 +70,7 @@ async fn live_anilist_search_berserk() {
 }
 
 #[tokio::test]
+#[ignore = "live network"]
 async fn live_anilist_search_no_type() {
     let client = AniListClient::new();
     let provider = AniListProvider::new(client);
@@ -87,6 +89,7 @@ async fn live_anilist_search_no_type() {
 }
 
 #[tokio::test]
+#[ignore = "live network"]
 async fn live_openlibrary_search() {
     use mylore_lib::infrastructure::providers::openlibrary::{
         OpenLibraryClient, OpenLibraryProvider,

@@ -237,15 +237,37 @@
     {
       "name": "ReadingRecap",
       "shape": "year: number; by_month: MonthReading[]; totals: ReadingTotals; mood_counts: StatCount[]; pace_counts: StatCount[]; format_counts: StatCount[]"
+    },
+    {
+      "name": "GroupMemberView",
+      "shape": "member_id: string; display_name: string; role: string; joined_at: string"
+    },
+    {
+      "name": "GroupShelfEntryView",
+      "shape": "group_id: string; member_id: string; work_key: string; title: string; content_type: string; status: string; progress: number; updated_at: string"
+    },
+    {
+      "name": "GroupNoteView",
+      "shape": "id: string; group_id: string; work_key: string; author_id: string; body: string; created_at: string; updated_at: string"
+    },
+    {
+      "name": "GroupView",
+      "shape": "id: string; name: string; owner_id: string; epoch: number; created_at: string; updated_at: string; members: GroupMemberView[]; shelf_count: number; note_count: number"
+    },
+    {
+      "name": "GroupPrefs",
+      "shape": "enabled: boolean; member_id: string; display_name: string"
+    },
+    {
+      "name": "GroupExportReport",
+      "shape": "path: string; groups: number; members: number; shelf: number; notes: number"
+    },
+    {
+      "name": "GroupImportReport",
+      "shape": "groups: number; members: number; shelf: number; notes: number; skipped: number"
     }
   ],
   "commands": [
-    {
-      "name": "greet",
-      "args": { "name": "string" },
-      "returns": "string",
-      "doc": "Placeholder greeting command (create-tauri-app scaffold). Resolves with the greeting or rejects with an AppError string."
-    },
     {
       "name": "media_create",
       "args": {
@@ -821,6 +843,126 @@
       "args": { "year": "number" },
       "returns": "ReadingRecap",
       "doc": "Resolve the reading recap for one year: pages and chapters consumed per month (book pages weighed by page count, all bucketed by local time), the year totals including distinct finished reading media, plus all-time taste distributions - mood set, pace and format - built from review metadata and tracked reading media. Resolves with the ReadingRecap or rejects with an AppError string."
+    },
+    {
+      "name": "reading_group_prefs_get",
+      "args": {},
+      "returns": "GroupPrefs",
+      "doc": "MISSION-114 - the local reading-group opt-in flag and this install's identity (a member id is minted and persisted on first read). Resolves with the prefs or rejects with an AppError string."
+    },
+    {
+      "name": "reading_group_prefs_set",
+      "args": { "enabled": "boolean", "display_name": "string" },
+      "returns": "GroupPrefs",
+      "doc": "MISSION-114 - persist the reading-group opt-in flag and display name. Resolves with the updated prefs or rejects with an AppError string."
+    },
+    {
+      "name": "reading_group_list",
+      "args": {},
+      "returns": "GroupView[]",
+      "doc": "MISSION-114 - every reading group with its members and row counts. Resolves with the list or rejects with an AppError string."
+    },
+    {
+      "name": "reading_group_create",
+      "args": { "name": "string" },
+      "returns": "GroupView",
+      "doc": "MISSION-114 - create a reading group (seeds the local owner membership). Resolves with the group view or rejects with an AppError string."
+    },
+    {
+      "name": "reading_group_rename",
+      "args": { "group_id": "string", "name": "string" },
+      "returns": "GroupView",
+      "doc": "MISSION-114 - rename a reading group. Resolves with the updated group view or rejects with an AppError string."
+    },
+    {
+      "name": "reading_group_delete",
+      "args": { "group_id": "string" },
+      "returns": "void",
+      "doc": "MISSION-114 - delete a reading group; its members, shelf rows and notes cascade. Resolves or rejects with an AppError string."
+    },
+    {
+      "name": "reading_group_view",
+      "args": { "group_id": "string" },
+      "returns": "GroupView",
+      "doc": "MISSION-114 - one reading group with its members and row counts. Resolves with the group view or rejects with an AppError string."
+    },
+    {
+      "name": "reading_group_add_member",
+      "args": {
+        "group_id": "string",
+        "member_id": "string",
+        "display_name": "string",
+        "role": "string"
+      },
+      "returns": "GroupView",
+      "doc": "MISSION-114 - add (or update) a group member. Role is `owner` or `member`. Resolves with the updated group view or rejects with an AppError string."
+    },
+    {
+      "name": "reading_group_remove_member",
+      "args": { "group_id": "string", "member_id": "string" },
+      "returns": "GroupView",
+      "doc": "MISSION-114 - remove a member (the owner can never be removed); bumps the group epoch. Resolves with the updated group view or rejects with an AppError string."
+    },
+    {
+      "name": "reading_group_shelf",
+      "args": { "group_id": "string", "member_id": "string | null" },
+      "returns": "GroupShelfEntryView[]",
+      "doc": "MISSION-114 - a group's shelf rows, optionally narrowed to one member. Resolves with the rows or rejects with an AppError string."
+    },
+    {
+      "name": "reading_group_set_shelf",
+      "args": {
+        "group_id": "string",
+        "member_id": "string",
+        "work_key": "string",
+        "title": "string",
+        "content_type": "string",
+        "status": "string",
+        "progress": "number"
+      },
+      "returns": "GroupShelfEntryView",
+      "doc": "MISSION-114 - upsert one member's shelf entry for a work (single-writer). Status is a core status string. Resolves with the row or rejects with an AppError string."
+    },
+    {
+      "name": "reading_group_notes",
+      "args": { "group_id": "string", "work_key": "string | null" },
+      "returns": "GroupNoteView[]",
+      "doc": "MISSION-114 - a group's shared notes, optionally narrowed to one work. Resolves with the rows or rejects with an AppError string."
+    },
+    {
+      "name": "reading_group_add_note",
+      "args": {
+        "group_id": "string",
+        "work_key": "string",
+        "author_id": "string",
+        "body": "string"
+      },
+      "returns": "GroupNoteView",
+      "doc": "MISSION-114 - add a shared note (the author must be a member). Resolves with the note or rejects with an AppError string."
+    },
+    {
+      "name": "reading_group_update_note",
+      "args": { "note_id": "string", "body": "string" },
+      "returns": "GroupNoteView",
+      "doc": "MISSION-114 - update a shared note's body. Resolves with the updated note or rejects with an AppError string."
+    },
+    {
+      "name": "reading_group_delete_note",
+      "args": { "note_id": "string" },
+      "returns": "void",
+      "doc": "MISSION-114 - delete a shared note. Resolves or rejects with an AppError string."
+    },
+    {
+      "name": "reading_group_export",
+      "args": { "path": "string", "group_id": "string | null" },
+      "returns": "GroupExportReport",
+      "doc": "MISSION-114 - write group_state.json (one group when group_id is given, else all) to a caller-chosen path. Resolves with the report or rejects with an AppError string."
+    },
+    {
+      "name": "reading_group_import",
+      "args": { "source": "string" },
+      "returns": "GroupImportReport",
+      "doc": "MISSION-114 - merge a group_state.json payload (read in the webview) into the library; idempotent last-write-wins by updated_at. Resolves with the report or rejects with an AppError string."
     }
   ],
   "events": [

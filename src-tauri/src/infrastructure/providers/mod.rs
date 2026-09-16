@@ -3,11 +3,11 @@
 //! Each adapter is a thin normalizer: provider HTTP → unified domain types
 //! (`domain::provider`) + typed `ProviderError`s, with all policy applied by
 //! `application::providers::coordinator`. AniList, TMDB, MangaDex, OpenLibrary,
-//! NovelUpdates, Jikan (anime fallback), Google Books (book fallback) and
-//! Hardcover (optional third book provider) and Bangumi (CN ACGN) land here.
-//! The coordinator fans out to *every* provider that serves a domain, so a
-//! primary that fails never fails the search — that's how fallbacks work
-//! (MISSION-058).
+//! NovelUpdates, Jikan (anime fallback), Google Books (book fallback),
+//! Hardcover, Bangumi (CN ACGN), WTR-LAB (web novels), iTunes (podcast/music),
+//! RAWG (games) and GCD (comics) land here. The coordinator fans out to *every*
+//! provider that serves a domain, so a primary that fails never fails the
+//! search — that's how fallbacks work (MISSION-058).
 
 pub mod anilist;
 pub mod bangumi;
@@ -131,36 +131,9 @@ impl EntryBuilder for StdEntryBuilder {
     }
 }
 
-/// The provider set registered at app startup. Grows as adapters land. TMDB's
-/// API key is injected by the settings UI (MISSION-063) via the OS keyring —
-/// the keyless client here only works against mocks until then.
-pub fn default_provider_entries() -> Vec<ProviderEntry> {
-    [
-        anilist_config(),
-        bangumi_config(),
-        tmdb_config(),
-        mangadex_config(),
-        openlibrary_config(),
-        novelupdates_config(),
-        jikan_config(),
-        googlebooks_config(),
-        hardcover_config(),
-        wtrlab_config(),
-        itunes_config(),
-        rawg_config(),
-        gcd_config(),
-    ]
-    .into_iter()
-    .map(|config| {
-        let adapter = build_adapter(&config.id, config.api_key.as_deref()).expect("known adapter");
-        (config, adapter)
-    })
-    .collect()
-}
-
 /// The default per-provider configs, in registration order (MISSION-063). The
 /// settings service reads persisted enabled flags and keyring keys on top of
-/// these, then rebuilds the coordinator.
+/// these, then rebuilds the coordinator through `StdEntryBuilder`.
 pub fn default_provider_configs() -> Vec<ProviderConfig> {
     vec![
         anilist_config(),

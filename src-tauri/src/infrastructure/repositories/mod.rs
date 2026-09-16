@@ -15,6 +15,7 @@ pub mod collection;
 pub mod media;
 pub mod node;
 pub mod reading;
+pub mod reading_group;
 pub mod recap;
 pub mod review;
 pub mod tracking;

@@ -1,28 +1,7 @@
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { greet as greetCommand } from "./ipc.generated";
-import { queryKeys } from "./queryKeys";
+/* MISSION-035 — Typed command wrappers live in the generated
+   `ipc.generated.ts` (one function per command). This module is the home for
+   hand-written React Query hooks that don't belong to a single feature slice;
+   every current hook lives with its feature, so this is intentionally empty
+   (the scaffold `greet` helpers were removed in MISSION-150). */
 
-/* MISSION-035 — Typed command wrappers (`api.ts`). IPC crossing stays inside
-   the generated wrappers; this layer adds React Query hooks so features read
-   and write domain data without touching invoke or cache keys directly. */
-
-export const api = {
-  greet: greetCommand,
-};
-
-export function useGreetQuery(name: string) {
-  return useQuery({
-    queryKey: queryKeys.system.greeting(name),
-    queryFn: () => api.greet({ name }),
-  });
-}
-
-export function useGreetMutation() {
-  const queryClient = useQueryClient();
-  return useMutation({
-    mutationFn: ({ name }: { name: string }) => api.greet({ name }),
-    onSuccess: (greeting, { name }) => {
-      queryClient.setQueryData(queryKeys.system.greeting(name), greeting);
-    },
-  });
-}
+export {};

@@ -21,10 +21,6 @@ export interface MediaListFilters {
 }
 
 export const queryKeys = {
-  system: {
-    all: () => ["system"] as const,
-    greeting: (name: string) => ["system", "greet", name] as const,
-  },
   media: {
     all: () => ["media"] as const,
     lists: () => ["media", "list"] as const,

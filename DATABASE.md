@@ -21,8 +21,10 @@ Options evaluated:
 Notes (verified 2026): `sqlx` supports SQLite, FTS5 executes as normal SQL, migrations run inside
 transactions; Tauri manages the connection pool as app state. Rust >= 1.77.2 toolchain.
 
-Encryption: **not for MVP**. If required later, evaluate `SQLCipher` (needs a bundled/native
-sqlite build — a real cost). Revisit as an ADR when demand exists.
+Encryption: **shipped as opt-in** (MISSION-112). A `db-encryption` cargo feature swaps the bundled
+SQLite for SQLCipher (vendored OpenSSL) and the passphrase is migrated in place via `PRAGMA rekey`
+and stored in the shared secret store (`db.encryption`); `MYLORE_DB_KEY` overrides at startup.
+Default builds stay plaintext SQLite. See `ARCHITECTURE.md §11` and `README.md`.
 
 ---
 
@@ -244,15 +246,10 @@ CREATE TABLE asset (
   created_at    TEXT NOT NULL
 );
 
--- provider_setting: not yet assigned to a mission (API keys via OS keyring;
--- created with the provider configuration work, MISSION-063).
-CREATE TABLE provider_setting (
-  provider  TEXT PRIMARY KEY,
-  enabled   INTEGER NOT NULL DEFAULT 1,
-  api_key   TEXT,               -- encrypted blob, see ARCHITECTURE §Security
-  options   TEXT,               -- JSON
-  updated_at TEXT NOT NULL
-);
+-- provider_setting: NOT created. MISSION-063 shipped provider configuration as
+-- `providers.json` (enabled flags) in the app data dir + the shared secret store
+-- (`api_keys.json`, MISSION-139) for API keys — never in the DB, never in the
+-- webview. The table below is kept only as a record of the original proposal.
 
 CREATE TABLE settings (
   key   TEXT PRIMARY KEY,
@@ -382,10 +379,9 @@ numbers are independent of prior samples. Full results in `src-tauri/benches/dat
 
 ## 6. Migrations
 
-- Versioned `.sql` files (`migrations/0001_init.sql` … `0007_media_fts.sql`, …) run through
-  `sqlx::migrate!` at startup, each **inside a transaction** (verified 2026: sqlx-sqlite wraps
-  migration SQL + bookkeeping in a single transaction; see `migrate.rs`). Wired as `db::migrate`
-  in MISSION-012.
+- Versioned `.sql` files (`migrations/0001_init.sql` … latest) run through `sqlx::migrate!` at
+  startup, each **inside a transaction** (verified 2026: sqlx-sqlite wraps migration SQL +
+  bookkeeping in a single transaction; see `migrate.rs`). Wired as `db::migrate` in MISSION-012.
 - Migration 0006 adds `media.cover_asset_id`/`banner_asset_id` via `ALTER TABLE ADD COLUMN`
   after `asset` exists (SQLite rejects writes through an FK pointing at a missing parent, so the
   columns had to wait for the `asset` table).
@@ -396,7 +392,28 @@ numbers are independent of prior samples. Full results in `src-tauri/benches/dat
   - Before any migration run: automatic DB backup to the backup dir (crash/migration-failure
     recovery, REQ-BACKUP-002).
   - After migration: `PRAGMA integrity_check`; on failure, restore the pre-migration backup.
-- `schema_version` tracked by sqlx `_sqlx_migrations` table.
+- `schema_version` tracked by sqlx `_sqlx_migrations`; backups record it and `BackupService`
+  refuses a snapshot whose schema is newer than the running build (MISSION-142).
+
+### 6.1 Migrations beyond the v1 schema (0008–0013)
+
+The v1 DDL above is the baseline (0001–0007). Later migrations are recorded here (MISSION-148):
+
+| Migration | Mission | What it adds |
+|-----------|---------|--------------|
+| `0008_tracking_mode.sql` | MISSION-052 | `tracking.auto_track INTEGER NOT NULL DEFAULT 1` — Normal (auto-status) vs Manual mode. |
+| `0009_review_metadata.sql` | MISSION-079 | `review.moods` / `review.content_warnings` (canonical JSON arrays), `review.pace TEXT CHECK (slow\|medium\|fast)`, `review.warnings_acknowledged_at`. |
+| `0010_calendar.sql` | MISSION-081 | Index-only: `activity(created_at)`, `content_node(release_date)` for the calendar queries. |
+| `0011_recap.sql` | MISSION-082 | Index-only: `activity(kind, created_at)` for the year-in-review recap. |
+| `0012_reading.sql` | MISSION-083 | Index-only: `node_progress(read_at)` for the reading recap. |
+| `0013_new_content_types.sql` | MISSION-109 | Widens the `media.content_type` CHECK via `PRAGMA writable_schema` (adds `game`, `podcast`, `music`, `comic`) — no table rebuild. |
+| `0014_reading_groups.sql` | MISSION-114 | Reading-group aggregate (separate from user data, ADR-007): `reading_group`, `group_member`, `group_shelf`, `group_note`. References works by a stable cross-device work key, never `media.id`. |
+
+- Migrations 0010–0012 are index-only (no schema/column change), so they are invisible in the v1
+  DDL above; 0008/0009 add columns to `tracking`/`review`; 0013 rewrites the `media` CHECK; 0014
+  adds the reading-group aggregate (its own section would live in `ARCHITECTURE.md §6`).
+- `sqlx::migrate!` is re-checked at every startup; the pre-migration backup hook (MISSION-087)
+  snapshots the database whenever `pending_migrations` is non-zero.
 
 ## 7. Backup & Restore
 

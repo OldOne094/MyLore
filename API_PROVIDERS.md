@@ -7,24 +7,35 @@
 
 **Summary of verified figures**
 
-| Provider | Endpoint | Auth | Rate limits (verified) | License notes |
-|---|---|---|---|---|
-| AniList | `graphql.anilist.co` | none (public) / OAuth (user lists) | ~90 req/min per IP | free, no key for public data |
-| Jikan | `api.jikan.moe/v4` | none | ~3 req/s, 60 req/min | unofficial MAL mirror; cache responses |
-| MangaDex | `api.mangadex.org` | none (public) / OAuth | ~5 req/s (default; verify AUP) | must credit; no ads/paid on API data |
-| TMDB | `api.themoviedb.org/3` | free API key | ~40 req/10s (soft ~50 rps ceiling) | non-commercial free tier; attribution required |
-| TVDB | `api4.thetvdb.com` | free key (JWT) | tier-based (vary) | free tier; verify current limits |
-| Trakt | `api.trakt.tv` | client id + OAuth | ~1 req/s sustained (free); 2026 free caps | personal use free; commercial needs approval |
-| OpenLibrary | `openlibrary.org` REST | none | 1 rps (3 rps with UA+email) | public-good; bulk allowed for aligned use |
-| Google Books | `books.googleapis.com` | free key | ~100 req/min/user (default) | free key; request higher quota |
-| BookBrainz | `bookbrainz.org` | none | no fixed public limit (be polite) | open data (MusicBrainz) |
-| SIMKL | `api.simkl.com` | free key | tiers; free generous for personal | free tier exists |
-| Annict | `api.annict.com` | OAuth | ~4 req/s (documented) | Japanese-focused |
-| Hardcover | `api.hardcover.app` (GraphQL) | public read (verify auth) | not published (flagged) | free tier; young/indie |
-| Bangumi | `api.bgm.tv/v0` | none (anonymous read) | ~1 req/s; 15/60 s; 80/10 min | open community wiki; credit |
-| ISBNDB | `api.isbndb.com` | API key | free 100 req/mo, 10 req/min | paid beyond free tier |
+Status column (MISSION-147): **shipped** = an adapter exists in
+`src-tauri/src/infrastructure/providers/`; **research only** = evaluated but never built and no
+mission exists (kept for the record). The shipped set is 13 adapters.
+
+| Provider | Status | Endpoint | Auth | Rate limits (verified) | License notes |
+|---|---|---|---|---|---|
+| AniList | shipped | `graphql.anilist.co` | none (public) / OAuth (user lists) | ~90 req/min per IP | free, no key for public data |
+| Jikan | shipped | `api.jikan.moe/v4` | none | ~3 req/s, 60 req/min | unofficial MAL mirror; cache responses |
+| MangaDex | shipped | `api.mangadex.org` | none (public) / OAuth | ~5 req/s (default; verify AUP) | must credit; no ads/paid on API data |
+| TMDB | shipped | `api.themoviedb.org/3` | free API key | ~40 req/10s (soft ~50 rps ceiling) | non-commercial free tier; attribution required |
+| OpenLibrary | shipped | `openlibrary.org` REST | none | 1 rps (3 rps with UA+email) | public-good; bulk allowed for aligned use |
+| Google Books | shipped | `books.googleapis.com` | free key | ~100 req/min/user (default) | free key; request higher quota |
+| Hardcover | shipped | `api.hardcover.app` (GraphQL) | bearer token (public reads now require one) | not published (flagged) | free tier; young/indie |
+| Bangumi | shipped | `api.bgm.tv/v0` | none (anonymous read) | ~1 req/s; 15/60 s; 80/10 min | open community wiki; credit |
+| NovelUpdates | shipped | `novelupdates.com` (HTML) | none (webview bridge) | ~1 rps self-throttled | LNReader-plugin selectors (MISSION-065/129) |
+| WTR-LAB | shipped | `wtr-lab.com` | none | ~2 req/s self-throttled | translated web novels (MISSION-131) |
+| iTunes Search | shipped | `itunes.apple.com/search` | none | ~3 rps self-throttled | podcast + music; search-only |
+| RAWG | shipped | `api.rawg.io/api` | free API key (optional) | ~1 rps self-throttled | games database |
+| GCD | shipped | `comics.org` | none | ~2 rps self-throttled | Grand Comics Database; comics/issues |
+| TVDB | research only | `api4.thetvdb.com` | free key (JWT) | tier-based (vary) | free tier; verify current limits |
+| Trakt | research only | `api.trakt.tv` | client id + OAuth | ~1 req/s sustained (free); 2026 free caps | personal use free; commercial needs approval |
+| BookBrainz | research only | `bookbrainz.org` | none | no fixed public limit (be polite) | open data (MusicBrainz) |
+| SIMKL | research only | `api.simkl.com` | free key | tiers; free generous for personal | free tier exists |
+| Annict | research only | `api.annict.com` | OAuth | ~4 req/s (documented) | Japanese-focused |
+| ISBNDB | research only | `api.isbndb.com` | API key | free 100 req/mo, 10 req/min | paid beyond free tier |
 
 > UNKNOWN/flagged items are marked explicitly; nothing is invented (spec §94).
+> **TVDB / Trakt / BookBrainz / SIMKL / Annict / ISBNDB are research only** — no adapter ships and
+> no roadmap mission targets them (MISSION-147). Nothing in MyLore should treat them as present.
 
 ---
 
