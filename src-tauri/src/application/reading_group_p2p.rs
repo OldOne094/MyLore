@@ -71,6 +71,7 @@ mod imp {
     use yrs::updates::encoder::Encode;
     use yrs::{Doc, Map, ReadTxn, StateVector, Transact, Update};
 
+    use crate::application::reading_group_service::ReadingGroupService;
     use crate::error::AppError;
     use crate::infrastructure::keyring::SecretStore;
     use crate::infrastructure::repositories::reading_group as repo;
@@ -261,6 +262,56 @@ mod imp {
         }
     }
 
+    /// Decrypt + merge one sealed remote update into `doc`.
+    fn merge_envelope(
+        doc: &Doc,
+        key: &[u8; 32],
+        aad: &[u8],
+        envelope: &[u8],
+    ) -> Result<(), AppError> {
+        let plaintext = open(key, aad, envelope)?;
+        let update = Update::decode_v1(&plaintext)
+            .map_err(|e| AppError::validation(format!("invalid group update: {e}")))?;
+        doc.transact_mut()
+            .apply_update(update)
+            .map_err(|e| AppError::validation(format!("group update rejected: {e}")))?;
+        Ok(())
+    }
+
+    /// Persist a document, applying the compaction policy. Returns whether the
+    /// document was compacted by this call.
+    async fn persist_doc(
+        pool: &SqlitePool,
+        group_id: &str,
+        work_key: &str,
+        doc: &Doc,
+        existing: Option<&DocRecord>,
+        applied_ops: i64,
+    ) -> Result<bool, AppError> {
+        let now = chrono::Utc::now().to_rfc3339();
+        let pending_ops = existing.map(|d| d.pending_ops).unwrap_or(0) + applied_ops;
+        let compacted_at = existing.and_then(|d| d.compacted_at.clone());
+        let compacted = should_compact(pending_ops, compacted_at.as_deref());
+        let (pending_ops, compacted_at) = if compacted {
+            (0, Some(now.clone()))
+        } else {
+            (pending_ops, compacted_at)
+        };
+        repo::upsert_doc(
+            pool,
+            &DocRecord {
+                group_id: group_id.to_string(),
+                work_key: work_key.to_string(),
+                state: encode_full_state(doc),
+                pending_ops,
+                compacted_at,
+                updated_at: now,
+            },
+        )
+        .await?;
+        Ok(compacted)
+    }
+
     // ---------------------------------------------------------------- use-cases
 
     pub async fn key_status(
@@ -322,7 +373,12 @@ mod imp {
         // Create the local replica when it isn't already present.
         if repo::get_group(pool, &payload.group_id).await?.is_none() {
             let now = chrono::Utc::now().to_rfc3339();
-            let member_id = format!("m-{}", uuid::Uuid::new_v4());
+            // The replica belongs to *this* device's member identity, so the
+            // local owner check (settings/keys are owner-only) recognises us.
+            let member_id = ReadingGroupService::new(pool.clone())
+                .prefs()
+                .await?
+                .member_id;
             let mut tx = pool.begin().await?;
             repo::create_group(
                 &mut *tx,
@@ -378,13 +434,7 @@ mod imp {
         // 1. Merge the peer's update when provided.
         let mut applied = false;
         if let Some(update_b64) = remote_update {
-            let envelope = unb64(&update_b64)?;
-            let plaintext = open(&key, &aad, &envelope)?;
-            let update = Update::decode_v1(&plaintext)
-                .map_err(|e| AppError::validation(format!("invalid group update: {e}")))?;
-            doc.transact_mut()
-                .apply_update(update)
-                .map_err(|e| AppError::validation(format!("group update rejected: {e}")))?;
+            merge_envelope(&doc, &key, &aad, &unb64(&update_b64)?)?;
             applied = true;
         }
 
@@ -400,26 +450,13 @@ mod imp {
         let envelope = seal(&key, &aad, &update_plain)?;
 
         // 3. Persist, compacting on the size/time policy.
-        let now = chrono::Utc::now().to_rfc3339();
-        let pending_ops =
-            existing.as_ref().map(|d| d.pending_ops).unwrap_or(0) + i64::from(applied);
-        let compacted_at = existing.as_ref().and_then(|d| d.compacted_at.clone());
-        let compacted = should_compact(pending_ops, compacted_at.as_deref());
-        let (pending_ops, compacted_at, state) = if compacted {
-            (0, Some(now.clone()), encode_full_state(&doc))
-        } else {
-            (pending_ops, compacted_at, encode_full_state(&doc))
-        };
-        repo::upsert_doc(
+        let compacted = persist_doc(
             pool,
-            &DocRecord {
-                group_id: group_id.to_string(),
-                work_key: work_key.to_string(),
-                state,
-                pending_ops,
-                compacted_at,
-                updated_at: now,
-            },
+            group_id,
+            work_key,
+            &doc,
+            existing.as_ref(),
+            i64::from(applied),
         )
         .await?;
 
@@ -431,6 +468,30 @@ mod imp {
             notes: entries(&doc),
             compacted,
         })
+    }
+
+    /// Merge one sealed remote envelope (raw bytes) into the local document.
+    /// Returns the resulting note count.
+    pub async fn apply_envelope(
+        pool: &SqlitePool,
+        store: &dyn SecretStore,
+        group_id: &str,
+        work_key: &str,
+        envelope: &[u8],
+    ) -> Result<usize, AppError> {
+        let group = repo::get_group(pool, group_id)
+            .await?
+            .ok_or_else(|| AppError::validation(format!("unknown group: {group_id}")))?;
+        let key = load_key(store, group_id)?.ok_or_else(|| {
+            AppError::validation("no group key — create or accept an invite first")
+        })?;
+        let aad = aad(group_id, group.epoch);
+
+        let existing = repo::get_doc(pool, group_id, work_key).await?;
+        let doc = open_doc(existing.as_ref().map(|d| d.state.as_slice()).unwrap_or(&[]))?;
+        merge_envelope(&doc, &key, &aad, envelope)?;
+        persist_doc(pool, group_id, work_key, &doc, existing.as_ref(), 1).await?;
+        Ok(entries(&doc).len())
     }
 
     /// The document's notes, materialized for the UI.
@@ -468,31 +529,10 @@ mod imp {
         let doc = open_doc(existing.as_ref().map(|d| d.state.as_slice()).unwrap_or(&[]))?;
         set_note(&doc, note_id.trim(), body);
 
-        let now = chrono::Utc::now().to_rfc3339();
         let update_plain = encode_full_state(&doc);
         let envelope = seal(&key, &aad, &update_plain)?;
         let own_state_vector = doc.transact().state_vector().encode_v1();
-
-        let pending_ops = existing.as_ref().map(|d| d.pending_ops).unwrap_or(0) + 1;
-        let compacted_at = existing.as_ref().and_then(|d| d.compacted_at.clone());
-        let compacted = should_compact(pending_ops, compacted_at.as_deref());
-        let (pending_ops, compacted_at) = if compacted {
-            (0, Some(now.clone()))
-        } else {
-            (pending_ops, compacted_at)
-        };
-        repo::upsert_doc(
-            pool,
-            &DocRecord {
-                group_id: group_id.to_string(),
-                work_key: work_key.to_string(),
-                state: encode_full_state(&doc),
-                pending_ops,
-                compacted_at,
-                updated_at: now,
-            },
-        )
-        .await?;
+        let compacted = persist_doc(pool, group_id, work_key, &doc, existing.as_ref(), 1).await?;
 
         Ok(GroupNoteSyncView {
             group_id: group_id.to_string(),
@@ -618,6 +658,16 @@ mod imp {
         unsupported()
     }
 
+    pub async fn apply_envelope(
+        _pool: &SqlitePool,
+        _store: &dyn SecretStore,
+        _group_id: &str,
+        _work_key: &str,
+        _envelope: &[u8],
+    ) -> Result<usize, AppError> {
+        unsupported()
+    }
+
     #[allow(clippy::too_many_arguments)]
     pub async fn note_edit(
         _pool: &SqlitePool,
@@ -631,7 +681,9 @@ mod imp {
     }
 }
 
-pub use imp::{invite_accept, invite_create, key_status, note_edit, note_state, note_sync};
+pub use imp::{
+    apply_envelope, invite_accept, invite_create, key_status, note_edit, note_state, note_sync,
+};
 
 #[cfg(all(test, feature = "p2p"))]
 mod tests {

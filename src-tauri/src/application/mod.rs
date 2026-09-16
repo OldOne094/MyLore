@@ -25,6 +25,7 @@ pub mod progress_service;
 pub mod providers;
 pub mod reading_group_p2p;
 pub mod reading_group_service;
+pub mod reading_group_transport;
 pub mod reading_recap_service;
 pub mod recap_service;
 pub mod review_service;

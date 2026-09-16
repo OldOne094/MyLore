@@ -21,6 +21,8 @@ pub enum TaskKind {
     Backup,
     /// `.mylore` library restore (result: `RestoreReport`).
     Restore,
+    /// Reading-groups relay sync (MISSION-116; result: `GroupSyncReport`).
+    GroupSync,
 }
 
 impl TaskKind {
@@ -30,6 +32,7 @@ impl TaskKind {
             Self::ExportFile => "export_file",
             Self::Backup => "backup",
             Self::Restore => "restore",
+            Self::GroupSync => "group_sync",
         }
     }
 }

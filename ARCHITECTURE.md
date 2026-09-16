@@ -371,8 +371,8 @@ has no type column. `delimiter` is the CSV field delimiter, `separator` splits m
     opt-in prefs (`readingGroup.*` in `settings`, opt-in **off** by default, member id minted on
     first read), and the manual **`group_state.json`** export/import (merge by primary key,
     last-write-wins on `updated_at`, idempotent) as the first transport. `epoch` bumps on member
-    removal as the seam MISSION-118's key rotation consumes. Still pending: 115 (CRDT + E2EE),
-    116 (Nostr transport), 117 (UI + spoiler gates + opt-in privacy screen), 118 (hardening).
+    removal as the seam MISSION-118's key rotation consumes. Still pending: 117 (UI + spoiler
+    gates + opt-in privacy screen), 118 (hardening).
   - **Shipped (MISSION-115):** the **CRDT + E2EE engine**, behind a default-off `p2p` cargo
     feature (`--features p2p`; `yrs` + `chacha20poly1305` + `getrandom`). `application/`
     `reading_group_p2p.rs` owns: the group key (XChaCha20-Poly1305, minted on first use, stored in
@@ -387,6 +387,20 @@ has no type column. `delimiter` is the CSV field delimiter, `separator` splits m
     these primitives over relays; the UI (117) surfaces them.
   - **What E2EE covers:** envelopes leaving the device are encrypted; the locally stored document
     is plaintext like the rest of the DB (at-rest protection is SQLCipher, MISSION-112).
+  - **Shipped (MISSION-116):** the **relay transport**, on the *same* `p2p` feature (`nostr-sdk`
+    with rustls/webpki roots — no OpenSSL). `application/reading_group_transport.rs` defines a
+    narrow `GroupTransport` trait (`publish`/`fetch` of already-sealed envelopes) with two
+    implementations: a real **Nostr** client (kind `21337` events tagged `g` = group,
+    `t` = work, content = base64 chunk; relays added per group) and an **in-memory relay** for
+    tests. **Outbox-first:** `reading_group_note_edit` queues the sealed envelope in
+    `group_outbox` *before* any relay is contacted, and a sync pass flushes it (a failure leaves
+    the row pending for the next attempt), so an offline window never loses a change. **Dedup:**
+    a delivered envelope is claimed once by message id (`group_event_seen`), so re-pulling the
+    same events cannot disturb the document. **Chunking:** envelopes over ~60KB are split into
+    `MLC1`-headed chunks (message id + seq + total) and reassembled on arrival; an incomplete
+    group is withheld until the next pass. Sync runs as `TaskKind::GroupSync` on the existing
+    TaskManager, so `task_changed` streams progress. Relays are group settings — **owner-only** —
+    trimmed, deduped and capped at 8. IPC: `reading_group_relays_get/set`, `reading_group_sync_now`.
   - **Threat model (explicit):** E2EE (XChaCha20-Poly1305, group key in the OS keyring, shared
     only via out-of-band QR/link invite) protects payloads, but public relays still observe
     metadata — IP address, pubkey, timing, packet sizes, group size. The feature is therefore

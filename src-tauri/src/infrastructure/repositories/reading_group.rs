@@ -70,6 +70,23 @@ pub struct DocRecord {
     pub updated_at: String,
 }
 
+/// One queued broadcast — written before the relay is contacted (MISSION-116).
+#[derive(Debug, Clone)]
+pub struct OutboxRecord {
+    pub id: String,
+    pub group_id: String,
+    pub work_key: String,
+    pub topic: String,
+    /// Groups the chunks of one envelope on the receiving side.
+    pub message_id: String,
+    /// The sealed envelope.
+    pub payload: Vec<u8>,
+    pub created_at: String,
+    pub sent_at: Option<String>,
+    pub attempts: i64,
+    pub last_error: Option<String>,
+}
+
 // ---------------------------------------------------------------- groups
 
 pub async fn create_group<'e, E>(executor: E, g: &GroupRecord) -> Result<(), AppError>
@@ -409,6 +426,132 @@ pub async fn upsert_doc(pool: &SqlitePool, d: &DocRecord) -> Result<(), AppError
     Ok(())
 }
 
+// ------------------------------------------------------------------ transport
+
+/// Replace a group's relay set.
+pub async fn set_relays(
+    pool: &SqlitePool,
+    group_id: &str,
+    relays: &[String],
+) -> Result<(), AppError> {
+    let mut tx = pool.begin().await?;
+    sqlx::query("DELETE FROM group_relay WHERE group_id = ?")
+        .bind(group_id)
+        .execute(&mut *tx)
+        .await?;
+    for url in relays {
+        sqlx::query("INSERT OR IGNORE INTO group_relay (group_id, url) VALUES (?, ?)")
+            .bind(group_id)
+            .bind(url)
+            .execute(&mut *tx)
+            .await?;
+    }
+    tx.commit().await?;
+    Ok(())
+}
+
+/// A group's relays, sorted for stable output.
+pub async fn relays(pool: &SqlitePool, group_id: &str) -> Result<Vec<String>, AppError> {
+    let rows = sqlx::query("SELECT url FROM group_relay WHERE group_id = ? ORDER BY url")
+        .bind(group_id)
+        .fetch_all(pool)
+        .await?;
+    Ok(rows.iter().map(|r| r.get::<String, _>(0)).collect())
+}
+
+/// Queue an envelope for broadcast.
+pub async fn enqueue(pool: &SqlitePool, o: &OutboxRecord) -> Result<(), AppError> {
+    sqlx::query(
+        "INSERT INTO group_outbox
+           (id, group_id, work_key, topic, message_id, payload, created_at, sent_at, attempts, last_error)
+         VALUES (?, ?, ?, ?, ?, ?, ?, NULL, 0, NULL)",
+    )
+    .bind(&o.id)
+    .bind(&o.group_id)
+    .bind(&o.work_key)
+    .bind(&o.topic)
+    .bind(&o.message_id)
+    .bind(&o.payload)
+    .bind(&o.created_at)
+    .execute(pool)
+    .await?;
+    Ok(())
+}
+
+/// Unsynced envelopes, oldest first (a stable retry order).
+pub async fn pending(pool: &SqlitePool, group_id: &str) -> Result<Vec<OutboxRecord>, AppError> {
+    let rows = sqlx::query(
+        "SELECT id, group_id, work_key, topic, message_id, payload, created_at, sent_at, attempts, last_error
+         FROM group_outbox WHERE group_id = ? AND sent_at IS NULL
+         ORDER BY created_at, id",
+    )
+    .bind(group_id)
+    .fetch_all(pool)
+    .await?;
+    Ok(rows.iter().map(row_to_outbox).collect())
+}
+
+/// How many envelopes are still waiting to go out.
+pub async fn pending_count(pool: &SqlitePool, group_id: &str) -> Result<i64, AppError> {
+    let row =
+        sqlx::query("SELECT COUNT(*) FROM group_outbox WHERE group_id = ? AND sent_at IS NULL")
+            .bind(group_id)
+            .fetch_one(pool)
+            .await?;
+    Ok(row.get(0))
+}
+
+/// Mark an envelope as delivered.
+pub async fn mark_sent(pool: &SqlitePool, id: &str, sent_at: &str) -> Result<(), AppError> {
+    sqlx::query("UPDATE group_outbox SET sent_at = ?, last_error = NULL WHERE id = ?")
+        .bind(sent_at)
+        .bind(id)
+        .execute(pool)
+        .await?;
+    Ok(())
+}
+
+/// Record a failed delivery attempt; the row stays pending for the next flush.
+pub async fn mark_failed(pool: &SqlitePool, id: &str, error: &str) -> Result<(), AppError> {
+    sqlx::query("UPDATE group_outbox SET attempts = attempts + 1, last_error = ? WHERE id = ?")
+        .bind(error)
+        .bind(id)
+        .execute(pool)
+        .await?;
+    Ok(())
+}
+
+/// Claim an event id for a topic. Returns `false` when it was already merged —
+/// the dedup gate for re-delivered events.
+pub async fn claim_event(
+    pool: &SqlitePool,
+    event_id: &str,
+    group_id: &str,
+    topic: &str,
+    received_at: &str,
+) -> Result<bool, AppError> {
+    let result = sqlx::query(
+        "INSERT OR IGNORE INTO group_event_seen (event_id, group_id, topic, received_at)
+         VALUES (?, ?, ?, ?)",
+    )
+    .bind(event_id)
+    .bind(group_id)
+    .bind(topic)
+    .bind(received_at)
+    .execute(pool)
+    .await?;
+    Ok(result.rows_affected() > 0)
+}
+
+/// The works this group has a document for (drives which topics to pull).
+pub async fn doc_work_keys(pool: &SqlitePool, group_id: &str) -> Result<Vec<String>, AppError> {
+    let rows = sqlx::query("SELECT work_key FROM group_doc WHERE group_id = ? ORDER BY work_key")
+        .bind(group_id)
+        .fetch_all(pool)
+        .await?;
+    Ok(rows.iter().map(|r| r.get::<String, _>(0)).collect())
+}
+
 // --------------------------------------------------------------- mapping
 
 fn row_to_group(row: SqliteRow) -> GroupRecord {
@@ -470,6 +613,21 @@ fn row_to_doc(row: SqliteRow) -> DocRecord {
         pending_ops: row.get(3),
         compacted_at: get(4),
         updated_at: get(5).expect("updated_at"),
+    }
+}
+
+fn row_to_outbox(row: &SqliteRow) -> OutboxRecord {
+    OutboxRecord {
+        id: row.get(0),
+        group_id: row.get(1),
+        work_key: row.get(2),
+        topic: row.get(3),
+        message_id: row.get(4),
+        payload: row.get(5),
+        created_at: row.get(6),
+        sent_at: row.get(7),
+        attempts: row.get(8),
+        last_error: row.get(9),
     }
 }
 

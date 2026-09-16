@@ -281,6 +281,14 @@
     {
       "name": "GroupNoteSyncView",
       "shape": "group_id: string; work_key: string; state_vector: string; update: string; notes: GroupNoteEntry[]; compacted: boolean"
+    },
+    {
+      "name": "GroupRelayView",
+      "shape": "relays: string[]; pending: number"
+    },
+    {
+      "name": "GroupSyncReport",
+      "shape": "published: number; failed: number; received: number; merged: number; skipped: number; pending: number"
     }
   ],
   "commands": [
@@ -1020,6 +1028,24 @@
       },
       "returns": "GroupNoteSyncView",
       "doc": "MISSION-115 (p2p) - one sync round-trip: merge an optional encrypted remote update and produce the update the peer is missing (diffed against its state vector). Resolves with the sync view or rejects with an AppError string."
+    },
+    {
+      "name": "reading_group_relays_get",
+      "args": { "group_id": "string" },
+      "returns": "GroupRelayView",
+      "doc": "MISSION-116 (p2p) - a group's relays plus how many envelopes are still waiting in the outbox. Resolves with the view or rejects with an AppError string."
+    },
+    {
+      "name": "reading_group_relays_set",
+      "args": { "group_id": "string", "relays": "string[]" },
+      "returns": "GroupRelayView",
+      "doc": "MISSION-116 (p2p) - replace a group's relay set (owner-only; trimmed, deduped, capped at 8). Resolves with the new view or rejects with an AppError string."
+    },
+    {
+      "name": "reading_group_sync_now",
+      "args": { "group_id": "string" },
+      "returns": "TaskSnapshot",
+      "doc": "MISSION-116 (p2p) - run one relay sync pass as a GroupSync background task: flush the outbox, then pull and merge unseen envelopes. Progress streams over task_changed; resolves with the task snapshot or rejects with an AppError string."
     }
   ],
   "events": [

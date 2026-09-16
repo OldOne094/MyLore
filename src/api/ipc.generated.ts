@@ -519,6 +519,18 @@ export interface GroupNoteSyncView {
   notes: GroupNoteEntry[];
   compacted: boolean;
 }
+export interface GroupRelayView {
+  relays: string[];
+  pending: number;
+}
+export interface GroupSyncReport {
+  published: number;
+  failed: number;
+  received: number;
+  merged: number;
+  skipped: number;
+  pending: number;
+}
 
 /** Create a media entry from manual input. Resolves with the new media id or rejects with an AppError string. */
 export function media_create(args: {
@@ -1275,6 +1287,24 @@ export function reading_group_note_sync(args: {
   remoteUpdate: string | null;
 }): Promise<GroupNoteSyncView> {
   return invoke<GroupNoteSyncView>("reading_group_note_sync", args);
+}
+
+/** MISSION-116 (p2p) - a group's relays plus how many envelopes are still waiting in the outbox. Resolves with the view or rejects with an AppError string. */
+export function reading_group_relays_get(args: { groupId: string }): Promise<GroupRelayView> {
+  return invoke<GroupRelayView>("reading_group_relays_get", args);
+}
+
+/** MISSION-116 (p2p) - replace a group's relay set (owner-only; trimmed, deduped, capped at 8). Resolves with the new view or rejects with an AppError string. */
+export function reading_group_relays_set(args: {
+  groupId: string;
+  relays: string[];
+}): Promise<GroupRelayView> {
+  return invoke<GroupRelayView>("reading_group_relays_set", args);
+}
+
+/** MISSION-116 (p2p) - run one relay sync pass as a GroupSync background task: flush the outbox, then pull and merge unseen envelopes. Progress streams over task_changed; resolves with the task snapshot or rejects with an AppError string. */
+export function reading_group_sync_now(args: { groupId: string }): Promise<TaskSnapshot> {
+  return invoke<TaskSnapshot>("reading_group_sync_now", args);
 }
 
 export function listenAnilistOauth(
