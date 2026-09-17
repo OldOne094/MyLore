@@ -989,6 +989,18 @@
       "doc": "MISSION-114 - merge a group_state.json payload (read in the webview) into the library; idempotent last-write-wins by updated_at. Resolves with the report or rejects with an AppError string."
     },
     {
+      "name": "reading_group_work_key",
+      "args": {
+        "title": "string",
+        "author": "string | null",
+        "year": "number | null",
+        "provider": "string | null",
+        "external_id": "string | null"
+      },
+      "returns": "string",
+      "doc": "MISSION-117 - the stable cross-device work key for a work: `{provider}:{value}` when a provider id is given, else a fold+hash of title/author/year. Exposed so the UI never re-implements (and drifts from) the domain's derivation. Resolves with the key or rejects with an AppError string."
+    },
+    {
       "name": "reading_group_key_status",
       "args": { "group_id": "string" },
       "returns": "GroupKeyStatus",

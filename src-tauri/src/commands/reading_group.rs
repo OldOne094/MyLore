@@ -11,7 +11,34 @@ use crate::application::reading_group_service::{
     GroupExportReport, GroupImportReport, GroupNoteView, GroupPrefs, GroupShelfEntryView,
     GroupView, ReadingGroupService,
 };
+use crate::domain::reading_group::work_key;
+use crate::domain::value_objects::{ExternalId, ProviderId};
 use crate::error::AppError;
+
+/// The stable cross-device key for a work (MISSION-117).
+///
+/// The UI must not re-implement the fold + hash: a second implementation would
+/// drift from the domain's and silently split a work in two across devices.
+/// Exposed so the frontend always asks the same code path.
+#[command]
+pub async fn reading_group_work_key(
+    title: String,
+    author: Option<String>,
+    year: Option<i64>,
+    provider: Option<String>,
+    external_id: Option<String>,
+) -> Result<String, AppError> {
+    info!(title, "reading_group_work_key invoked");
+    let external_ids = match (provider, external_id) {
+        (Some(provider), Some(value)) if !value.trim().is_empty() => {
+            let provider =
+                ProviderId::new(provider.trim().to_lowercase()).map_err(AppError::from)?;
+            vec![ExternalId::new(provider, value.trim(), None).map_err(AppError::from)?]
+        }
+        _ => Vec::new(),
+    };
+    Ok(work_key(&external_ids, &title, author.as_deref(), year))
+}
 
 /// The local opt-in flag + identity (mints a member id when absent).
 #[command]

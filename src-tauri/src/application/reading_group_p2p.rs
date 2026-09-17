@@ -86,6 +86,16 @@ mod imp {
     const INVITE_FORMAT: &str = "mylore.group-invite";
     const INVITE_VERSION: u32 = 1;
     const LINK_PREFIX: &str = "mylore://group-invite#";
+    /// Envelope plaintext framing, so a payload can say which work it carries
+    /// *inside* the sealed bytes instead of in a relay-readable tag (MISSION-118).
+    const ENVELOPE_MAGIC: &[u8; 4] = b"MLG1";
+    /// The reserved topic carrying group state (roster + shelves) rather than a
+    /// work's notes. A work key is `provider:value` or `h:<hex>`, so this can
+    /// never collide with one.
+    pub const STATE_TOPIC: &str = "~state";
+    /// Field separator inside a state-document composite key. Member ids and work
+    /// keys are UTF-8 text that never contains NUL.
+    const KEY_SEP: char = '\u{0}';
 
     #[derive(serde::Serialize, serde::Deserialize)]
     struct InvitePayload {
@@ -145,6 +155,18 @@ mod imp {
         if let Some(key) = load_key(store, group_id)? {
             return Ok(key);
         }
+        let mut key = [0u8; 32];
+        fill_random(&mut key)?;
+        store
+            .set(&key_entry(group_id), &b64(&key))
+            .map_err(AppError::internal)?;
+        Ok(key)
+    }
+
+    /// Replace the group key with a fresh one (forward secrecy). Everything
+    /// sealed afterwards is unreadable to anyone still holding the old key, which
+    /// is the point: a removed member cannot follow the group any further.
+    fn rotate_key(store: &dyn SecretStore, group_id: &str) -> Result<[u8; 32], AppError> {
         let mut key = [0u8; 32];
         fill_random(&mut key)?;
         store
@@ -262,20 +284,73 @@ mod imp {
         }
     }
 
-    /// Decrypt + merge one sealed remote update into `doc`.
-    fn merge_envelope(
-        doc: &Doc,
+    /// Seal a framed envelope: `magic || topic || NUL || update`.
+    ///
+    /// The topic (a work key, or `~state`) travels **inside** the ciphertext, so
+    /// the relay-facing event needs no tag naming the work (MISSION-118).
+    fn seal_update(
+        key: &[u8; 32],
+        aad: &[u8],
+        work_key: &str,
+        update: &[u8],
+    ) -> Result<Vec<u8>, AppError> {
+        let mut plain =
+            Vec::with_capacity(ENVELOPE_MAGIC.len() + work_key.len() + 1 + update.len());
+        plain.extend_from_slice(ENVELOPE_MAGIC);
+        plain.extend_from_slice(work_key.as_bytes());
+        plain.push(0);
+        plain.extend_from_slice(update);
+        seal(key, aad, &plain)
+    }
+
+    /// Decrypt one sealed envelope and split out the work it belongs to and its
+    /// still-unapplied `yrs` update.
+    fn open_envelope(
         key: &[u8; 32],
         aad: &[u8],
         envelope: &[u8],
-    ) -> Result<(), AppError> {
+    ) -> Result<(String, Vec<u8>), AppError> {
         let plaintext = open(key, aad, envelope)?;
-        let update = Update::decode_v1(&plaintext)
+        let body = plaintext
+            .strip_prefix(ENVELOPE_MAGIC.as_slice())
+            .ok_or_else(|| AppError::validation("unsupported group envelope version"))?;
+        let split = body
+            .iter()
+            .position(|byte| *byte == 0)
+            .ok_or_else(|| AppError::validation("group envelope is malformed"))?;
+        let work_key = std::str::from_utf8(&body[..split])
+            .map_err(|_| AppError::validation("group envelope topic is not UTF-8"))?;
+        if work_key.is_empty() {
+            return Err(AppError::validation("group envelope has no topic"));
+        }
+        Ok((work_key.to_string(), body[split + 1..].to_vec()))
+    }
+
+    fn apply_update_bytes(doc: &Doc, update: &[u8]) -> Result<(), AppError> {
+        let update = Update::decode_v1(update)
             .map_err(|e| AppError::validation(format!("invalid group update: {e}")))?;
         doc.transact_mut()
             .apply_update(update)
             .map_err(|e| AppError::validation(format!("group update rejected: {e}")))?;
         Ok(())
+    }
+
+    /// Decrypt + apply one envelope into `doc`, refusing a payload that belongs
+    /// to a different work than the caller asked for.
+    fn merge_for_topic(
+        doc: &Doc,
+        key: &[u8; 32],
+        aad: &[u8],
+        expected_topic: &str,
+        envelope: &[u8],
+    ) -> Result<(), AppError> {
+        let (topic, update) = open_envelope(key, aad, envelope)?;
+        if topic != expected_topic {
+            return Err(AppError::validation(
+                "group envelope belongs to a different work",
+            ));
+        }
+        apply_update_bytes(doc, &update)
     }
 
     /// Persist a document, applying the compaction policy. Returns whether the
@@ -434,7 +509,7 @@ mod imp {
         // 1. Merge the peer's update when provided.
         let mut applied = false;
         if let Some(update_b64) = remote_update {
-            merge_envelope(&doc, &key, &aad, &unb64(&update_b64)?)?;
+            merge_for_topic(&doc, &key, &aad, work_key, &unb64(&update_b64)?)?;
             applied = true;
         }
 
@@ -447,7 +522,7 @@ mod imp {
         };
         let own_state_vector = doc.transact().state_vector().encode_v1();
         let update_plain = doc.transact().encode_state_as_update_v1(&peer_sv);
-        let envelope = seal(&key, &aad, &update_plain)?;
+        let envelope = seal_update(&key, &aad, work_key, &update_plain)?;
 
         // 3. Persist, compacting on the size/time policy.
         let compacted = persist_doc(
@@ -470,15 +545,33 @@ mod imp {
         })
     }
 
-    /// Merge one sealed remote envelope (raw bytes) into the local document.
-    /// Returns the resulting note count.
+    /// The topic a sealed envelope belongs to, decrypted without touching any
+    /// document — so the caller can dedup an arriving event before applying it.
+    pub async fn topic_of(
+        pool: &SqlitePool,
+        store: &dyn SecretStore,
+        group_id: &str,
+        envelope: &[u8],
+    ) -> Result<String, AppError> {
+        let group = repo::get_group(pool, group_id)
+            .await?
+            .ok_or_else(|| AppError::validation(format!("unknown group: {group_id}")))?;
+        let key = load_key(store, group_id)?.ok_or_else(|| {
+            AppError::validation("no group key — create or accept an invite first")
+        })?;
+        let (topic, _) = open_envelope(&key, &aad(group_id, group.epoch), envelope)?;
+        Ok(topic)
+    }
+
+    /// Apply one incoming envelope to whichever document it belongs to (a work's
+    /// notes, or the reserved state document, which is then projected into the
+    /// group tables). Returns the topic it carried.
     pub async fn apply_envelope(
         pool: &SqlitePool,
         store: &dyn SecretStore,
         group_id: &str,
-        work_key: &str,
         envelope: &[u8],
-    ) -> Result<usize, AppError> {
+    ) -> Result<String, AppError> {
         let group = repo::get_group(pool, group_id)
             .await?
             .ok_or_else(|| AppError::validation(format!("unknown group: {group_id}")))?;
@@ -486,12 +579,17 @@ mod imp {
             AppError::validation("no group key — create or accept an invite first")
         })?;
         let aad = aad(group_id, group.epoch);
+        let (topic, update) = open_envelope(&key, &aad, envelope)?;
 
-        let existing = repo::get_doc(pool, group_id, work_key).await?;
+        let existing = repo::get_doc(pool, group_id, &topic).await?;
         let doc = open_doc(existing.as_ref().map(|d| d.state.as_slice()).unwrap_or(&[]))?;
-        merge_envelope(&doc, &key, &aad, envelope)?;
-        persist_doc(pool, group_id, work_key, &doc, existing.as_ref(), 1).await?;
-        Ok(entries(&doc).len())
+        apply_update_bytes(&doc, &update)?;
+        persist_doc(pool, group_id, &topic, &doc, existing.as_ref(), 1).await?;
+
+        if topic == STATE_TOPIC {
+            project_state(pool, group_id).await?;
+        }
+        Ok(topic)
     }
 
     /// The document's notes, materialized for the UI.

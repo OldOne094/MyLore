@@ -401,6 +401,25 @@ has no type column. `delimiter` is the CSV field delimiter, `separator` splits m
     group is withheld until the next pass. Sync runs as `TaskKind::GroupSync` on the existing
     TaskManager, so `task_changed` streams progress. Relays are group settings — **owner-only** —
     trimmed, deduped and capped at 8. IPC: `reading_group_relays_get/set`, `reading_group_sync_now`.
+  - **Shipped (MISSION-117):** the **UI**, behind an explicit opt-in. `/groups` is the gate until
+    the user turns the feature on: the privacy screen names what leaves sealed (note text), what a
+    relay can still see (IP, pubkey, timing, message size, and the group/work tags), and what never
+    leaves (library, shelves, reviews, stats, roster). `/groups/:id` is an **alignment matrix —
+    works × members** — because the point of a group is where everyone is in the *same* work; a
+    member's cell shows their recorded status and progress. **Spoiler gating:** a note is hidden
+    while its author's recorded progress is ahead of the reader's, so the gate is real data and
+    lifts by itself; a hidden note's body is not rendered at all (a blur would still be readable),
+    and revealing is per note. The thread reads the **synced document** in a `p2p` build and the
+    `group_note` table otherwise, with the same gate, so what you read is what a sync moves (note
+    ids are `n:{ms}:{author}:{uuid}` — the document stores only id → body). The page also carries
+    E2EE/relay badges, `Sync now` with the live task and its typed report, member management, the
+    owner-only relay set, and the `group_state.json` export/import that makes 114's manual
+    transport reachable. `reading_group_work_key` exposes the domain's key derivation so the UI
+    cannot drift from it.
+  - **Known gaps (carried to MISSION-118):** the relay-facing `t` tag is the **plaintext work key**,
+    so a relay can read which work a group discusses — the UI states this rather than hiding it; and
+    the **roster + per-member shelves are not on the wire**, so a device's matrix reflects what it
+    was told locally (members added by id) plus whatever `group_state.json` merged.
   - **Threat model (explicit):** E2EE (XChaCha20-Poly1305, group key in the OS keyring, shared
     only via out-of-band QR/link invite) protects payloads, but public relays still observe
     metadata — IP address, pubkey, timing, packet sizes, group size. The feature is therefore

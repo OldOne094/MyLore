@@ -129,4 +129,22 @@ export const queryKeys = {
     all: () => ["task"] as const,
     detail: (taskId: string) => ["task", "detail", taskId] as const,
   },
+  readingGroup: {
+    all: () => ["readingGroup"] as const,
+    /** Local opt-in flag + this device's member identity (MISSION-117). */
+    prefs: () => ["readingGroup", "prefs"] as const,
+    lists: () => ["readingGroup", "list"] as const,
+    list: () => ["readingGroup", "list"] as const,
+    detail: (groupId: string) => ["readingGroup", "detail", groupId] as const,
+    /** One member's shelves, or the whole group's when `memberId` is null. */
+    shelf: (groupId: string, memberId: string | null) =>
+      ["readingGroup", "shelf", groupId, memberId] as const,
+    /** A work's discussion thread (MISSION-117). */
+    thread: (groupId: string, workKey: string) =>
+      ["readingGroup", "thread", groupId, workKey] as const,
+    /** Shared-key presence + fingerprint for the E2EE badge (MISSION-115). */
+    keyStatus: (groupId: string) => ["readingGroup", "keyStatus", groupId] as const,
+    /** Relay set + unsynced outbox depth (MISSION-116). */
+    relays: (groupId: string) => ["readingGroup", "relays", groupId] as const,
+  },
 } as const;

@@ -8,6 +8,8 @@ export { DiscoverPage } from "@/features/discover/DiscoverPage";
 export { CollectionsPage } from "@/features/collections/CollectionsPage";
 export { CollectionDetailPage } from "@/features/collections/CollectionDetailPage";
 export { ReviewsPage } from "@/features/reviews/ReviewsPage";
+export { GroupsPage } from "@/features/groups/GroupsPage";
+export { GroupDetailPage } from "@/features/groups/GroupDetailPage";
 export { StatsPage } from "@/features/stats/StatsPage";
 export { CalendarPage } from "@/features/calendar/CalendarPage";
 export { RecapPage } from "@/features/recap/RecapPage";

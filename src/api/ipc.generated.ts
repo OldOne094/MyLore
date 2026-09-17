@@ -1243,6 +1243,17 @@ export function reading_group_import(args: { source: string }): Promise<GroupImp
   return invoke<GroupImportReport>("reading_group_import", args);
 }
 
+/** MISSION-117 - the stable cross-device work key for a work: `{provider}:{value}` when a provider id is given, else a fold+hash of title/author/year. Exposed so the UI never re-implements (and drifts from) the domain's derivation. Resolves with the key or rejects with an AppError string. */
+export function reading_group_work_key(args: {
+  title: string;
+  author: string | null;
+  year: number | null;
+  provider: string | null;
+  externalId: string | null;
+}): Promise<string> {
+  return invoke<string>("reading_group_work_key", args);
+}
+
 /** MISSION-115 (p2p) - whether this group has a shared key on this device, plus a short fingerprint. Requires a build with the `p2p` feature. Resolves with the status or rejects with an AppError string. */
 export function reading_group_key_status(args: { groupId: string }): Promise<GroupKeyStatus> {
   return invoke<GroupKeyStatus>("reading_group_key_status", args);
