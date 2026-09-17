@@ -77,10 +77,11 @@ mod imp {
     /// Keep the relay set small: every envelope goes to every relay.
     const MAX_RELAYS: usize = 8;
 
-    /// One whole envelope that arrived from a relay.
+    /// One whole envelope that arrived from a relay. The work it belongs to is
+    /// inside the sealed bytes, not in the event (MISSION-118), so the transport
+    /// never learns it.
     #[derive(Debug, Clone, PartialEq, Eq)]
     pub struct Incoming {
-        pub work_key: String,
         pub message_id: String,
         pub envelope: Vec<u8>,
     }
@@ -93,7 +94,6 @@ mod imp {
             &self,
             relays: &[String],
             group_id: &str,
-            work_key: &str,
             message_id: &str,
             envelope: &[u8],
         ) -> Result<(), AppError>;
@@ -148,39 +148,40 @@ mod imp {
 
     /// Reassemble whole envelopes from a bag of chunks. Incomplete groups (a
     /// chunk still in flight, or one the relay dropped) are left out so the next
-    /// pass can pick them up.
-    pub fn assemble(chunks: &[(String, Vec<u8>)]) -> Vec<Incoming> {
+    /// pass can pick them up. Partials are keyed by the message id the chunk
+    /// header carries, so a duplicate or reordered delivery still assembles once.
+    pub fn assemble(chunks: &[Vec<u8>]) -> Vec<Incoming> {
         struct Partial {
             total: u32,
-            parts: Vec<(u32, Vec<u8>)>,
+            /// seq → body, so a duplicate or reordered delivery still assembles
+            /// once (a repeat of a seq keeps the first copy).
+            parts: HashMap<u32, Vec<u8>>,
         }
-        let mut groups: HashMap<(String, String), Partial> = HashMap::new();
-        for (work_key, chunk) in chunks {
+        let mut groups: HashMap<String, Partial> = HashMap::new();
+        for chunk in chunks {
             let Some((id, seq, total, body)) = decode_chunk(chunk) else {
                 continue;
             };
-            let entry = groups
-                .entry((work_key.clone(), id))
-                .or_insert_with(|| Partial {
-                    total,
-                    parts: Vec::new(),
-                });
-            entry.parts.push((seq, body.to_vec()));
+            let entry = groups.entry(id).or_insert_with(|| Partial {
+                total,
+                parts: HashMap::new(),
+            });
+            entry.parts.entry(seq).or_insert_with(|| body.to_vec());
         }
 
         let mut out = Vec::new();
-        for ((work_key, message_id), mut partial) in groups {
+        for (message_id, partial) in groups {
             if partial.parts.len() as u32 != partial.total {
                 continue;
             }
-            partial.parts.sort_by_key(|(seq, _)| *seq);
-            let envelope: Vec<u8> = partial
-                .parts
+            let mut parts: Vec<(u32, &Vec<u8>)> =
+                partial.parts.iter().map(|(s, b)| (*s, b)).collect();
+            parts.sort_by_key(|(seq, _)| *seq);
+            let envelope: Vec<u8> = parts
                 .iter()
                 .flat_map(|(_, body)| body.iter().copied())
                 .collect();
             out.push(Incoming {
-                work_key,
                 message_id,
                 envelope,
             });
@@ -225,16 +226,11 @@ mod imp {
             }
         }
 
-        fn build_event(
-            &self,
-            group_id: &str,
-            work_key: &str,
-            chunk: &[u8],
-        ) -> Result<Event, AppError> {
-            let tags = vec![
-                Tag::parse(["g", group_id]).map_err(nostr_err)?,
-                Tag::parse(["t", work_key]).map_err(nostr_err)?,
-            ];
+        /// Only the group tag is public. The work a payload is about rides inside
+        /// the sealed envelope, so a relay reads the group id and ciphertext and
+        /// learns nothing about *what* the group is discussing (MISSION-118).
+        fn build_event(&self, group_id: &str, chunk: &[u8]) -> Result<Event, AppError> {
+            let tags = vec![Tag::parse(["g", group_id]).map_err(nostr_err)?];
             EventBuilder::new(Kind::Custom(GROUP_EVENT_KIND), b64(chunk))
                 .tags(tags)
                 .finalize(&self.keys)
@@ -248,7 +244,6 @@ mod imp {
             &self,
             relays: &[String],
             group_id: &str,
-            work_key: &str,
             _message_id: &str,
             envelope: &[u8],
         ) -> Result<(), AppError> {
@@ -257,7 +252,7 @@ mod imp {
             }
             self.connect(relays).await;
             for chunk in chunk_payload(envelope, MAX_EVENT_BYTES - CHUNK_HEADER) {
-                let event = self.build_event(group_id, work_key, &chunk)?;
+                let event = self.build_event(group_id, &chunk)?;
                 self.client
                     .send_event(&event)
                     .to(relays.to_vec())
@@ -287,18 +282,12 @@ mod imp {
                 .await
                 .map_err(nostr_err)?;
 
-            let mut chunks: Vec<(String, Vec<u8>)> = Vec::new();
+            let mut chunks: Vec<Vec<u8>> = Vec::new();
             for event in events {
-                let work_key = event
-                    .tags
-                    .iter()
-                    .find(|tag| tag.single_letter_tag() == Some(SingleLetterTag::LOWERCASE_T))
-                    .and_then(|tag| tag.content().map(str::to_string));
-                let Some(work_key) = work_key else { continue };
                 let Ok(chunk) = unb64(&event.content) else {
                     continue;
                 };
-                chunks.push((work_key, chunk));
+                chunks.push(chunk);
             }
             Ok(assemble(&chunks))
         }
@@ -334,7 +323,6 @@ mod imp {
     #[derive(Debug, Clone)]
     struct StoredChunk {
         group_id: String,
-        work_key: String,
         chunk: Vec<u8>,
     }
 
@@ -371,7 +359,6 @@ mod imp {
             &self,
             _relays: &[String],
             group_id: &str,
-            work_key: &str,
             _message_id: &str,
             envelope: &[u8],
         ) -> Result<(), AppError> {
@@ -385,7 +372,6 @@ mod imp {
             for chunk in chunk_payload(envelope, MAX_EVENT_BYTES - CHUNK_HEADER) {
                 stored.push(StoredChunk {
                     group_id: group_id.to_string(),
-                    work_key: work_key.to_string(),
                     chunk,
                 });
             }
@@ -404,10 +390,10 @@ mod imp {
                 .stored
                 .lock()
                 .map_err(|_| AppError::internal("mock relay poisoned"))?;
-            let chunks: Vec<(String, Vec<u8>)> = stored
+            let chunks: Vec<Vec<u8>> = stored
                 .iter()
                 .filter(|s| s.group_id == group_id)
-                .map(|s| (s.work_key.clone(), s.chunk.clone()))
+                .map(|s| s.chunk.clone())
                 .collect();
             Ok(assemble(&chunks))
         }
@@ -439,7 +425,8 @@ mod imp {
         relays_view(pool, group_id).await
     }
 
-    /// Queue a sealed envelope for broadcast (outbox-first).
+    /// Queue a sealed envelope for broadcast (outbox-first). The `work_key` is
+    /// local bookkeeping only — it never reaches a relay (MISSION-118).
     pub async fn enqueue_envelope(
         pool: &SqlitePool,
         group_id: &str,
@@ -474,17 +461,24 @@ mod imp {
         require_group(pool, group_id).await?;
         let relays = repo::relays(pool, group_id).await?;
 
+        // 0. Announce this device's own state (its member row and shelf), so the
+        //    flush below also carries who is here and where they are. The
+        //    document decides whether anything actually changed.
+        if let Some(envelope) = reading_group_p2p::state_announce(pool, store, group_id).await? {
+            enqueue_envelope(
+                pool,
+                group_id,
+                reading_group_p2p::STATE_TOPIC,
+                &unb64(&envelope)?,
+            )
+            .await?;
+        }
+
         // 1. Flush: whatever is queued goes out before we read anything back.
         let (mut published, mut failed) = (0, 0);
         for row in repo::pending(pool, group_id).await? {
             match transport
-                .publish(
-                    &relays,
-                    group_id,
-                    &row.work_key,
-                    &row.message_id,
-                    &row.payload,
-                )
+                .publish(&relays, group_id, &row.message_id, &row.payload)
                 .await
             {
                 Ok(()) => {
@@ -500,16 +494,25 @@ mod imp {
             }
         }
 
-        // 2. Pull: merge anything we have not already seen.
+        // 2. Pull: merge anything we have not already seen. Which document an
+        //    envelope belongs to is only knowable after opening it, so the topic
+        //    is resolved first for the dedup key and again for the merge.
         let (mut received, mut merged, mut skipped) = (0, 0, 0);
         if failed == 0 {
             for incoming in transport.fetch(&relays, group_id).await? {
                 received += 1;
+                let Ok(topic) =
+                    reading_group_p2p::topic_of(pool, store, group_id, &incoming.envelope).await
+                else {
+                    // Not ours to read (a foreign or stale-epoch payload).
+                    skipped += 1;
+                    continue;
+                };
                 let claimed = repo::claim_event(
                     pool,
                     &incoming.message_id,
                     group_id,
-                    &incoming.work_key,
+                    &topic,
                     &chrono::Utc::now().to_rfc3339(),
                 )
                 .await?;
@@ -517,14 +520,8 @@ mod imp {
                     skipped += 1;
                     continue;
                 }
-                reading_group_p2p::apply_envelope(
-                    pool,
-                    store,
-                    group_id,
-                    &incoming.work_key,
-                    &incoming.envelope,
-                )
-                .await?;
+                reading_group_p2p::apply_envelope(pool, store, group_id, &incoming.envelope)
+                    .await?;
                 merged += 1;
             }
         }
@@ -726,31 +723,57 @@ mod tests {
             "no chunk exceeds the body budget plus its header"
         );
 
-        let bag: Vec<(String, Vec<u8>)> = chunks
-            .iter()
-            .map(|c| ("w".to_string(), c.clone()))
-            .collect();
-        let assembled = imp::assemble(&bag);
+        let assembled = imp::assemble(&chunks);
         assert_eq!(assembled.len(), 1);
-        assert_eq!(assembled[0].work_key, "w");
         assert_eq!(assembled[0].envelope, payload);
 
         // An empty envelope still travels as one (empty) chunk.
         let empty = imp::chunk_payload(&[], 16 * 1024);
         assert_eq!(empty.len(), 1);
-        let assembled = imp::assemble(&[("w".to_string(), empty[0].clone())]);
+        let assembled = imp::assemble(&empty);
         assert_eq!(assembled.len(), 1);
         assert!(assembled[0].envelope.is_empty());
 
         // A missing chunk withholds the whole envelope — the next pass retries.
-        let partial: Vec<(String, Vec<u8>)> = chunks[..2]
-            .iter()
-            .map(|c| ("w".to_string(), c.clone()))
-            .collect();
-        assert!(imp::assemble(&partial).is_empty());
+        assert!(imp::assemble(&chunks[..2]).is_empty());
 
         // Foreign junk is ignored rather than panicking.
-        assert!(imp::assemble(&[("w".to_string(), b"not a chunk".to_vec())]).is_empty());
+        assert!(imp::assemble(&[b"not a chunk".to_vec()]).is_empty());
+    }
+
+    /// Chaos: a relay may re-deliver a chunk, hand them over in any order, or do
+    /// both. Assembly must still yield exactly one envelope with the right bytes.
+    #[test]
+    fn duplicate_and_reordered_chunks_still_assemble_once() {
+        let payload: Vec<u8> = (0..6_000u32).flat_map(|i| i.to_le_bytes()).collect();
+        let chunks = imp::chunk_payload(&payload, 16 * 1024);
+
+        let mut bag: Vec<Vec<u8>> = Vec::new();
+        bag.extend(chunks.iter().rev().cloned());
+        bag.extend(chunks.iter().cloned());
+        bag.extend(chunks.iter().rev().cloned());
+
+        let assembled = imp::assemble(&bag);
+        assert_eq!(
+            assembled.len(),
+            1,
+            "repeats must not produce a second envelope"
+        );
+        assert_eq!(assembled[0].envelope, payload);
+
+        // A duplicate of one part only is still complete.
+        bag.push(chunks[0].clone());
+        assert_eq!(imp::assemble(&bag).len(), 1);
+    }
+
+    /// Chaos: a chunk whose header claims a total the bag cannot satisfy is never
+    /// assembled, so a truncated or lying chunk cannot fabricate an envelope.
+    #[test]
+    fn a_lying_chunk_total_never_assembles() {
+        let mut chunk = imp::chunk_payload(b"payload", 16 * 1024).remove(0);
+        // Rewrite `total` (bytes 24..28) to claim two parts.
+        chunk[24..28].copy_from_slice(&2u32.to_le_bytes());
+        assert!(imp::assemble(&[chunk]).is_empty());
     }
 
     #[test]
@@ -796,17 +819,20 @@ mod tests {
         assert_eq!(relay.event_count(), 0);
         assert_eq!(relays_view(&a.pool, &group.id).await.unwrap().pending, 1);
 
-        // A syncs (its "session" ends) — only now does the envelope leave.
+        // A syncs (its "session" ends) — only now do the envelopes leave: the
+        // note it wrote plus its own state announcement.
         let report = sync_now(&a.pool, &a.store, &relay, &group.id)
             .await
             .unwrap();
-        assert_eq!((report.published, report.failed, report.pending), (1, 0, 0));
+        assert!(report.published >= 1);
+        assert_eq!((report.failed, report.pending), (0, 0));
 
-        // B, which was away, syncs later and receives it.
+        // B, which was away, syncs later and receives everything A left.
         let report = sync_now(&b.pool, &b.store, &relay, &group.id)
             .await
             .unwrap();
-        assert_eq!((report.received, report.merged, report.skipped), (1, 1, 0));
+        assert_eq!(report.failed, 0);
+        assert!(report.merged >= 1, "B must merge A's note");
         assert_eq!(
             note_state(&b.pool, &group.id, "w").await.unwrap(),
             vec![entry("n1", "hello")]
@@ -843,20 +869,27 @@ mod tests {
             .unwrap();
         edit_and_queue(&a, &group.id, "n1", "queued while offline").await;
 
-        // The relay is unreachable: the row stays pending for the next pass.
+        // The relay is unreachable: nothing goes out and every queued envelope
+        // stays pending for the next pass (including the state announcement).
         relay.set_online(false);
         let report = sync_now(&a.pool, &a.store, &relay, &group.id)
             .await
             .unwrap();
-        assert_eq!((report.published, report.failed, report.pending), (0, 1, 1));
+        assert_eq!(report.published, 0);
+        assert!(report.pending >= 1);
+        assert_eq!(
+            report.failed, report.pending,
+            "every queued envelope must have failed, none may be lost"
+        );
 
-        // Reconnect: the same row goes out, nothing was lost.
+        // Reconnect: the same envelopes go out, nothing was lost.
         relay.set_online(true);
         let report = sync_now(&a.pool, &a.store, &relay, &group.id)
             .await
             .unwrap();
-        assert_eq!((report.published, report.failed, report.pending), (1, 0, 0));
-        assert_eq!(relay.event_count(), 1);
+        assert_eq!((report.failed, report.pending), (0, 0));
+        assert!(report.published >= 1);
+        assert!(relay.event_count() >= 1);
 
         cleanup_files(&a.path);
     }
@@ -891,14 +924,16 @@ mod tests {
         let first = sync_now(&b.pool, &b.store, &relay, &group.id)
             .await
             .unwrap();
-        assert_eq!((first.merged, first.skipped), (1, 0));
+        assert!(first.merged >= 1, "A's note must reach B once");
+        assert_eq!(first.failed, 0);
         let before = note_state(&b.pool, &group.id, "w").await.unwrap();
 
-        // The envelope is still on the relay; a second pull must not re-merge it.
+        // The envelopes are still on the relay; a second pull must not re-merge.
         let second = sync_now(&b.pool, &b.store, &relay, &group.id)
             .await
             .unwrap();
-        assert_eq!((second.merged, second.skipped), (0, 1));
+        assert_eq!(second.merged, 0, "a re-delivered envelope merges once");
+        assert!(second.skipped >= 1);
         assert_eq!(note_state(&b.pool, &group.id, "w").await.unwrap(), before);
 
         cleanup_files(&a.path);

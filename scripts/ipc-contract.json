@@ -1007,6 +1007,12 @@
       "doc": "MISSION-115 (p2p) - whether this group has a shared key on this device, plus a short fingerprint. Requires a build with the `p2p` feature. Resolves with the status or rejects with an AppError string."
     },
     {
+      "name": "reading_group_key_rotate",
+      "args": { "group_id": "string" },
+      "returns": "GroupKeyStatus",
+      "doc": "MISSION-118 (p2p) - replace the group key with a fresh one and bump the group's epoch, so anything sealed from now on is unreadable to whoever held the previous key. Owner-only; queued envelopes are dropped. Resolves with the new status or rejects with an AppError string (including the unsupported-p2p error)."
+    },
+    {
       "name": "reading_group_invite_create",
       "args": { "group_id": "string", "relays": "string[]" },
       "returns": "GroupInviteView",

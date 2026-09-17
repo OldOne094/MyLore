@@ -22,6 +22,7 @@ import {
   reading_group_import,
   reading_group_invite_accept,
   reading_group_invite_create,
+  reading_group_key_rotate,
   reading_group_key_status,
   reading_group_list,
   reading_group_note_edit,
@@ -155,10 +156,12 @@ export function useRemoveGroupMember(groupId: string) {
     mutationFn: (memberId: string) => reading_group_remove_member({ groupId, memberId }),
     onSuccess: async (group) => {
       queryClient.setQueryData(queryKeys.readingGroup.detail(groupId), group);
-      // The member's shelf rows are gone with them.
-      await queryClient.invalidateQueries({
-        queryKey: queryKeys.readingGroup.shelf(groupId, null),
-      });
+      // Removing a member rotates the group key (MISSION-118), so the E2EE badge
+      // and the member's shelf rows are both stale now.
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: queryKeys.readingGroup.shelf(groupId, null) }),
+        queryClient.invalidateQueries({ queryKey: queryKeys.readingGroup.keyStatus(groupId) }),
+      ]);
     },
   });
 }
@@ -281,6 +284,19 @@ export function isP2pBuild(status: { isError: boolean; error: unknown }): boolea
   return !(status.isError && isP2pUnsupported(status.error));
 }
 
+/** Replace the group key (owner-only). Everyone who should still read the group
+    needs the invite created after this. */
+export function useRotateGroupKey(groupId: string) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (): Promise<GroupKeyStatus> => reading_group_key_rotate({ groupId }),
+    onSuccess: async (status) => {
+      queryClient.setQueryData(queryKeys.readingGroup.keyStatus(groupId), status);
+      await queryClient.invalidateQueries({ queryKey: queryKeys.readingGroup.relays(groupId) });
+    },
+  });
+}
+
 export function useGroupRelaysQuery(groupId: string, enabled: boolean) {
   return useQuery({
     queryKey: queryKeys.readingGroup.relays(groupId),
@@ -325,11 +341,14 @@ export function useSyncGroup() {
   });
 }
 
-/** Follow a sync task; the group's thread and relay depth refresh when it ends. */
+/** Follow a sync task; the group, its thread and its relay depth refresh when it
+    ends. A sync now also carries the other members' announcements, so the member
+    list and the shelves matrix are as stale as the thread. */
 export function useGroupSyncTask(taskId: string | null, groupId: string) {
   const queryClient = useQueryClient();
   return useTask(taskId, {
     onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: queryKeys.readingGroup.detail(groupId) });
       void queryClient.invalidateQueries({ queryKey: queryKeys.readingGroup.relays(groupId) });
       void queryClient.invalidateQueries({
         queryKey: queryKeys.readingGroup.shelf(groupId, null),

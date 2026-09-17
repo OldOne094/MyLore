@@ -59,6 +59,43 @@ pub struct GroupNoteSyncView {
     pub compacted: bool,
 }
 
+/// The reserved topic that carries group state (roster + shelves) rather than a
+/// work's notes. A work key is `provider:value` or `h:<hex>`, so it can never
+/// collide with one (MISSION-118).
+pub const STATE_TOPIC: &str = "~state";
+
+/// One member as the state document knows them.
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize)]
+pub struct GroupStateMember {
+    pub member_id: String,
+    pub display_name: String,
+}
+
+/// One shelf entry as the state document knows it.
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize)]
+pub struct GroupStateShelfEntry {
+    pub member_id: String,
+    pub work_key: String,
+    pub title: String,
+    pub content_type: String,
+    pub status: String,
+    pub progress: i64,
+}
+
+/// What the reserved state document currently holds: who has announced
+/// themselves into the group, and where each of them is in each work.
+///
+/// Membership *removal* is deliberately not expressed here. Every accepted
+/// invite makes the joiner the owner of its own replica, so two devices would
+/// publish conflicting lists; a removal is enforced by rotating the group key
+/// instead (see `rotate_group_key`), and the entries a removed member already
+/// published stay in the copies they were shared with.
+#[derive(Debug, Clone, Default, PartialEq, Eq, serde::Serialize)]
+pub struct GroupStateView {
+    pub members: Vec<GroupStateMember>,
+    pub shelf: Vec<GroupStateShelfEntry>,
+}
+
 #[cfg(feature = "p2p")]
 mod imp {
     use super::*;
@@ -89,10 +126,6 @@ mod imp {
     /// Envelope plaintext framing, so a payload can say which work it carries
     /// *inside* the sealed bytes instead of in a relay-readable tag (MISSION-118).
     const ENVELOPE_MAGIC: &[u8; 4] = b"MLG1";
-    /// The reserved topic carrying group state (roster + shelves) rather than a
-    /// work's notes. A work key is `provider:value` or `h:<hex>`, so this can
-    /// never collide with one.
-    pub const STATE_TOPIC: &str = "~state";
     /// Field separator inside a state-document composite key. Member ids and work
     /// keys are UTF-8 text that never contains NUL.
     const KEY_SEP: char = '\u{0}';
@@ -628,7 +661,7 @@ mod imp {
         set_note(&doc, note_id.trim(), body);
 
         let update_plain = encode_full_state(&doc);
-        let envelope = seal(&key, &aad, &update_plain)?;
+        let envelope = seal_update(&key, &aad, work_key, &update_plain)?;
         let own_state_vector = doc.transact().state_vector().encode_v1();
         let compacted = persist_doc(pool, group_id, work_key, &doc, existing.as_ref(), 1).await?;
 
@@ -640,6 +673,265 @@ mod imp {
             notes: entries(&doc),
             compacted,
         })
+    }
+
+    // ------------------------------------------------------------------ state
+
+    const STATE_MEMBERS: &str = "members";
+    const STATE_SHELF: &str = "shelf";
+
+    #[derive(serde::Serialize, serde::Deserialize)]
+    struct ShelfValue {
+        title: String,
+        content_type: String,
+        status: String,
+        progress: i64,
+    }
+
+    fn composite(member_id: &str, work_key: &str) -> String {
+        format!("{member_id}{KEY_SEP}{work_key}")
+    }
+
+    fn set_state_member(doc: &Doc, member_id: &str, display_name: &str) {
+        let map = doc.get_or_insert_map(STATE_MEMBERS);
+        map.insert(&mut doc.transact_mut(), member_id, display_name);
+    }
+
+    fn set_state_shelf(doc: &Doc, entry: &GroupStateShelfEntry) -> Result<(), AppError> {
+        let map = doc.get_or_insert_map(STATE_SHELF);
+        let value = serde_json::to_string(&ShelfValue {
+            title: entry.title.clone(),
+            content_type: entry.content_type.clone(),
+            status: entry.status.clone(),
+            progress: entry.progress,
+        })?;
+        map.insert(
+            &mut doc.transact_mut(),
+            composite(&entry.member_id, &entry.work_key).as_str(),
+            value,
+        );
+        Ok(())
+    }
+
+    fn state_view(doc: &Doc) -> GroupStateView {
+        let member_map = doc.get_or_insert_map(STATE_MEMBERS);
+        let shelf_map = doc.get_or_insert_map(STATE_SHELF);
+        let txn = doc.transact();
+
+        let mut members: Vec<GroupStateMember> = member_map
+            .iter(&txn)
+            .map(|(member_id, name)| GroupStateMember {
+                member_id: member_id.to_string(),
+                display_name: name.to_string(&txn),
+            })
+            .collect();
+        members.sort_by(|a, b| a.member_id.cmp(&b.member_id));
+
+        let mut shelf: Vec<GroupStateShelfEntry> = shelf_map
+            .iter(&txn)
+            .filter_map(|(key, value)| {
+                let (member_id, work_key) = key.split_once(KEY_SEP)?;
+                let parsed: ShelfValue = serde_json::from_str(&value.to_string(&txn)).ok()?;
+                Some(GroupStateShelfEntry {
+                    member_id: member_id.to_string(),
+                    work_key: work_key.to_string(),
+                    title: parsed.title,
+                    content_type: parsed.content_type,
+                    status: parsed.status,
+                    progress: parsed.progress,
+                })
+            })
+            .collect();
+        shelf.sort_by(|a, b| {
+            a.member_id
+                .cmp(&b.member_id)
+                .then_with(|| a.work_key.cmp(&b.work_key))
+        });
+
+        GroupStateView { members, shelf }
+    }
+
+    /// Publish this device's own rows — its member entry and its shelf — and
+    /// return the sealed envelope to broadcast, or `None` when the document would
+    /// not change.
+    ///
+    /// Each device writes only its own keys, so the merge stays conflict-free:
+    /// this is how the other devices learn who is in the group and where they
+    /// are, which is what fills in the shelves matrix.
+    pub async fn state_announce(
+        pool: &SqlitePool,
+        store: &dyn SecretStore,
+        group_id: &str,
+    ) -> Result<Option<String>, AppError> {
+        let group = repo::get_group(pool, group_id)
+            .await?
+            .ok_or_else(|| AppError::validation(format!("unknown group: {group_id}")))?;
+        // Without a key nothing can leave the device, so there is nothing to say.
+        let Some(key) = load_key(store, group_id)? else {
+            return Ok(None);
+        };
+        let aad = aad(group_id, group.epoch);
+
+        let me = ReadingGroupService::new(pool.clone()).prefs().await?;
+        let my_name = if me.display_name.trim().is_empty() {
+            "Me".to_string()
+        } else {
+            me.display_name.trim().to_string()
+        };
+
+        let existing = repo::get_doc(pool, group_id, STATE_TOPIC).await?;
+        let doc = open_doc(existing.as_ref().map(|d| d.state.as_slice()).unwrap_or(&[]))?;
+        let before = state_view(&doc);
+
+        set_state_member(&doc, &me.member_id, &my_name);
+        for row in repo::list_shelf(pool, group_id, Some(&me.member_id)).await? {
+            set_state_shelf(
+                &doc,
+                &GroupStateShelfEntry {
+                    member_id: row.member_id,
+                    work_key: row.work_key,
+                    title: row.title,
+                    content_type: row.content_type,
+                    status: row.status,
+                    progress: row.progress,
+                },
+            )?;
+        }
+
+        if state_view(&doc) == before {
+            return Ok(None);
+        }
+
+        let update_plain = encode_full_state(&doc);
+        let envelope = seal_update(&key, &aad, STATE_TOPIC, &update_plain)?;
+        persist_doc(pool, group_id, STATE_TOPIC, &doc, existing.as_ref(), 1).await?;
+        Ok(Some(b64(&envelope)))
+    }
+
+    /// Fold the state document into the group tables: an announced member who is
+    /// not known yet becomes a `group_member` row, and their shelf entries become
+    /// `group_shelf` rows. Returns the view it applied.
+    ///
+    /// It only adds or refreshes — never deletes. Membership revocation is the
+    /// key rotation's job; a member who is gone stays in the history they were
+    /// part of.
+    pub async fn project_state(
+        pool: &SqlitePool,
+        group_id: &str,
+    ) -> Result<GroupStateView, AppError> {
+        let existing = repo::get_doc(pool, group_id, STATE_TOPIC).await?;
+        let doc = open_doc(existing.as_ref().map(|d| d.state.as_slice()).unwrap_or(&[]))?;
+        let view = state_view(&doc);
+
+        let me = ReadingGroupService::new(pool.clone())
+            .prefs()
+            .await?
+            .member_id;
+        let now = chrono::Utc::now().to_rfc3339();
+
+        for member in &view.members {
+            match repo::get_member(pool, group_id, &member.member_id).await? {
+                // An announcement never rewrites the local owner's own row.
+                Some(row) if row.role == "owner" => {}
+                Some(_) | None => {
+                    repo::add_member(
+                        pool,
+                        &repo::MemberRecord {
+                            group_id: group_id.to_string(),
+                            member_id: member.member_id.clone(),
+                            display_name: member.display_name.clone(),
+                            role: "member".to_string(),
+                            joined_at: now.clone(),
+                        },
+                    )
+                    .await?
+                }
+            }
+        }
+
+        for entry in &view.shelf {
+            // My own shelf is written by my own edits; the document carries the
+            // other members' rows (single-writer per member).
+            if entry.member_id == me {
+                continue;
+            }
+            repo::upsert_shelf(
+                pool,
+                &repo::ShelfRecord {
+                    group_id: group_id.to_string(),
+                    member_id: entry.member_id.clone(),
+                    work_key: entry.work_key.clone(),
+                    title: entry.title.clone(),
+                    content_type: entry.content_type.clone(),
+                    status: entry.status.clone(),
+                    progress: entry.progress,
+                    updated_at: now.clone(),
+                },
+            )
+            .await?;
+        }
+
+        Ok(view)
+    }
+
+    // --------------------------------------------------------------- rotation
+
+    async fn require_owner(pool: &SqlitePool, group_id: &str) -> Result<(), AppError> {
+        let service = ReadingGroupService::new(pool.clone());
+        let group = service.view_group(group_id).await?;
+        let prefs = service.prefs().await?;
+        if group.owner_id != prefs.member_id {
+            return Err(AppError::validation(
+                "only the group owner can rotate the group key",
+            ));
+        }
+        Ok(())
+    }
+
+    /// Rotate a group's key and bump its epoch, so anything sealed from now on is
+    /// unreadable to whoever held the previous key. Owner-only: re-keying is what
+    /// a removal *means*, and a non-owner doing it would lock the group out.
+    ///
+    /// Queued envelopes are dropped — they were sealed under the old key and the
+    /// first sync after re-keying sends a full state diff anyway.
+    pub async fn rotate_group_key(
+        pool: &SqlitePool,
+        store: &dyn SecretStore,
+        group_id: &str,
+    ) -> Result<GroupKeyStatus, AppError> {
+        require_owner(pool, group_id).await?;
+        let key = rotate_key(store, group_id)?;
+        repo::bump_epoch(pool, group_id, &chrono::Utc::now().to_rfc3339()).await?;
+        repo::clear_outbox(pool, group_id).await?;
+        Ok(GroupKeyStatus {
+            has_key: true,
+            key_id: Some(fingerprint(&key)),
+        })
+    }
+
+    /// Called after the owner removes a member: rotate when a key exists.
+    /// Returns whether rotation happened (a group with no key has nothing to
+    /// revoke).
+    pub async fn rotate_after_removal(
+        pool: &SqlitePool,
+        store: &dyn SecretStore,
+        group_id: &str,
+    ) -> Result<bool, AppError> {
+        if load_key(store, group_id)?.is_none() {
+            return Ok(false);
+        }
+        rotate_group_key(pool, store, group_id).await?;
+        Ok(true)
+    }
+
+    /// The group state the membership table implies, for tests and inspection.
+    pub async fn state_view_for(
+        pool: &SqlitePool,
+        group_id: &str,
+    ) -> Result<GroupStateView, AppError> {
+        let existing = repo::get_doc(pool, group_id, STATE_TOPIC).await?;
+        let doc = open_doc(existing.as_ref().map(|d| d.state.as_slice()).unwrap_or(&[]))?;
+        Ok(state_view(&doc))
     }
 
     fn parse_invite(link: &str) -> Result<InvitePayload, AppError> {
@@ -690,6 +982,12 @@ mod imp {
     #[cfg(test)]
     pub fn seal_for_test(key: &[u8; 32], aad: &[u8], msg: &[u8]) -> Result<Vec<u8>, AppError> {
         seal(key, aad, msg)
+    }
+
+    /// Exposed for tests: the compaction policy against a given clock reading.
+    #[cfg(test)]
+    pub fn should_compact_for_test(pending_ops: i64, compacted_at: Option<&str>) -> bool {
+        should_compact(pending_ops, compacted_at)
     }
 
     #[cfg(test)]
@@ -760,10 +1058,59 @@ mod imp {
         _pool: &SqlitePool,
         _store: &dyn SecretStore,
         _group_id: &str,
-        _work_key: &str,
         _envelope: &[u8],
-    ) -> Result<usize, AppError> {
+    ) -> Result<String, AppError> {
         unsupported()
+    }
+
+    pub async fn topic_of(
+        _pool: &SqlitePool,
+        _store: &dyn SecretStore,
+        _group_id: &str,
+        _envelope: &[u8],
+    ) -> Result<String, AppError> {
+        unsupported()
+    }
+
+    pub async fn state_announce(
+        _pool: &SqlitePool,
+        _store: &dyn SecretStore,
+        _group_id: &str,
+    ) -> Result<Option<String>, AppError> {
+        unsupported()
+    }
+
+    pub async fn project_state(
+        _pool: &SqlitePool,
+        _group_id: &str,
+    ) -> Result<GroupStateView, AppError> {
+        unsupported()
+    }
+
+    pub async fn state_view_for(
+        _pool: &SqlitePool,
+        _group_id: &str,
+    ) -> Result<GroupStateView, AppError> {
+        unsupported()
+    }
+
+    pub async fn rotate_group_key(
+        _pool: &SqlitePool,
+        _store: &dyn SecretStore,
+        _group_id: &str,
+    ) -> Result<GroupKeyStatus, AppError> {
+        unsupported()
+    }
+
+    /// A build without the feature holds no group key, so a removal has nothing
+    /// to revoke. This is the one entry point that succeeds rather than rejecting:
+    /// member removal must keep working in a local-only build.
+    pub async fn rotate_after_removal(
+        _pool: &SqlitePool,
+        _store: &dyn SecretStore,
+        _group_id: &str,
+    ) -> Result<bool, AppError> {
+        Ok(false)
     }
 
     #[allow(clippy::too_many_arguments)]
@@ -781,6 +1128,8 @@ mod imp {
 
 pub use imp::{
     apply_envelope, invite_accept, invite_create, key_status, note_edit, note_state, note_sync,
+    project_state, rotate_after_removal, rotate_group_key, state_announce, state_view_for,
+    topic_of,
 };
 
 #[cfg(all(test, feature = "p2p"))]
@@ -788,6 +1137,7 @@ mod tests {
     use super::*;
     use crate::application::reading_group_service::ReadingGroupService;
     use crate::infrastructure::keyring::InMemoryKeyring;
+    use crate::infrastructure::repositories::reading_group as repo;
     use crate::infrastructure::test_support::{cleanup_files, migrated_pool};
 
     /// One "device": its own DB + secret store.
@@ -995,6 +1345,377 @@ mod tests {
             note_id: note_id.to_string(),
             body: body.to_string(),
         }
+    }
+
+    // ------------------------------------------- MISSION-118 · envelope topic
+
+    /// The work a payload is about travels inside the ciphertext, so a relay can
+    /// never read it, and an envelope cannot be replayed into another work's
+    /// document.
+    #[tokio::test]
+    async fn the_work_key_rides_inside_the_sealed_envelope() {
+        let a = device("rg118_topic_a.db").await;
+        let b = device("rg118_topic_b.db").await;
+        let group = ReadingGroupService::new(a.pool.clone())
+            .create_group("G")
+            .await
+            .expect("group");
+        let invite = invite_create(&a.pool, &a.store, &group.id, vec![])
+            .await
+            .unwrap();
+        invite_accept(&b.pool, &b.store, &invite.link)
+            .await
+            .unwrap();
+
+        let from_a = note_edit(&a.pool, &a.store, &group.id, "anilist:42", "n1", "spoiler")
+            .await
+            .expect("edit");
+        // Neither the work key nor the body may be readable from the envelope.
+        assert!(!from_a.update.contains("anilist"));
+        assert!(!from_a.update.contains("spoiler"));
+
+        // The topic is recoverable with the key, and it is the work we wrote to.
+        let envelope =
+            crate::application::reading_group_transport::envelope_bytes(&from_a.update).unwrap();
+        let topic = topic_of(&b.pool, &b.store, &group.id, &envelope)
+            .await
+            .expect("B can open what A sealed");
+        assert_eq!(topic, "anilist:42");
+
+        // An envelope for one work is refused by another work's sync.
+        let refused = note_sync(
+            &b.pool,
+            &b.store,
+            &group.id,
+            "h:other-work",
+            None,
+            Some(from_a.update.clone()),
+        )
+        .await;
+        assert!(
+            refused.is_err(),
+            "an envelope must not be merged into a work it does not belong to"
+        );
+
+        cleanup_files(&a.path);
+        cleanup_files(&b.path);
+    }
+
+    #[tokio::test]
+    async fn a_truncated_envelope_is_refused_without_touching_the_document() {
+        let d = device("rg118_truncated.db").await;
+        let group = ReadingGroupService::new(d.pool.clone())
+            .create_group("G")
+            .await
+            .expect("group");
+        let from_d = note_edit(&d.pool, &d.store, &group.id, "w", "n1", "kept")
+            .await
+            .unwrap();
+        let envelope =
+            crate::application::reading_group_transport::envelope_bytes(&from_d.update).unwrap();
+
+        assert!(topic_of(&d.pool, &d.store, &group.id, &envelope[..10])
+            .await
+            .is_err());
+        assert!(
+            apply_envelope(&d.pool, &d.store, &group.id, &envelope[..10])
+                .await
+                .is_err()
+        );
+        // The document still holds exactly the note that was written.
+        assert_eq!(
+            note_state(&d.pool, &group.id, "w").await.unwrap(),
+            vec![entry("n1", "kept")]
+        );
+
+        cleanup_files(&d.path);
+    }
+
+    /// An envelope sealed under an epoch the group has moved past is not ours any
+    /// more: this is what makes a re-key take effect (clock skew included — the
+    /// AAD is the epoch, not a timestamp).
+    #[tokio::test]
+    async fn an_envelope_from_a_stale_epoch_is_refused_after_a_rotation() {
+        let d = device("rg118_stale_epoch.db").await;
+        let group = ReadingGroupService::new(d.pool.clone())
+            .create_group("G")
+            .await
+            .expect("group");
+        // A key must exist before a rotation has anything to replace.
+        invite_create(&d.pool, &d.store, &group.id, vec![])
+            .await
+            .unwrap();
+
+        let before = note_edit(&d.pool, &d.store, &group.id, "w", "n1", "sealed at epoch 0")
+            .await
+            .unwrap();
+        let stale =
+            crate::application::reading_group_transport::envelope_bytes(&before.update).unwrap();
+        assert!(topic_of(&d.pool, &d.store, &group.id, &stale).await.is_ok());
+
+        let rotated = rotate_group_key(&d.pool, &d.store, &group.id)
+            .await
+            .unwrap();
+        assert!(rotated.has_key);
+
+        // The old envelope no longer opens with the group's current key.
+        assert!(topic_of(&d.pool, &d.store, &group.id, &stale)
+            .await
+            .is_err());
+        assert!(apply_envelope(&d.pool, &d.store, &group.id, &stale)
+            .await
+            .is_err());
+
+        cleanup_files(&d.path);
+    }
+
+    // --------------------------------------------- MISSION-118 · key rotation
+
+    #[tokio::test]
+    async fn rotating_the_key_changes_the_fingerprint_and_bumps_the_epoch() {
+        let d = device("rg118_rotate.db").await;
+        let group = ReadingGroupService::new(d.pool.clone())
+            .create_group("G")
+            .await
+            .expect("group");
+        let invite = invite_create(&d.pool, &d.store, &group.id, vec![])
+            .await
+            .unwrap();
+
+        let rotated = rotate_group_key(&d.pool, &d.store, &group.id)
+            .await
+            .unwrap();
+        assert_ne!(rotated.key_id, Some(invite.key_id.clone()));
+        assert_eq!(
+            key_status(&d.store, &group.id).await.unwrap().key_id,
+            rotated.key_id
+        );
+
+        let after = repo::get_group(&d.pool, &group.id).await.unwrap().unwrap();
+        assert_eq!(after.epoch, 1, "an epoch bump invalidates the old AAD");
+
+        cleanup_files(&d.path);
+    }
+
+    #[tokio::test]
+    async fn only_the_owner_may_rotate_the_group_key() {
+        let d = device("rg118_rotate_nonowner.db").await;
+        let group = ReadingGroupService::new(d.pool.clone())
+            .create_group("G")
+            .await
+            .expect("group");
+        invite_create(&d.pool, &d.store, &group.id, vec![])
+            .await
+            .unwrap();
+
+        // A replica that does not own this group must not re-key it for everyone.
+        sqlx::query("UPDATE reading_group SET owner_id = 'm-somebody-else' WHERE id = ?")
+            .bind(&group.id)
+            .execute(&d.pool)
+            .await
+            .unwrap();
+
+        let error = rotate_group_key(&d.pool, &d.store, &group.id)
+            .await
+            .expect_err("a non-owner must be refused");
+        assert!(error.to_string().contains("owner"), "{error}");
+
+        cleanup_files(&d.path);
+    }
+
+    #[tokio::test]
+    async fn removal_only_rotates_when_a_key_exists() {
+        let d = device("rg118_removal.db").await;
+        let group = ReadingGroupService::new(d.pool.clone())
+            .create_group("G")
+            .await
+            .expect("group");
+
+        // No key yet: nothing to revoke, and the removal must still succeed.
+        assert!(!rotate_after_removal(&d.pool, &d.store, &group.id)
+            .await
+            .unwrap());
+
+        let invite = invite_create(&d.pool, &d.store, &group.id, vec![])
+            .await
+            .unwrap();
+        assert!(rotate_after_removal(&d.pool, &d.store, &group.id)
+            .await
+            .unwrap());
+        let after = key_status(&d.store, &group.id).await.unwrap();
+        assert_ne!(after.key_id, Some(invite.key_id.clone()));
+
+        cleanup_files(&d.path);
+    }
+
+    // ------------------------------------------- MISSION-118 · state over wire
+
+    #[tokio::test]
+    async fn the_state_document_carries_members_and_shelves_to_a_peer() {
+        let a = device("rg118_state_a.db").await;
+        let b = device("rg118_state_b.db").await;
+        let service_a = ReadingGroupService::new(a.pool.clone());
+        let group = service_a.create_group("G").await.expect("group");
+        let invite = invite_create(&a.pool, &a.store, &group.id, vec![])
+            .await
+            .unwrap();
+        invite_accept(&b.pool, &b.store, &invite.link)
+            .await
+            .unwrap();
+
+        // A shelves a work; every accepted invite makes B the owner of its own
+        // replica, so A stays the owner of *its* copy — "A" here is A's device.
+        let me_a = service_a.prefs().await.unwrap().member_id;
+        service_a.set_prefs(true, "A").await.unwrap();
+        service_a
+            .set_shelf_entry(
+                &group.id,
+                &me_a,
+                "anilist:42",
+                "Berserk",
+                "manga",
+                "in_progress",
+                12,
+            )
+            .await
+            .expect("shelf");
+
+        // A announces: the announcement is a real envelope.
+        let sealed = state_announce(&a.pool, &a.store, &group.id)
+            .await
+            .expect("announce")
+            .expect("the shelf change changed the document");
+        let envelope =
+            crate::application::reading_group_transport::envelope_bytes(&sealed).unwrap();
+        assert_eq!(
+            topic_of(&a.pool, &a.store, &group.id, &envelope)
+                .await
+                .unwrap(),
+            STATE_TOPIC
+        );
+
+        // B merges it and the group tables learn who A is and where A is.
+        apply_envelope(&b.pool, &b.store, &group.id, &envelope)
+            .await
+            .expect("apply");
+
+        let view = ReadingGroupService::new(b.pool.clone())
+            .view_group(&group.id)
+            .await
+            .unwrap();
+        let a_member = view
+            .members
+            .iter()
+            .find(|member| member.member_id == me_a)
+            .expect("A is announced to B");
+        assert_eq!(a_member.display_name, "A");
+
+        let shelf = repo::list_shelf(&b.pool, &group.id, None).await.unwrap();
+        let row = shelf
+            .iter()
+            .find(|row| row.member_id == me_a && row.work_key == "anilist:42")
+            .expect("A's shelf row reached B");
+        assert_eq!(row.progress, 12);
+        assert_eq!(row.title, "Berserk");
+        assert_eq!(row.status, "in_progress");
+
+        cleanup_files(&a.path);
+        cleanup_files(&b.path);
+    }
+
+    #[tokio::test]
+    async fn announcing_twice_publishes_once() {
+        let d = device("rg118_announce_once.db").await;
+        let group = ReadingGroupService::new(d.pool.clone())
+            .create_group("G")
+            .await
+            .expect("group");
+        invite_create(&d.pool, &d.store, &group.id, vec![])
+            .await
+            .unwrap();
+
+        assert!(state_announce(&d.pool, &d.store, &group.id)
+            .await
+            .unwrap()
+            .is_some());
+        assert!(
+            state_announce(&d.pool, &d.store, &group.id)
+                .await
+                .unwrap()
+                .is_none(),
+            "an unchanged announcement must not add a second envelope"
+        );
+
+        cleanup_files(&d.path);
+    }
+
+    #[tokio::test]
+    async fn a_group_without_a_key_announces_nothing() {
+        let d = device("rg118_announce_no_key.db").await;
+        let group = ReadingGroupService::new(d.pool.clone())
+            .create_group("G")
+            .await
+            .expect("group");
+
+        assert!(state_announce(&d.pool, &d.store, &group.id)
+            .await
+            .unwrap()
+            .is_none());
+
+        cleanup_files(&d.path);
+    }
+
+    // ------------------------------------------------ MISSION-118 · chaos
+
+    /// A skewed clock must never make the compaction policy panic or compact
+    /// early: a future or malformed stamp simply does not trigger it.
+    #[test]
+    fn the_compaction_policy_survives_a_skewed_clock() {
+        assert!(!imp::should_compact_for_test(
+            1,
+            Some("2999-01-01T00:00:00Z")
+        ));
+        assert!(!imp::should_compact_for_test(1, Some("not a timestamp")));
+        assert!(!imp::should_compact_for_test(1, None));
+        assert!(
+            imp::should_compact_for_test(100, None),
+            "the op cap still applies"
+        );
+    }
+
+    #[tokio::test]
+    async fn a_foreign_envelope_never_disturbs_the_document() {
+        let a = device("rg118_foreign_a.db").await;
+        let b = device("rg118_foreign_b.db").await;
+        let group_a = ReadingGroupService::new(a.pool.clone())
+            .create_group("G")
+            .await
+            .expect("group");
+        let group_b = ReadingGroupService::new(b.pool.clone())
+            .create_group("Other")
+            .await
+            .expect("group");
+
+        note_edit(&a.pool, &a.store, &group_a.id, "w", "n1", "A's note")
+            .await
+            .unwrap();
+        let mine = note_edit(&b.pool, &b.store, &group_b.id, "w", "n1", "B's note")
+            .await
+            .unwrap();
+        let foreign =
+            crate::application::reading_group_transport::envelope_bytes(&mine.update).unwrap();
+
+        // B's envelope, offered to A's group: refused, and A's document is intact.
+        assert!(apply_envelope(&a.pool, &a.store, &group_a.id, &foreign)
+            .await
+            .is_err());
+        assert_eq!(
+            note_state(&a.pool, &group_a.id, "w").await.unwrap(),
+            vec![entry("n1", "A's note")]
+        );
+
+        cleanup_files(&a.path);
+        cleanup_files(&b.path);
     }
 }
 

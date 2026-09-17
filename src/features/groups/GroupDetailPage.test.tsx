@@ -163,6 +163,21 @@ describe("GroupDetailPage", () => {
     );
   });
 
+  it("replaces the group key from the sharing panel", async () => {
+    mockWorld();
+    renderPage();
+
+    // The panel is part of the page; replacing the key is the owner's escape
+    // hatch when an invite link has travelled too far (MISSION-118).
+    const trigger = await screen.findByRole("button", { name: "Replace key" });
+    await userEvent.click(trigger);
+
+    const buttons = screen.getAllByRole("button", { name: "Replace key" });
+    await userEvent.click(buttons[buttons.length - 1]);
+
+    expect(invoke).toHaveBeenCalledWith("reading_group_key_rotate", { groupId: "g-1" });
+  });
+
   it("falls back to the local notes table in a build without relay support", async () => {
     mockWorld({}, true);
     renderPage();

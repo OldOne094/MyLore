@@ -735,13 +735,13 @@ const en = {
     privacyHeading: "What leaves this device",
     privacySealedLabel: "Leaves encrypted",
     privacySealedValue:
-      "A note you write in a group is sealed on this device before anything is sent. The group key travels only in the invite you hand out yourself.",
+      "Notes you write, the works on your group shelf and your display name are sealed on this device before anything is sent. The group key travels only in the invite you hand out yourself.",
     privacyMetadataLabel: "A relay can still see",
     privacyMetadataValue:
-      "Your IP address, this install's public key, when you sync, how large each message is, and each event's group and work tags — so a relay can tell which group is discussing which work.",
+      "Your IP address, this install's public key, when you sync, and how large each message is. Events carry the group id and nothing else — not the works you discuss.",
     privacyStaysLabel: "Stays here",
     privacyStaysValue:
-      "Your library, shelves, reviews, statistics and the member list are never sent.",
+      "Your library, reviews, statistics and reading history are never sent. Only what you keep in a group is shared with that group.",
     privacyOffHint: "You can turn reading groups off again at any time.",
     displayNameLabel: "Your name in groups",
     displayNamePlaceholder: "How friends see you",
@@ -837,15 +837,22 @@ const en = {
     removeMemberAria: "Remove {{name}}",
     removeMemberTitle: "Remove {{name}}?",
     removeMemberBody:
-      "Their shelf entries are removed from this device. Notes they already wrote stay in the threads.",
+      "Their shelf entries are removed from this device and the group key is replaced, so they cannot read anything sent from now on. Send the members who stay a new invite, and keep the one you sent them to yourself — it still carries the old key.",
     removeMember: "Remove",
-    removeMemberToast: "Member removed",
+    removeMemberToast: "Removed. Send the members who stay a new invite.",
     removeMemberErrorToast: "Couldn't remove that member",
     membersLocalHint:
-      "Members are stored on this device. An invite shares the group key, not the roster — add friends by their member id.",
+      "Members are announced when they sync. You can also add one by their member id before their first sync.",
     sharingHeading: "Sharing",
-    keyPresent: "Group key {{id}} — notes are sealed before they leave.",
+    encryptionHeading: "Encryption",
+    keyPresent: "Group key {{id}} — notes and shelves are sealed before they leave.",
     keyAbsent: "No group key yet. Create an invite to share one.",
+    rotateKey: "Replace key",
+    rotateTitle: "Replace the group key?",
+    rotateBody:
+      "Everything already sent stays readable to whoever holds the old key; everything sent from now on needs the new one. Everyone who should stay in the group must accept a freshly created invite.",
+    rotateConfirm: "Replace key",
+    rotateToast: "Key replaced. Create an invite and send it to the members who stay.",
     p2pUnavailable:
       "This build was compiled without relay support. Shelves, members and the group file still work.",
     relaysLabel: "Relays",
@@ -855,7 +862,7 @@ const en = {
     relaysSaved: "Relays saved",
     groupFileLabel: "Group file",
     groupFileHint:
-      "A group file carries shelves and members as well as notes, and merges by newest change. The relay sync moves notes only.",
+      "A sync already carries notes, shelves and members. A group file is for handing the whole group to someone directly, and merges by newest change.",
     exportGroup: "Export group file",
     importGroup: "Import group file",
     exportToast: "Exported {{shelf}} shelf entries and {{notes}} notes",
@@ -1870,12 +1877,13 @@ const ar = {
     privacyHeading: "ما يخرج من هذا الجهاز",
     privacySealedLabel: "يُرسَل مشفَّراً",
     privacySealedValue:
-      "الملاحظة التي تكتبها داخل مجموعة تُشفَّر على هذا الجهاز قبل إرسال أي شيء. ومفتاح المجموعة لا ينتقل إلا في الدعوة التي تشاركها بنفسك.",
+      "الملاحظات التي تكتبها، والأعمال على رفّ مجموعتك، واسمك الظاهر — كلها تُشفَّر على هذا الجهاز قبل إرسال أي شيء. ومفتاح المجموعة لا ينتقل إلا في الدعوة التي تشاركها بنفسك.",
     privacyMetadataLabel: "ما يظل المرحّل قادراً على رؤيته",
     privacyMetadataValue:
-      "عنوان IP الخاص بك، ومفتاح هذا التثبيت العام، وتوقيت المزامنة، وحجم كل رسالة، ووسما المجموعة والعمل في كل حدث — فيستطيع المرحّل معرفة أي مجموعة تناقش أي عمل.",
+      "عنوان IP الخاص بك، ومفتاح هذا التثبيت العام، وتوقيت المزامنة، وحجم كل رسالة. أما الأحداث فلا تحمل إلا معرّف المجموعة — لا الأعمال التي تناقشونها.",
     privacyStaysLabel: "ما يبقى هنا",
-    privacyStaysValue: "مكتبتك وأرففك ومراجعاتك وإحصاءاتك وقائمة الأعضاء لا تُرسَل إطلاقاً.",
+    privacyStaysValue:
+      "مكتبتك ومراجعاتك وإحصاءاتك وسجل قراءتك لا تُرسَل إطلاقاً. لا يُشارَك مع المجموعة إلا ما تحتفظ به داخلها.",
     privacyOffHint: "يمكنك إيقاف مجموعات القراءة في أي وقت.",
     displayNameLabel: "اسمك في المجموعات",
     displayNamePlaceholder: "كما يراك أصدقاؤك",
@@ -1969,15 +1977,23 @@ const ar = {
     addMemberErrorToast: "تعذّرت إضافة هذا العضو",
     removeMemberAria: "إزالة {{name}}",
     removeMemberTitle: "إزالة {{name}}؟",
-    removeMemberBody: "تُحذف أرففه من هذا الجهاز، وتبقى ملاحظاته المكتوبة سابقاً في النقاشات.",
+    removeMemberBody:
+      "تُحذف أرففه من هذا الجهاز، ويُستبدَل مفتاح المجموعة فلا يستطيع قراءة أي شيء يُرسَل بعد الآن. أرسل دعوة جديدة إلى الأعضاء الباقين، واحتفظ بالدعوة القديمة لنفسك — فهي ما زالت تحمل المفتاح السابق.",
     removeMember: "إزالة",
-    removeMemberToast: "أُزيل العضو",
+    removeMemberToast: "تمت الإزالة. أرسل دعوة جديدة إلى الأعضاء الباقين.",
     removeMemberErrorToast: "تعذّرت إزالة هذا العضو",
     membersLocalHint:
-      "قائمة الأعضاء محفوظة على هذا الجهاز. الدعوة تشارك مفتاح المجموعة لا القائمة — أضف أصدقاءك بمعرّف العضو.",
+      "يُعلن الأعضاء عن أنفسهم عند المزامنة. ويمكنك أيضاً إضافة أحدهم بمعرّف العضو قبل أول مزامنة له.",
     sharingHeading: "المشاركة",
-    keyPresent: "مفتاح المجموعة {{id}} — تُشفَّر الملاحظات قبل خروجها.",
+    encryptionHeading: "التشفير",
+    keyPresent: "مفتاح المجموعة {{id}} — تُشفَّر الملاحظات والأرفف قبل خروجها.",
     keyAbsent: "لا يوجد مفتاح للمجموعة بعد. أنشئ دعوة لمشاركة واحد.",
+    rotateKey: "استبدال المفتاح",
+    rotateTitle: "استبدال مفتاح المجموعة؟",
+    rotateBody:
+      "كل ما أُرسل سابقاً يبقى مقروءاً لمن يحمل المفتاح القديم، وكل ما سيُرسَل بعد الآن يحتاج المفتاح الجديد. وعلى كل من يجب أن يبقى في المجموعة قبول دعوة جديدة.",
+    rotateConfirm: "استبدال المفتاح",
+    rotateToast: "استُبدل المفتاح. أنشئ دعوة وأرسلها إلى الأعضاء الباقين.",
     p2pUnavailable: "هذه النسخة بُنيت دون دعم المرحّلات. تبقى الأرفف والأعضاء وملف المجموعة عاملة.",
     relaysLabel: "المرحّلات",
     relaysHint: "رابط واحد في كل سطر. لا يغيّرها إلا مالك المجموعة.",
@@ -1986,7 +2002,7 @@ const ar = {
     relaysSaved: "حُفظت المرحّلات",
     groupFileLabel: "ملف المجموعة",
     groupFileHint:
-      "ملف المجموعة يحمل الأرفف والأعضاء إضافة إلى الملاحظات، ويُدمج بالأحدث تغييراً. أما المزامنة فتنقل الملاحظات فقط.",
+      "المزامنة تنقل الملاحظات والأرفف والأعضاء بالفعل. أما ملف المجموعة فلتسليم المجموعة كاملة إلى شخص مباشرةً، ويُدمج بالأحدث تغييراً.",
     exportGroup: "تصدير ملف المجموعة",
     importGroup: "استيراد ملف المجموعة",
     exportToast: "صُدِّرت {{shelf}} إدخالات رفّ و{{notes}} ملاحظات",

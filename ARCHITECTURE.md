@@ -390,8 +390,8 @@ has no type column. `delimiter` is the CSV field delimiter, `separator` splits m
   - **Shipped (MISSION-116):** the **relay transport**, on the *same* `p2p` feature (`nostr-sdk`
     with rustls/webpki roots — no OpenSSL). `application/reading_group_transport.rs` defines a
     narrow `GroupTransport` trait (`publish`/`fetch` of already-sealed envelopes) with two
-    implementations: a real **Nostr** client (kind `21337` events tagged `g` = group,
-    `t` = work, content = base64 chunk; relays added per group) and an **in-memory relay** for
+    implementations: a real **Nostr** client (kind `21337` events tagged with the group only,
+    content = base64 chunk; relays added per group) and an **in-memory relay** for
     tests. **Outbox-first:** `reading_group_note_edit` queues the sealed envelope in
     `group_outbox` *before* any relay is contacted, and a sync pass flushes it (a failure leaves
     the row pending for the next attempt), so an offline window never loses a change. **Dedup:**
@@ -402,9 +402,8 @@ has no type column. `delimiter` is the CSV field delimiter, `separator` splits m
     TaskManager, so `task_changed` streams progress. Relays are group settings — **owner-only** —
     trimmed, deduped and capped at 8. IPC: `reading_group_relays_get/set`, `reading_group_sync_now`.
   - **Shipped (MISSION-117):** the **UI**, behind an explicit opt-in. `/groups` is the gate until
-    the user turns the feature on: the privacy screen names what leaves sealed (note text), what a
-    relay can still see (IP, pubkey, timing, message size, and the group/work tags), and what never
-    leaves (library, shelves, reviews, stats, roster). `/groups/:id` is an **alignment matrix —
+    the user turns the feature on: the privacy screen names what leaves sealed, what a relay can
+    still see, and what never leaves. `/groups/:id` is an **alignment matrix —
     works × members** — because the point of a group is where everyone is in the *same* work; a
     member's cell shows their recorded status and progress. **Spoiler gating:** a note is hidden
     while its author's recorded progress is ahead of the reader's, so the gate is real data and
@@ -416,10 +415,27 @@ has no type column. `delimiter` is the CSV field delimiter, `separator` splits m
     owner-only relay set, and the `group_state.json` export/import that makes 114's manual
     transport reachable. `reading_group_work_key` exposes the domain's key derivation so the UI
     cannot drift from it.
-  - **Known gaps (carried to MISSION-118):** the relay-facing `t` tag is the **plaintext work key**,
-    so a relay can read which work a group discusses — the UI states this rather than hiding it; and
-    the **roster + per-member shelves are not on the wire**, so a device's matrix reflects what it
-    was told locally (members added by id) plus whatever `group_state.json` merged.
+  - **Hardening (MISSION-118):** three things the earlier missions left open.
+    **(a) The relay learns nothing about the work.** The `t` tag is gone: an envelope's plaintext is
+    framed `MLG1 || topic || NUL || yrs-update` and sealed whole, so the work key travels *inside*
+    the ciphertext. An event carries the group id and base64 chunks — nothing else. The topic is
+    resolved after decryption (`topic_of`) for the dedup key, and `note_sync` refuses an envelope
+    whose topic is not the work it was asked for, so a payload cannot be replayed into another
+    work's document.
+    **(b) Forward secrecy.** `rotate_group_key` (owner-only) mints a fresh 32-byte key, bumps the
+    group's epoch and drops the queued envelopes, which were sealed under the old key and are
+    undeliverable once the others re-key. Removing a member rotates automatically. Because every
+    accepted invite makes the joiner the owner of *its own* replica, the members who stay must
+    accept a freshly created invite to keep reading — the UI says exactly that, in the removal
+    dialog and in a toast.
+    **(c) The roster and the shelves ride the sync channel.** A reserved topic (`~state`, never a
+    valid work key) holds two conflict-free maps: `members` (id → display name) and `shelf`
+    (`id NUL work_key` → entry). Each sync announces *this* device's own rows — single-writer per
+    member, so nothing conflicts — and a received state envelope is projected into
+    `group_member`/`group_shelf` (`project_state`), which is what fills the alignment matrix from
+    the wire instead of by hand. The projection only adds or refreshes: membership *revocation* is
+    expressed by the key rotation, not by the document, because two replicas both believing they
+    own the group would otherwise publish conflicting rosters.
   - **Threat model (explicit):** E2EE (XChaCha20-Poly1305, group key in the OS keyring, shared
     only via out-of-band QR/link invite) protects payloads, but public relays still observe
     metadata — IP address, pubkey, timing, packet sizes, group size. The feature is therefore

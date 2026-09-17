@@ -30,6 +30,18 @@ pub async fn reading_group_key_status(
     reading_group_p2p::key_status(store.inner().as_ref(), &group_id).await
 }
 
+/// Replace the group key with a fresh one and bump the epoch (MISSION-118).
+/// Owner-only; everyone who should still read the group needs the new invite.
+#[command]
+pub async fn reading_group_key_rotate(
+    state: State<'_, SqlitePool>,
+    store: State<'_, Arc<dyn SecretStore>>,
+    group_id: String,
+) -> Result<GroupKeyStatus, AppError> {
+    info!(group_id, "reading_group_key_rotate invoked");
+    reading_group_p2p::rotate_group_key(state.inner(), store.inner().as_ref(), &group_id).await
+}
+
 /// Create an out-of-band invite (generates the group key on first use).
 #[command]
 pub async fn reading_group_invite_create(

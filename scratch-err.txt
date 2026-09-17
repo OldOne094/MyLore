@@ -1,0 +1,5 @@
+
+thread 'main' (21008) panicked at C:\Users\malek\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\tauri-2.11.5\src\app.rs:1425:11:
+Failed to setup app: error encountered during setup hook: migration error: migration 13 was previously applied but has been modified
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+[0917/191124.207:ERROR:ui\gfx\win\window_impl.cc:172] Failed to unregister class Chrome_WidgetWin_0. Error = 1412

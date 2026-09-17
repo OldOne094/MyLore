@@ -298,6 +298,7 @@ pub fn run() {
             commands::reading_group::reading_group_import,
             commands::reading_group::reading_group_work_key,
             commands::reading_group_p2p::reading_group_key_status,
+            commands::reading_group_p2p::reading_group_key_rotate,
             commands::reading_group_p2p::reading_group_invite_create,
             commands::reading_group_p2p::reading_group_invite_accept,
             commands::reading_group_p2p::reading_group_note_state,

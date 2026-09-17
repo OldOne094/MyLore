@@ -134,13 +134,25 @@ pub async fn reading_group_add_member(
 #[command]
 pub async fn reading_group_remove_member(
     state: State<'_, SqlitePool>,
+    store: State<'_, std::sync::Arc<dyn crate::infrastructure::keyring::SecretStore>>,
     group_id: String,
     member_id: String,
 ) -> Result<GroupView, AppError> {
     info!(group_id, member_id, "reading_group_remove_member invoked");
-    ReadingGroupService::new(state.inner().clone())
+    let view = ReadingGroupService::new(state.inner().clone())
         .remove_member(&group_id, &member_id)
-        .await
+        .await?;
+    // Removing a member is only meaningful with forward secrecy: rotate the group
+    // key so they cannot read anything sealed from now on (MISSION-118). The
+    // members who stay need the new invite; the UI says so. A build without the
+    // `p2p` feature (or a group that never had a key) has nothing to rotate.
+    crate::application::reading_group_p2p::rotate_after_removal(
+        state.inner(),
+        store.inner().as_ref(),
+        &group_id,
+    )
+    .await?;
+    Ok(view)
 }
 
 #[command]

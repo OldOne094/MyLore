@@ -94,6 +94,23 @@ This is the mechanism `ARCHITECTURE.md §4` refers to when it says fixtures "ena
   benchmark enforcement is promised for Beta in `MISSION-100`. The `MILESTONE-REPORT.md` release
   gates track this.
 
+## 7.1 Release size budget (`npm run size:budget`)
+
+`scripts/binary-size.mjs` (MISSION-118) builds the app twice in release mode — default, then
+`--features p2p` — and fails when either binary exceeds its budget or when the optional feature
+adds more than its allowance:
+
+| Build | Budget |
+|-------|--------|
+| default | 40 MB |
+| `--features p2p` | 52 MB |
+| p2p delta | 14 MB |
+
+Why it exists: an optional feature is only honest if its cost is visible. The check catches a sync
+dependency leaking into the default build and the `p2p` feature growing the binary unnoticed. It
+compiles from scratch, so it is a **release gate**, not part of the everyday loop — run it before
+tagging, alongside the other gates.
+
 ## 8. Quality gates (what must pass)
 
 CI (`.github/workflows/ci.yml`) runs on every push/PR, on **ubuntu / macos / windows**:

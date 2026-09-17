@@ -165,7 +165,9 @@ export function GroupMembers({ groupId, members, myMemberId, myName }: GroupMemb
                 removeMember.mutate(removing.member_id, {
                   onSuccess: () => {
                     setRemoving(null);
-                    toast.success({ title: t("groupsPage.removeMemberToast") });
+                    // The removal rotates the group key, so whoever stays needs
+                    // the invite that comes next — say so, not a bare "removed".
+                    toast.info({ title: t("groupsPage.removeMemberToast") });
                   },
                   onError: () => toast.error({ title: t("groupsPage.removeMemberErrorToast") }),
                 });

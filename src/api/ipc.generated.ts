@@ -1259,6 +1259,11 @@ export function reading_group_key_status(args: { groupId: string }): Promise<Gro
   return invoke<GroupKeyStatus>("reading_group_key_status", args);
 }
 
+/** MISSION-118 (p2p) - replace the group key with a fresh one and bump the group's epoch, so anything sealed from now on is unreadable to whoever held the previous key. Owner-only; queued envelopes are dropped. Resolves with the new status or rejects with an AppError string (including the unsupported-p2p error). */
+export function reading_group_key_rotate(args: { groupId: string }): Promise<GroupKeyStatus> {
+  return invoke<GroupKeyStatus>("reading_group_key_rotate", args);
+}
+
 /** MISSION-115 (p2p) - create an out-of-band invite (generates the group key on first use) carrying the relays, group id and key. Resolves with the link + QR payload or rejects with an AppError string. */
 export function reading_group_invite_create(args: {
   groupId: string;

@@ -93,7 +93,7 @@ Losing the passphrase means losing the data — there is no recovery path by
 design. Default builds without the feature stay plain SQLite and ignore the
 variable entirely.
 
-#### Optional: enable the reading-groups p2p engine (MISSION-115/116)
+#### Optional: enable the reading-groups p2p engine (MISSION-115/116/118)
 
 Reading groups are local-first and future-gated. Their conflict-free notes +
 end-to-end encryption engine and its Nostr relay transport compile only with
@@ -106,7 +106,10 @@ cargo build --features p2p
 
 Nothing leaves the device unless you opt in, configure relays for a group and
 run a sync: local edits are queued in the outbox first, and envelopes are
-encrypted before they reach a relay. The UI lands in MISSION-117. See
+encrypted before they reach a relay — a relay sees the group id, ciphertext and
+connection metadata, and never which work a group is discussing. Removing a
+member rotates the group key. `npm run size:budget` reports what the optional
+feature costs (26.5 MB → 32.4 MB at the time of writing). See
 `ARCHITECTURE.md §6` for the threat model.
 
 > The IPC boundary is generated: edit `scripts/ipc-contract.json`, then run

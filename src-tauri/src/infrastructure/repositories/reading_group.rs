@@ -521,6 +521,17 @@ pub async fn mark_failed(pool: &SqlitePool, id: &str, error: &str) -> Result<(),
     Ok(())
 }
 
+/// Drop every queued envelope for a group (MISSION-118). Used when the group key
+/// rotates: what is queued was sealed under the old key and the members who stay
+/// cannot open it, while the next sync sends a full state diff regardless.
+pub async fn clear_outbox(pool: &SqlitePool, group_id: &str) -> Result<u64, AppError> {
+    let result = sqlx::query("DELETE FROM group_outbox WHERE group_id = ? AND sent_at IS NULL")
+        .bind(group_id)
+        .execute(pool)
+        .await?;
+    Ok(result.rows_affected())
+}
+
 /// Claim an event id for a topic. Returns `false` when it was already merged —
 /// the dedup gate for re-delivered events.
 pub async fn claim_event(

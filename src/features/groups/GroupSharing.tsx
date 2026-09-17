@@ -8,12 +8,20 @@
 
 import { useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { Button, TextareaField, useToast } from "@/components/ui";
+import {
+  Button,
+  Dialog,
+  DialogContent,
+  DialogTitle,
+  TextareaField,
+  useToast,
+} from "@/components/ui";
 import {
   useExportGroupFile,
   useGroupKeyStatusQuery,
   useGroupRelaysQuery,
   useImportGroupFile,
+  useRotateGroupKey,
   useSetGroupRelays,
 } from "@/features/groups/api";
 
@@ -31,10 +39,12 @@ export function GroupSharing({ groupId, groupName, p2p, isOwner }: GroupSharingP
   const keyStatus = useGroupKeyStatusQuery(groupId);
   const relaysQuery = useGroupRelaysQuery(groupId, p2p);
   const setRelays = useSetGroupRelays(groupId);
+  const rotateKey = useRotateGroupKey(groupId);
   const exportFile = useExportGroupFile();
   const importFile = useImportGroupFile();
 
   const [draft, setDraft] = useState<string | null>(null);
+  const [confirmRotate, setConfirmRotate] = useState(false);
   const fileInput = useRef<HTMLInputElement>(null);
 
   const relays = relaysQuery.data?.relays ?? [];
@@ -89,11 +99,23 @@ export function GroupSharing({ groupId, groupName, p2p, isOwner }: GroupSharingP
       <h2 className="text-sm font-semibold text-text-primary">{t("groupsPage.sharingHeading")}</h2>
 
       {p2p ? (
-        <p className="mt-2 text-sm text-text-secondary">
-          {keyStatus.data?.has_key
-            ? t("groupsPage.keyPresent", { id: keyStatus.data.key_id ?? "" })
-            : t("groupsPage.keyAbsent")}
-        </p>
+        <div className="mt-4">
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <h3 className="text-sm font-medium text-text-primary">
+              {t("groupsPage.encryptionHeading")}
+            </h3>
+            {isOwner ? (
+              <Button size="sm" variant="secondary" onClick={() => setConfirmRotate(true)}>
+                {t("groupsPage.rotateKey")}
+              </Button>
+            ) : null}
+          </div>
+          <p className="mt-1 text-sm text-text-secondary">
+            {keyStatus.data?.has_key
+              ? t("groupsPage.keyPresent", { id: keyStatus.data.key_id ?? "" })
+              : t("groupsPage.keyAbsent")}
+          </p>
+        </div>
       ) : (
         <p className="mt-2 text-sm text-text-tertiary">{t("groupsPage.p2pUnavailable")}</p>
       )}
@@ -173,6 +195,33 @@ export function GroupSharing({ groupId, groupName, p2p, isOwner }: GroupSharingP
           />
         </div>
       </div>
+
+      <Dialog open={confirmRotate} onOpenChange={setConfirmRotate}>
+        <DialogContent>
+          <DialogTitle>{t("groupsPage.rotateTitle")}</DialogTitle>
+          <p className="mt-2 text-sm text-text-secondary">{t("groupsPage.rotateBody")}</p>
+          <div className="mt-6 flex justify-end gap-2">
+            <Button variant="secondary" onClick={() => setConfirmRotate(false)}>
+              {t("groupsPage.cancel")}
+            </Button>
+            <Button
+              variant="danger"
+              disabled={rotateKey.isPending}
+              onClick={() =>
+                rotateKey.mutate(undefined, {
+                  onSuccess: () => {
+                    setConfirmRotate(false);
+                    toast.info({ title: t("groupsPage.rotateToast") });
+                  },
+                  onError: (error) => toast.error({ title: String(error) }),
+                })
+              }
+            >
+              {t("groupsPage.rotateConfirm")}
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
     </section>
   );
 }

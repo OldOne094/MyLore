@@ -1,0 +1,3 @@
+[2m2026-09-17T16:11:24.107971Z[0m [33m WARN[0m [2mmylore_lib::application::providers::oauth[0m[2m:[0m no AniList client secret found (anilist.client-secret or ANILIST_CLIENT_SECRET); browser sign-in disabled, manual token paste still works
+[2m2026-09-17T16:11:24.190873Z[0m [32m INFO[0m [2mmylore_lib[0m[2m:[0m pre-migration backup created [3mpath[0m[2m=[0mC:\Users\malek\AppData\Roaming\com.mylore.app\backups\mylore-20260917-161124-54941b.mylore
+[2m2026-09-17T16:11:24.196509Z[0m [32m INFO[0m [2mmylore_lib[0m[2m:[0m database opened [3mdb[0m[2m=[0mC:\Users\malek\AppData\Roaming\com.mylore.app\mylore.db [3mms[0m[2m=[0m91
