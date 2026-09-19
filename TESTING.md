@@ -130,6 +130,17 @@ npm run build         # tsc + vite build
 Local parity: `npm run e2e` for the Playwright flows (not wired into CI), and
 `cargo test -- --ignored` for the live-network probes (manual only).
 
+Two guards exist because a green suite is not the same as a working app (both came out of a
+startup failure that no test could see):
+
+- **`applied_migrations_are_never_edited`** (`infrastructure/db.rs`) pins the SHA-384 of every
+  embedded migration. sqlx rejects a database whose recorded checksum differs, so editing an
+  applied migration makes the app fail to start for every existing install — this test turns that
+  into a `cargo test` failure. Adding a migration means appending its checksum to the table.
+- **`init_is_idempotent_and_writes_log_files`** (`infrastructure/logging.rs`) also asserts that a
+  line logged before `logging::shutdown()` is on disk, which is what the fatal startup path relies
+  on: a release build has no console, so an unlogged failure is an invisible one.
+
 ## 9. Conventions & gotchas
 
 - **Never edit an applied migration**; add a new one (see `DATABASE.md §6`).

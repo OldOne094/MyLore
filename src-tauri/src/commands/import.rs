@@ -90,10 +90,17 @@ pub async fn import_commit(
         let pipeline = ImportPipeline::new(pool);
 
         reporter.progress(0, Some("Analyzing the file…".to_string()));
-        let preview = service
-            .preview(kind, &source, mapping.as_ref())
-            .await
-            .map_err(|error| TaskError::failed(error.to_string()))?;
+        // The analysis re-parses the whole file and loads identity candidates, so
+        // it has to be observable too: awaiting it before the `select!` below made
+        // Cancel look inert for the length of the parse (MISSION-155).
+        let analysis = service.preview(kind, &source, mapping.as_ref());
+        tokio::pin!(analysis);
+        let preview = tokio::select! {
+            result = &mut analysis => {
+                result.map_err(|error| TaskError::failed(error.to_string()))?
+            }
+            _ = reporter.cancelled() => return Err(TaskError::Cancelled),
+        };
         let plan = match plan {
             Some(plan) => plan,
             None => ImportPlan::all_new(&preview),

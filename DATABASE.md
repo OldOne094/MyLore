@@ -386,7 +386,13 @@ numbers are independent of prior samples. Full results in `src-tauri/benches/dat
   after `asset` exists (SQLite rejects writes through an FK pointing at a missing parent, so the
   columns had to wait for the `asset` table).
 - Policy:
-  - Never edit an applied migration.
+  - Never edit an applied migration. sqlx stores each file's SHA-384 in `_sqlx_migrations` and
+    **refuses to open a database whose recorded checksum differs** — an edit in place does not
+    "update" the schema, it makes every existing install fail to start. `0013` was rewritten after
+    it had been applied (`b962ead`) and the app died on startup for anyone with an older database;
+    the file was restored to the applied bytes and `applied_migrations_are_never_edited`
+    (`infrastructure/db.rs`) now pins every embedded checksum so the drift fails `cargo test`
+    instead of a user's launch.
   - Backward-compatible only (additive) for app updates; destructive changes happen in the next
     major version behind a backup + explicit confirm.
   - Before any migration run: automatic DB backup to the backup dir (crash/migration-failure

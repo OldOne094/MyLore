@@ -11,7 +11,7 @@ import {
   Segmented,
   useToast,
 } from "@/components/ui";
-import { backup_validate, type BackupEntry, type BackupReport } from "@/api";
+import { backup_validate, type BackupEntry, type BackupReport, type RestoreReport } from "@/api";
 import { cn } from "@/lib/cn";
 import {
   useBackupCreate,
@@ -65,9 +65,12 @@ export function BackupsSection() {
 
   const createTask = useBackupTask(createTaskId).data;
   const restoreTask = useBackupTask(restoreTaskId).data;
-  const restoreReport =
+  // A restore task's result is a `RestoreReport`, not a `BackupReport`: they
+  // share no fields, so typing it as the wrong one would silently read
+  // `undefined` the moment anything looked at it (MISSION-155).
+  const restoreReport: RestoreReport | null =
     restoreTask?.state === "success" && restoreTask.result
-      ? (restoreTask.result as BackupReport)
+      ? (restoreTask.result as RestoreReport)
       : null;
 
   const prefs = prefsQuery.data;

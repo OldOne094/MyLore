@@ -22,6 +22,16 @@ function renderBar() {
   );
 }
 
+/** The bar hosts the task centre (MISSION-155), which reads `task_list`; answer
+    it explicitly so a count-shaped reply never leaks into the list. */
+function countOnly(count: number) {
+  vi.mocked(invoke).mockImplementation(async (cmd: string) => {
+    if (cmd === "task_list") return [];
+    if (cmd === "media_count") return count;
+    throw new Error(`unexpected command ${cmd}`);
+  });
+}
+
 afterEach(async () => {
   vi.mocked(invoke).mockReset();
   await i18n.changeLanguage("en");
@@ -29,10 +39,7 @@ afterEach(async () => {
 
 describe("StatusBar", () => {
   it("renders the live title count from media_count", async () => {
-    vi.mocked(invoke).mockImplementation(async (cmd: string) => {
-      if (cmd === "media_count") return 42;
-      throw new Error(`unexpected command ${cmd}`);
-    });
+    countOnly(42);
     renderBar();
 
     expect(await screen.findByText("42 titles")).toBeInTheDocument();
@@ -40,14 +47,14 @@ describe("StatusBar", () => {
   });
 
   it("uses the singular form for one title", async () => {
-    vi.mocked(invoke).mockResolvedValue(1);
+    countOnly(1);
     renderBar();
 
     expect(await screen.findByText("1 title")).toBeInTheDocument();
   });
 
   it("falls back to zero before the count loads", async () => {
-    vi.mocked(invoke).mockResolvedValue(0);
+    countOnly(0);
     renderBar();
 
     expect(await screen.findByText("0 titles")).toBeInTheDocument();

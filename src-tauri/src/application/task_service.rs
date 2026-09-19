@@ -13,7 +13,7 @@
 
 use std::collections::HashMap;
 use std::future::Future;
-use std::sync::{Arc, Mutex, RwLock};
+use std::sync::{Arc, Mutex, PoisonError, RwLock};
 use std::time::SystemTime;
 
 use chrono::{DateTime, Utc};
@@ -62,13 +62,29 @@ impl TaskEntry {
             id: self.id.clone(),
             kind: self.kind.as_str().to_string(),
             title: self.title.clone(),
-            state: *self.state.read().unwrap(),
-            progress: *self.progress.read().unwrap(),
-            message: self.message.read().unwrap().clone(),
-            error: self.error.read().unwrap().clone(),
-            result: self.result.read().unwrap().clone(),
+            state: *self.state.read().unwrap_or_else(PoisonError::into_inner),
+            progress: *self.progress.read().unwrap_or_else(PoisonError::into_inner),
+            message: self
+                .message
+                .read()
+                .unwrap_or_else(PoisonError::into_inner)
+                .clone(),
+            error: self
+                .error
+                .read()
+                .unwrap_or_else(PoisonError::into_inner)
+                .clone(),
+            result: self
+                .result
+                .read()
+                .unwrap_or_else(PoisonError::into_inner)
+                .clone(),
             created_at: self.created_at.clone(),
-            updated_at: self.updated_at.read().unwrap().clone(),
+            updated_at: self
+                .updated_at
+                .read()
+                .unwrap_or_else(PoisonError::into_inner)
+                .clone(),
         }
     }
 }
@@ -101,20 +117,36 @@ impl TaskReporter {
 
     /// Mark the task as running (the first event a spawned task emits).
     pub fn start(&self) {
-        *self.entry.state.write().unwrap() = TaskState::Running;
+        *self
+            .entry
+            .state
+            .write()
+            .unwrap_or_else(PoisonError::into_inner) = TaskState::Running;
         self.emit();
     }
 
     /// Report progress (0..=100) plus an optional status line.
     pub fn progress(&self, percent: u32, message: Option<String>) {
-        *self.entry.progress.write().unwrap() = Some(percent.min(100));
-        *self.entry.message.write().unwrap() = message;
+        *self
+            .entry
+            .progress
+            .write()
+            .unwrap_or_else(PoisonError::into_inner) = Some(percent.min(100));
+        *self
+            .entry
+            .message
+            .write()
+            .unwrap_or_else(PoisonError::into_inner) = message;
         self.emit();
     }
 
     /// Replace just the status line, keeping progress as-is.
     pub fn message(&self, message: String) {
-        *self.entry.message.write().unwrap() = Some(message);
+        *self
+            .entry
+            .message
+            .write()
+            .unwrap_or_else(PoisonError::into_inner) = Some(message);
         self.emit();
     }
 
@@ -123,9 +155,21 @@ impl TaskReporter {
         // Result and error land BEFORE the terminal state: the state write is
         // the commit marker, so no observer can ever see a terminal snapshot
         // whose payload has not landed yet.
-        *self.entry.result.write().unwrap() = result;
-        *self.entry.error.write().unwrap() = error;
-        *self.entry.state.write().unwrap() = state;
+        *self
+            .entry
+            .result
+            .write()
+            .unwrap_or_else(PoisonError::into_inner) = result;
+        *self
+            .entry
+            .error
+            .write()
+            .unwrap_or_else(PoisonError::into_inner) = error;
+        *self
+            .entry
+            .state
+            .write()
+            .unwrap_or_else(PoisonError::into_inner) = state;
         self.emit();
     }
 
@@ -145,8 +189,57 @@ impl TaskReporter {
     }
 
     fn emit(&self) {
-        *self.entry.updated_at.write().unwrap() = now_rfc3339();
+        *self
+            .entry
+            .updated_at
+            .write()
+            .unwrap_or_else(PoisonError::into_inner) = now_rfc3339();
         (self.emit)(self.entry.snapshot());
+    }
+}
+
+/// Ensures a task reaches a terminal state even if its runner never returns
+/// normally.
+///
+/// `finish` is only reachable through the `match` in [`TaskManager::spawn`], so a
+/// panic unwinding through the runner used to skip it: the task stayed `Running`
+/// forever, the UI showed work that had already stopped, and — because pruning is
+/// terminal-only — the entry was never evicted either. Dropping the future (a
+/// runtime shutdown) has the same effect. This guard closes both holes, and a
+/// panic is additionally recorded by the process panic hook.
+struct FinishGuard {
+    reporter: TaskReporter,
+    armed: bool,
+}
+
+impl FinishGuard {
+    fn arm(reporter: TaskReporter) -> Self {
+        Self {
+            reporter,
+            armed: true,
+        }
+    }
+
+    /// The runner reported its own terminal state; nothing left to do.
+    fn disarm(&mut self) {
+        self.armed = false;
+    }
+}
+
+impl Drop for FinishGuard {
+    fn drop(&mut self) {
+        if !self.armed {
+            return;
+        }
+        info!(
+            task_id = %self.reporter.entry.id,
+            "task runner ended without a result; marking it failed"
+        );
+        self.reporter.finish(
+            TaskState::Failed,
+            None,
+            Some("the task stopped unexpectedly before it could finish".to_string()),
+        );
     }
 }
 
@@ -192,7 +285,7 @@ impl TaskManager {
         let (cancel_tx, cancel_rx) = watch::channel(false);
         let entry = Arc::new(TaskEntry::new(id.clone(), kind, title, cancel_tx));
         {
-            let mut tasks = self.tasks.lock().unwrap();
+            let mut tasks = self.tasks.lock().unwrap_or_else(PoisonError::into_inner);
             tasks.insert(id.clone(), entry.clone());
             prune_locked(&mut tasks);
         }
@@ -201,6 +294,9 @@ impl TaskManager {
         let manager = self.clone();
         tauri::async_runtime::spawn(async move {
             reporter.start();
+            // Armed before the runner: if it unwinds or is dropped, the task
+            // still ends as `Failed` instead of hanging in `Running` forever.
+            let mut guard = FinishGuard::arm(reporter.clone());
             match run(reporter.clone()).await {
                 Ok(result) => reporter.finish(TaskState::Success, Some(result), None),
                 Err(TaskError::Cancelled) => reporter.finish(TaskState::Cancelled, None, None),
@@ -209,6 +305,7 @@ impl TaskManager {
                     reporter.finish(TaskState::Failed, None, Some(message));
                 }
             }
+            guard.disarm();
             // The task is terminal now; keep the map bounded even if no new
             // task spawns for a while.
             prune(&manager);
@@ -221,7 +318,7 @@ impl TaskManager {
     pub fn get(&self, id: &str) -> Option<TaskSnapshot> {
         self.tasks
             .lock()
-            .unwrap()
+            .unwrap_or_else(PoisonError::into_inner)
             .get(id)
             .map(|entry| entry.snapshot())
     }
@@ -231,7 +328,7 @@ impl TaskManager {
         let mut all: Vec<TaskSnapshot> = self
             .tasks
             .lock()
-            .unwrap()
+            .unwrap_or_else(PoisonError::into_inner)
             .values()
             .map(|entry| entry.snapshot())
             .collect();
@@ -242,7 +339,12 @@ impl TaskManager {
     /// Request cancellation. The runner observes the flag (and drops its future
     /// when it is inside `select!`); a queued task cancels once it starts.
     pub fn cancel(&self, id: &str) -> Option<TaskSnapshot> {
-        let entry = self.tasks.lock().unwrap().get(id).cloned()?;
+        let entry = self
+            .tasks
+            .lock()
+            .unwrap_or_else(PoisonError::into_inner)
+            .get(id)
+            .cloned()?;
         let _ = entry.cancel.send(true);
         Some(entry.snapshot())
     }
@@ -252,7 +354,7 @@ impl TaskManager {
 /// Terminal tasks are ranked by their `updated_at` stamp; running/queued
 /// entries are never touched.
 fn prune(manager: &TaskManager) {
-    let mut tasks = manager.tasks.lock().unwrap();
+    let mut tasks = manager.tasks.lock().unwrap_or_else(PoisonError::into_inner);
     prune_locked(&mut tasks);
 }
 
@@ -262,8 +364,23 @@ fn prune_locked(tasks: &mut HashMap<String, Arc<TaskEntry>>) {
     // even when live tasks push the total count past it.
     let mut terminal: Vec<(String, String)> = tasks
         .iter()
-        .filter(|(_, entry)| entry.state.read().unwrap().is_terminal())
-        .map(|(id, entry)| (id.clone(), entry.updated_at.read().unwrap().clone()))
+        .filter(|(_, entry)| {
+            entry
+                .state
+                .read()
+                .unwrap_or_else(PoisonError::into_inner)
+                .is_terminal()
+        })
+        .map(|(id, entry)| {
+            (
+                id.clone(),
+                entry
+                    .updated_at
+                    .read()
+                    .unwrap_or_else(PoisonError::into_inner)
+                    .clone(),
+            )
+        })
         .collect();
     if terminal.len() <= MAX_TERMINAL_TASKS {
         return;
@@ -305,6 +422,71 @@ mod tests {
             tokio::time::sleep(std::time::Duration::from_millis(1)).await;
         }
         panic!("task {id} never reached a terminal state");
+    }
+
+    /// MISSION-154: a runner that panics must not strand the task in `Running`.
+    /// Before the guard, `finish` was unreachable after an unwind — the task
+    /// stayed live forever, was never pruned (pruning is terminal-only), and the
+    /// UI showed work that had already stopped.
+    #[tokio::test]
+    async fn a_panicking_runner_still_reaches_a_terminal_state() {
+        let (manager, _seen) = collecting_manager();
+        let id = manager.spawn(
+            TaskKind::ImportFile,
+            "exploding task".to_string(),
+            |_reporter| async move {
+                panic!("a bug inside the runner");
+            },
+        );
+
+        let snapshot = wait_terminal(&manager, &id).await;
+        assert_eq!(snapshot.state, TaskState::Failed);
+        assert!(
+            snapshot
+                .error
+                .unwrap_or_default()
+                .contains("stopped unexpectedly"),
+            "the failure must say the task stopped, not invent a result"
+        );
+
+        // …and the manager is still usable afterwards.
+        let next = manager.spawn(
+            TaskKind::ExportFile,
+            "after the panic".to_string(),
+            |_reporter| async move { Ok(json!({ "ok": true })) },
+        );
+        assert_eq!(
+            wait_terminal(&manager, &next).await.state,
+            TaskState::Success
+        );
+        assert_eq!(manager.list().len(), 2);
+    }
+
+    /// MISSION-154: a poisoned lock used to take the whole task API down — every
+    /// later `get`/`list`/`cancel`/`spawn` panicked on `.unwrap()`. Recovering is
+    /// the project-wide convention (MISSION-141).
+    #[tokio::test]
+    async fn the_task_api_survives_a_poisoned_lock() {
+        let (manager, _seen) = collecting_manager();
+
+        let poisoned = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+            let _held = manager.tasks.lock().unwrap();
+            panic!("poison the manager lock");
+        }));
+        assert!(poisoned.is_err());
+        assert!(manager.tasks.is_poisoned(), "the lock really is poisoned");
+
+        // Every entry point still answers instead of panicking.
+        assert!(manager.list().is_empty());
+        assert!(manager.get("t-missing").is_none());
+        assert!(manager.cancel("t-missing").is_none());
+
+        let id = manager.spawn(
+            TaskKind::Backup,
+            "spawned after the poison".to_string(),
+            |_reporter| async move { Ok(json!({ "ok": true })) },
+        );
+        assert_eq!(wait_terminal(&manager, &id).await.state, TaskState::Success);
     }
 
     #[tokio::test]

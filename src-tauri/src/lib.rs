@@ -24,6 +24,7 @@ use crate::infrastructure::providers::StdEntryBuilder;
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
+    install_panic_hook();
     tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_store::Builder::new().build())
@@ -90,7 +91,20 @@ pub fn run() {
                 if let Err(error) =
                     tauri::async_runtime::block_on(infrastructure::db::migrate(&pool))
                 {
-                    return Err(error.into());
+                    // Refusing to touch a schema that does not match is right;
+                    // dying silently is not. Log it (so the reason is on disk),
+                    // say it on stderr, show it, then exit non-zero.
+                    fatal_startup_error(
+                        app,
+                        "The database schema could not be updated, so MyLore stopped \
+                         before touching your data.",
+                        &format!(
+                            "{error}\n\nDatabase: {}\nBackups: {}\nLogs: {}",
+                            db_path.display(),
+                            data_dir.join("backups").display(),
+                            data_dir.join("logs").display()
+                        ),
+                    );
                 }
             } else {
                 tracing::error!("database failed its integrity check; starting in recovery mode");
@@ -315,4 +329,58 @@ pub fn run() {
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
+}
+
+/// Write every panic to the log as well as to stderr.
+///
+/// A release build has no console (`windows_subsystem = "windows"` in
+/// `main.rs`), so a panic that only reaches stderr is invisible to the user *and*
+/// absent from the log file — which is how a rejected migration turned into "the
+/// window flashes and nothing is written anywhere". The hook runs before the
+/// subscriber exists only for the very earliest failures, which still reach
+/// stderr.
+fn install_panic_hook() {
+    let previous = std::panic::take_hook();
+    std::panic::set_hook(Box::new(move |info| {
+        let location = info
+            .location()
+            .map(|location| location.to_string())
+            .unwrap_or_else(|| "unknown location".to_string());
+        let message = info
+            .payload()
+            .downcast_ref::<&str>()
+            .map(|text| (*text).to_string())
+            .or_else(|| info.payload().downcast_ref::<String>().cloned())
+            .unwrap_or_else(|| "non-text panic payload".to_string());
+        tracing::error!(%location, %message, "panic");
+        previous(info);
+    }));
+}
+
+/// A failure that stops the process with no window to show: log it, flush the
+/// log, print it, show it, and exit non-zero (MISSION-118).
+fn fatal_startup_error(app: &tauri::App, summary: &str, detail: &str) -> ! {
+    tracing::error!(summary, detail, "startup failed; exiting");
+    // Flush before the dialog: the writer is non-blocking, and someone may kill
+    // the process while the box is on screen. Nothing else will be logged — the
+    // process is on its way out.
+    infrastructure::logging::shutdown();
+    eprintln!("MyLore could not start: {summary}\n{detail}");
+
+    // `blocking_show` must not run on the main thread, and `setup` runs there:
+    // a worker thread shows the modal box while this one waits for it.
+    let handle = app.handle().clone();
+    let body = format!("{summary}\n\n{detail}");
+    let _ = std::thread::spawn(move || {
+        use tauri_plugin_dialog::{DialogExt, MessageDialogKind};
+        handle
+            .dialog()
+            .message(body)
+            .title("MyLore could not start")
+            .kind(MessageDialogKind::Error)
+            .blocking_show();
+    })
+    .join();
+
+    std::process::exit(1);
 }

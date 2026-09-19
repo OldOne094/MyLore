@@ -215,6 +215,58 @@ mod tests {
     use super::*;
     use crate::infrastructure::test_support::{cleanup_files, migrated_pool, temp_db_path};
 
+    /// SHA-384 of every migration as sqlx has it embedded, computed from the file
+    /// bytes. sqlx refuses to open a database whose recorded checksum for an
+    /// applied migration differs, so editing an applied migration **bricks every
+    /// existing install** — the MISSION-118 hotfix was exactly this: `0013` was
+    /// rewritten after it had been applied, and the app died on startup for
+    /// anyone with an older database.
+    ///
+    /// This table is **append-only**: add the row for a new migration, never
+    /// touch an existing one. Check with `cargo test` — this test recomputes the
+    /// embedded checksums, so drift is caught here instead of on a user's disk.
+    const MIGRATION_CHECKSUMS: &[(i64, &str)] = &[
+        (1, "6695afa9286a5794c997d4bc34ebeffdcfc95b76b69ff8bff9be3f4f1c361e27389c98182d8c038f5d8fb0d92673ecd2"),
+        (2, "43ea04412325894e8d33183b633be2c1080c562735e6755522b42910027cd07f1d691354caa01749197260483a1df2ba"),
+        (3, "7184be87c7627879925006d639102800f5d7f7a45a45255cb59953e1a088e803904f46b431641171dbb9f52f4103d9ec"),
+        (4, "ee2557afb61332e605114116682e3c041cf27ca6eeabb715418ed90d11b798078c13fc685a9a939a0f19c3e737a19e07"),
+        (5, "76454590a91dda718b9a9781ae9cebb1a435ec323d1d37b3e9aa230e8fa1ab8e85ea46014bd67030e3bb4d9b622a55bb"),
+        (6, "7a0a11ea3e8f3c2903bb64f85c5610be6d3a0a32ee7cf7e908aa554b680d25c9c12212f9023d5d33c66276864238637a"),
+        (7, "fa979705421bed39061135d211e786e01f6b83d384e1b77bbc867ec812a1e33fd3ee527458d7024f84fdf28144fefd86"),
+        (8, "dc77f69ca6db5c47c7e910d050049c79a6434e2b2a268c945f4c0cac84ab6f2b72532fd195255f5450f7cc619388426c"),
+        (9, "080ec417de5789d725d0aed04a89ac273df599b75f0ae132df06f42775fbd6045befbfdf4bc436ddf297664283191e88"),
+        (10, "1556f1adb728e8aeb23b90173511e112a743c0893722304120042805839ef2cb393933f5439949b8c4af7db84abdc24b"),
+        (11, "8de5b3d24be8d5eb0d1c085fa305e254c228144735f08840b86e02fb8164314fdb32d8dd74f850b8ef620bdd3ff7056b"),
+        (12, "26ba59450102607c4a9717094b00edab7150905a6c65acd3c137ce95dbd09ee32ade2135a1c4da6bcc5b0d828e076bed"),
+        (13, "c6bed76ec1a498483c4cfc079328a0ce96bb76c0bc9bf5802f0175a495d99e67a316c424e7b908ad21c725853af8802b"),
+        (14, "e7d06e1fa594cdb4c19af94f6d818a4e04a8e87fe3c681ab0e674b7f078d1e11d012eaa2ea5c74aee8500b4a050da9b0"),
+        (15, "f9c3c7b7bfdea6820f981cbb655a3d57370931f076c3fed89b8121c39d53778a6921d797b8448aae0a28c346dc69989c"),
+        (16, "bb6109fc92eece82166e7d5138cc46dc86f064ed0d09578ce651766391c1fcf1ce61bb48c95f90da105040ed6590de29"),
+    ];
+
+    fn hex(bytes: &[u8]) -> String {
+        bytes.iter().map(|byte| format!("{byte:02x}")).collect()
+    }
+
+    #[test]
+    fn applied_migrations_are_never_edited() {
+        let embedded: Vec<(i64, String)> = MIGRATOR
+            .iter()
+            .map(|migration| (migration.version, hex(&migration.checksum)))
+            .collect();
+        let pinned: Vec<(i64, String)> = MIGRATION_CHECKSUMS
+            .iter()
+            .map(|(version, checksum)| (*version, (*checksum).to_string()))
+            .collect();
+
+        assert_eq!(
+            embedded, pinned,
+            "a migration file changed. Never edit an applied migration — add a new \
+             one (DATABASE.md §6). If you just added a migration, append its \
+             checksum to MIGRATION_CHECKSUMS."
+        );
+    }
+
     #[tokio::test]
     async fn connect_creates_database_and_applies_pragmas() {
         let path = temp_db_path("pragma.db");
