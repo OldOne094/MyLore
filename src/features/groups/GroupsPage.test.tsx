@@ -61,6 +61,7 @@ describe("GroupsPage", () => {
   it("enables reading groups with the chosen name", async () => {
     vi.mocked(invoke).mockImplementation((cmd: string) => {
       if (cmd === "reading_group_prefs_set") return Promise.resolve(PREFS);
+      if (cmd === "reading_group_list") return Promise.resolve([]);
       return Promise.resolve({ enabled: false, member_id: "m-me", display_name: "" });
     });
     renderPage();
@@ -72,6 +73,20 @@ describe("GroupsPage", () => {
       enabled: true,
       displayName: "Me",
     });
+  });
+
+  it("treats a non-array reply as an empty list instead of crashing", async () => {
+    // Regression (MISSION-155): a reply of the wrong shape reached `groups.map`
+    // and took the page down mid-render — a passing suite with an unhandled
+    // error in it. The hook normalises at the boundary now.
+    vi.mocked(invoke).mockImplementation((cmd: string) => {
+      if (cmd === "reading_group_prefs_get") return Promise.resolve(PREFS);
+      if (cmd === "reading_group_list") return Promise.resolve({ enabled: false });
+      return Promise.resolve(undefined);
+    });
+    renderPage();
+
+    expect(await screen.findByText("No groups yet")).toBeInTheDocument();
   });
 
   it("lists groups with their member count", async () => {

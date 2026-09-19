@@ -9,9 +9,13 @@ vi.mock("@tauri-apps/api/core", () => ({
 }));
 
 import { invoke } from "@tauri-apps/api/core";
+import { version as appVersion } from "../../../package.json";
 import { StatusBar } from "./StatusBar";
 
-/* MISSION-146 — the status-bar title count is live, not hardcoded. */
+/* MISSION-146 — the status-bar title count is live, not hardcoded.
+   The version is injected at build time from package.json (MISSION-099), which
+   is why this test reads the manifest: a hand-edited string drifted from it
+   before, showing "v0.1.0" long after the app had moved on. */
 
 function renderBar() {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
@@ -58,5 +62,12 @@ describe("StatusBar", () => {
     renderBar();
 
     expect(await screen.findByText("0 titles")).toBeInTheDocument();
+  });
+
+  it("shows the version the build was cut from", async () => {
+    countOnly(3);
+    renderBar();
+
+    expect(await screen.findByText(`v${appVersion}`)).toBeInTheDocument();
   });
 });

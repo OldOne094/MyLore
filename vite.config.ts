@@ -2,12 +2,18 @@ import { defineConfig, configDefaults } from "vitest/config";
 import react from "@vitejs/plugin-react";
 import tailwindcss from "@tailwindcss/vite";
 import { fileURLToPath, URL } from "node:url";
+import { version as appVersion } from "./package.json";
 
 const host = process.env.TAURI_DEV_HOST;
 
 // https://vite.dev/config/
 export default defineConfig(async () => ({
   plugins: [react(), tailwindcss()],
+
+  // The status bar shows the version the build was cut from. `package.json` is
+  // the source `scripts/release.mjs` keeps in sync with `Cargo.toml` and
+  // `tauri.conf.json`, so the UI never carries a hand-edited second copy.
+  define: { __APP_VERSION__: JSON.stringify(appVersion) },
 
   resolve: {
     alias: {

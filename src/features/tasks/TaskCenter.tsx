@@ -22,9 +22,9 @@ export function TaskCenter() {
   const list = useTaskList();
   const cancel = useTaskCancel();
 
-  // The list is a read of foreign data: a backend that answers with something
-  // other than an array must not take the status bar down with it.
-  const tasks: TaskSnapshot[] = Array.isArray(list.data) ? list.data : [];
+  // `useTaskList` normalises the reply, so anything the backend answers with
+  // arrives here as an array.
+  const tasks: TaskSnapshot[] = list.data ?? [];
   const live = tasks.filter((task) => !isTaskTerminal(task)).length;
 
   return (

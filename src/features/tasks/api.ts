@@ -10,6 +10,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import type { UnlistenFn } from "@tauri-apps/api/event";
 import { listenTaskChanged, task_cancel, task_get, task_list, type TaskSnapshot } from "@/api";
 import { queryKeys } from "@/api";
+import { asList } from "@/lib/asList";
 
 export interface UseTaskOptions {
   onSuccess?: (snapshot: TaskSnapshot) => void;
@@ -100,7 +101,7 @@ export function useTask(taskId: string | null, options: UseTaskOptions = {}) {
 export function useTaskList() {
   return useQuery({
     queryKey: queryKeys.task.all(),
-    queryFn: () => task_list(),
+    queryFn: async () => asList(await task_list()),
     refetchInterval: (query) =>
       (query.state.data ?? []).some((task) => !isTaskTerminal(task)) ? 1500 : IDLE_POLL_MS,
   });

@@ -6,7 +6,6 @@ const en = {
   shell: {
     brand: "MyLore",
     status: {
-      version: "v0.1.0",
       counts_one: "{{count}} title",
       counts_other: "{{count}} titles",
     },
@@ -1132,7 +1131,6 @@ const ar = {
   shell: {
     brand: "مايلور",
     status: {
-      version: "v0.1.0",
       counts_zero: "{{count}} عنوان",
       counts_one: "{{count}} عنوان",
       counts_two: "{{count}} عنوانان",

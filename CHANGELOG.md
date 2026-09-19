@@ -3,6 +3,32 @@
 All notable changes to MyLore are documented here.
 Format: [Keep a Changelog](https://keepachangelog.com), versions follow [SemVer](https://semver.org).
 
+## [0.1.1-alpha.4] - 2026-09-19
+
+### Added
+
+- feat(groups): **reading groups** (MISSION-114–118) — opt-in, local-first group reading. A privacy gate states exactly what leaves the device before anything is enabled; groups carry members, a shared shelf, and notes. Notes live in a conflict-free document that syncs over encrypted envelopes (work key sealed inside the payload), with invite links, per-group key rotation for revocation, and a relay transport behind the off-by-default `p2p` feature. The group page is an alignment matrix (works × members), and a spoiler gate never renders a note body ahead of your progress.
+- feat(tasks): **task centre** (MISSION-155) — the status bar lists every background task this session started (title, state, progress, message, error) with Cancel while it is still running. A spawned task used to be visible only from the dialog that started it.
+- feat(domain): new content types — **game, podcast, music, comic** — with progress templates and migration 0013 (MISSION-109).
+- feat(providers): **iTunes Search** (podcast + music), **RAWG** (games) and **GCD** (comics) close the remaining content-type gaps; every content type now has a serving provider, and Discover says so honestly when one is disabled.
+- feat(reviews): aggregate **Reviews hub** across the library (MISSION-144).
+- feat(stats): Recharts monthly-trend and donut charts, a shareable stats card exported as PNG, and a **user profile** with avatar + display name (MISSION-113/132).
+
+### Fixed
+
+- fix(tasks): a background task could stay `Running` forever if its runner panicked — it now always reaches a terminal state, and a poisoned lock no longer takes the whole task API down (MISSION-154).
+- fix(import): Cancel was ignored while the file was analysed; it now races the analysis and stops promptly (MISSION-155).
+- fix(backup): restore results were typed as `BackupReport`, so fields read as `undefined` (MISSION-155); encrypted backups now carry `encrypted` + `schema_version`, and a snapshot newer than the running build is refused instead of half-restored (MISSION-140/142).
+- fix(ui): a malformed reply from the backend could reach `.map` and take a page down mid-render; list payloads are now normalised at the query boundary (M20.4).
+- fix(security): provider settings and the DB passphrase shared one secret store again — a second store instance was silently dropping writes (M20.1).
+
+### Changed
+
+- docs: provider matrix realigned to the 13 shipped adapters (TVDB/Trakt/BookBrainz/SIMKL/Annict/ISBNDB marked research-only), `DATABASE.md` documents migrations 0008–0013, and **`TESTING.md` now exists** as the canonical test strategy (MISSION-147–149).
+- docs: `ROADMAP.md` statuses reconciled (MISSION-151); dead `greet` scaffold and the unused `keyring` dependency removed (MISSION-150).
+- chore: the status-bar version is injected from `package.json` at build time instead of being a hand-edited string that drifted from the real version.
+- chore: `cargo test` is hermetic again — the live-network probes are `#[ignore]`d as their file always claimed, so a plain `cargo test` never touches the internet.
+
 ## [0.1.0-alpha.3] - 2026-08-24
 
 ### Added

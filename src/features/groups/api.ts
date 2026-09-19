@@ -13,6 +13,7 @@
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { save } from "@tauri-apps/plugin-dialog";
+import { asList } from "@/lib/asList";
 import {
   reading_group_add_member,
   reading_group_add_note,
@@ -93,7 +94,7 @@ export function useSetGroupPrefs() {
 export function useGroupsQuery() {
   return useQuery({
     queryKey: queryKeys.readingGroup.list(),
-    queryFn: () => reading_group_list(),
+    queryFn: async () => asList(await reading_group_list()),
   });
 }
 
@@ -172,7 +173,7 @@ export function useRemoveGroupMember(groupId: string) {
 export function useGroupShelfQuery(groupId: string, enabled = true) {
   return useQuery({
     queryKey: queryKeys.readingGroup.shelf(groupId, null),
-    queryFn: () => reading_group_shelf({ groupId, memberId: null }),
+    queryFn: async () => asList(await reading_group_shelf({ groupId, memberId: null })),
     enabled: enabled && groupId.length > 0,
   });
 }
