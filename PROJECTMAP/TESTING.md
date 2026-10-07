@@ -12,8 +12,8 @@
 |-------|------|-------|--------------------------|
 | Rust unit | `cargo test --lib` | inline `#[cfg(test)] mod tests` | ~690 |
 | Rust integration | `cargo test --test …` | `src-tauri/tests/` | 15 |
-| Frontend unit/component | Vitest + Testing Library | `src/**/*.test.{ts,tsx}` | ~330 across ~50 files |
-| End-to-end | Playwright | `e2e/` | 5 flows |
+| Frontend unit/component | Vitest + Testing Library | `src/**/*.test.{ts,tsx}` | ~367 across 54 files |
+| End-to-end | Playwright | `e2e/` | 6 flows |
 | Benchmarks | `cargo bench` | `src-tauri/benches/` | `database.rs` |
 
 The pyramid is deliberately bottom-heavy: business rules, dedup, status transitions, import/export
@@ -83,8 +83,14 @@ This is the mechanism `ARCHITECTURE.md §4` refers to when it says fixtures "ena
 - **Why a stub, not `tauri-driver`:** WebView2 exposes no WebDriver endpoint compatible with
   Playwright, so driving the actual webview is not possible in CI. The suite drives the same
   renderer users see across a scripted boundary instead — deterministic and offline.
-- Flows (`e2e/flows.spec.ts`): add media, library search, track progress, import a file, and
-  backup/restore through the guarded dialog.
+- Flows (`e2e/flows.spec.ts`): add media, library search, track progress, import a file,
+  backup/restore through the guarded dialog, and theme/language survival across a relaunch.
+- **The store stub mirrors the plugin's wire contract, not just its shape.** `plugin-store`'s `get`
+  answers a `[value, exists]` **tuple** (and `has` a boolean). The stub originally returned the bare
+  value, which is not destructured — so every read looked like "nothing stored" and no E2E test could
+  observe a store-backed setting persisting (MISSION-158). It now implements
+  `get`/`has`/`keys`/`values`/`entries`/`length`/`delete`/`clear` and backs the store with
+  localStorage, so `page.reload()` behaves like a relaunch — the only way to assert persistence.
 
 ## 7. Benchmarks
 

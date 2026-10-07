@@ -401,7 +401,7 @@ numbers are independent of prior samples. Full results in `src-tauri/benches/dat
 - `schema_version` tracked by sqlx `_sqlx_migrations`; backups record it and `BackupService`
   refuses a snapshot whose schema is newer than the running build (MISSION-142).
 
-### 6.1 Migrations beyond the v1 schema (0008–0013)
+### 6.1 Migrations beyond the v1 schema (0008–0018)
 
 The v1 DDL above is the baseline (0001–0007). Later migrations are recorded here (MISSION-148):
 
@@ -416,10 +416,14 @@ The v1 DDL above is the baseline (0001–0007). Later migrations are recorded he
 | `0014_reading_groups.sql` | MISSION-114 | Reading-group aggregate (separate from user data, ADR-007): `reading_group`, `group_member`, `group_shelf`, `group_note`. References works by a stable cross-device work key, never `media.id`. |
 | `0015_reading_group_p2p.sql` | MISSION-115 | `group_doc` — one encoded CRDT (yrs) document per (group, work) holding the shared notes, with a `pending_ops`/`compacted_at` compaction policy. Additive; the plain `group_note` table stays the non-p2p source of truth. The reserved `work_key = '~state'` (MISSION-118) holds the group state document instead of a work's notes — self-announced member names and shelf entries — which is projected into `group_member`/`group_shelf`; a work key is `provider:value` or `h:<hex>`, so the sentinel can never collide with one. |
 | `0016_reading_group_transport.sql` | MISSION-116 | Relay transport: `group_relay` (a group's relay set), `group_outbox` (outbox-first queue of sealed envelopes, with `sent_at`/`attempts`/`last_error`), `group_event_seen` (message-id dedup gate). Chunking stays in the transport layer, so one row holds one whole envelope. `group_outbox.topic`/`work_key` are local bookkeeping only — MISSION-118 moved the topic inside the sealed payload, so no relay sees it, and a key rotation clears the pending rows (`clear_outbox`). |
+| `0017_group_work_origin.sql` | MISSION-160 | `group_work_origin` — the one-way seam a copied work leaves behind: `(group_id, work_key) → media_id`, primary-keyed so pressing "add to my library" twice cannot create a second title, and cascading with the media row so deleting the copy frees the key again. It is the only table that crosses from the group aggregate to `media` (ADR-007), and only in the direction "I took a copy". |
+| `0018_media_field_override.sql` | MISSION-161 | `media_field_override` — the provider-owned fields the user pinned by editing them by hand, keyed `(media_id, field)` with the same field names the enrich diff uses. A refresh keeps a pinned field and reports it back as `kept` instead of silently replacing the edit; `unpin` releases it. Cascades with the media row. |
 
 - Migrations 0010–0012 are index-only (no schema/column change), so they are invisible in the v1
-  DDL above; 0008/0009 add columns to `tracking`/`review`; 0013 rewrites the `media` CHECK; 0014
-  adds the reading-group aggregate (its own section would live in `ARCHITECTURE.md §6`).
+  DDL above; 0008/0009 add columns to `tracking`/`review`; 0013 rewrites the `media` CHECK; 0014–0016
+  add the reading-group aggregate and its p2p/transport tables, 0017 the copy-origin seam that links
+  a group work back to a media row, and 0018 the record of which fields a hand edit owns (its own
+  section would live in `ARCHITECTURE.md §6`).
 - `sqlx::migrate!` is re-checked at every startup; the pre-migration backup hook (MISSION-087)
   snapshots the database whenever `pending_migrations` is non-zero.
 
