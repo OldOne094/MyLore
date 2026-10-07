@@ -542,6 +542,11 @@ event (payload `TaskSnapshot`). The import confirm command spawns a `TaskKind::I
 runs `ImportPipeline::commit_with_progress` inside `tokio::select!` against a cooperative cancel
 flag; the export command spawns a `TaskKind::ExportFile` task that streams rows the same way.
 Cancellation propagates to Tokio tasks and HTTP requests (drop-based cancellation).
+**Progress is coalesced and now fine-grained (MISSION-156):** `TaskReporter::progress` drops a tick
+whose percent equals the last emitted one, so an import/export ticking once per row emits ~100
+events instead of one per row; `BackupService::create_with_progress`, `restore_with_progress` and
+`sync_now_with_progress` tick per cached file / staged asset / flushed envelope, and the commands
+map those into the 5–95 band (resolving at 100).
 
 - `domain::task::TaskSnapshot` — id, kind, title, state, `progress: Option<u32>`, message, error,
   `result: Option<Value>` (the typed outcome, e.g. the `ImportReport` on a successful import).

@@ -623,6 +623,22 @@ mod imp {
         transport: &dyn GroupTransport,
         group_id: &str,
     ) -> Result<GroupSyncReport, AppError> {
+        sync_now_with_progress(pool, store, transport, group_id, |_, _| {}).await
+    }
+
+    /// [`sync_now`] with a per-envelope flush progress callback (`done`,
+    /// `total` over the queued outbox), so a large outbox reports movement
+    /// instead of sitting at 5 % (MISSION-156).
+    pub async fn sync_now_with_progress<F>(
+        pool: &SqlitePool,
+        store: &dyn SecretStore,
+        transport: &dyn GroupTransport,
+        group_id: &str,
+        mut on_progress: F,
+    ) -> Result<GroupSyncReport, AppError>
+    where
+        F: FnMut(u32, u32),
+    {
         require_group(pool, group_id).await?;
         let relays = repo::relays(pool, group_id).await?;
 
@@ -640,8 +656,10 @@ mod imp {
         }
 
         // 1. Flush: whatever is queued goes out before we read anything back.
+        let pending = repo::pending(pool, group_id).await?;
+        let total = pending.len() as u32;
         let (mut published, mut failed) = (0, 0);
-        for row in repo::pending(pool, group_id).await? {
+        for (index, row) in pending.into_iter().enumerate() {
             match transport
                 .publish(&relays, group_id, &row.message_id, &row.payload)
                 .await
@@ -657,6 +675,7 @@ mod imp {
                     failed += 1;
                 }
             }
+            on_progress(index as u32 + 1, total);
         }
 
         // 2. Pull: merge anything we have not already seen. Which document an
@@ -749,9 +768,20 @@ mod imp {
             reporter.progress(5, Some("Connecting to relays…".to_string()));
             let transport = NostrTransport::new(store.as_ref())
                 .map_err(|e| TaskError::failed(e.to_string()))?;
-            let report = sync_now(&pool, store.as_ref(), &transport, &group_id)
-                .await
-                .map_err(|e| TaskError::failed(e.to_string()))?;
+            let report = sync_now_with_progress(&pool, store.as_ref(), &transport, &group_id, {
+                let reporter = reporter.clone();
+                move |done, total| {
+                    // 5..=90 for the flush; the sync resolves into 100 below.
+                    let percent = if total == 0 {
+                        90
+                    } else {
+                        5 + (u64::from(done) * 85 / u64::from(total)) as u32
+                    };
+                    reporter.progress(percent, Some(format!("Sending {done}/{total} messages")));
+                }
+            })
+            .await
+            .map_err(|e| TaskError::failed(e.to_string()))?;
             let message = if report.published == 0 && report.pending > 0 {
                 // Degraded, not failed: the change is safe in the outbox.
                 "Queued — no relay reachable".to_string()
@@ -825,7 +855,7 @@ mod imp {
 #[cfg(feature = "p2p")]
 pub use imp::{
     enqueue_envelope, relays_get, relays_set, relays_view, set_relays, spawn_sync, sync_now,
-    GroupTransport, InMemoryTransport, NostrTransport, GROUP_EVENT_KIND,
+    sync_now_with_progress, GroupTransport, InMemoryTransport, NostrTransport, GROUP_EVENT_KIND,
 };
 #[cfg(not(feature = "p2p"))]
 pub use imp::{enqueue_envelope, relays_get, relays_set, spawn_sync};
@@ -1279,6 +1309,35 @@ mod tests {
         assert_eq!(report.failed, 0);
         assert_eq!(report.received, 0, "nothing could be pulled this pass");
         assert_eq!(report.pending, 0);
+
+        cleanup_files(&a.path);
+    }
+
+    /// MISSION-156: a sync reports one flush tick per queued envelope, so a
+    /// large outbox shows movement instead of sitting at 5 %.
+    #[tokio::test]
+    async fn sync_reports_flush_progress() {
+        let a = device("rg_tx_progress.db").await;
+        let relay = InMemoryTransport::new();
+        let group = ReadingGroupService::new(a.pool.clone())
+            .create_group("G")
+            .await
+            .expect("group");
+        set_relays(&a.pool, &relay, &group.id, vec!["wss://relay.test".into()])
+            .await
+            .unwrap();
+        edit_and_queue(&a, &group.id, "n1", "hello").await;
+
+        let mut ticks = Vec::new();
+        let report = sync_now_with_progress(&a.pool, &a.store, &relay, &group.id, |done, total| {
+            ticks.push((done, total))
+        })
+        .await
+        .unwrap();
+        assert!(report.published >= 1);
+        let (done, total) = *ticks.last().expect("at least one flush tick");
+        assert!(total >= 1, "the flush had work to report");
+        assert_eq!(done, total, "the last tick reaches the total");
 
         cleanup_files(&a.path);
     }

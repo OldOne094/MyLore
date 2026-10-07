@@ -33,6 +33,9 @@ struct TaskEntry {
     cancel: watch::Sender<bool>,
     state: RwLock<TaskState>,
     progress: RwLock<Option<u32>>,
+    /// The percent carried by the last *emitted* progress event; a tick that
+    /// stays inside this bucket is dropped (MISSION-156 coalescing).
+    last_emitted_percent: RwLock<Option<u32>>,
     message: RwLock<Option<String>>,
     error: RwLock<Option<String>>,
     result: RwLock<Option<Value>>,
@@ -50,6 +53,7 @@ impl TaskEntry {
             cancel,
             state: RwLock::new(TaskState::Queued),
             progress: RwLock::new(None),
+            last_emitted_percent: RwLock::new(None),
             message: RwLock::new(None),
             error: RwLock::new(None),
             result: RwLock::new(None),
@@ -126,17 +130,35 @@ impl TaskReporter {
     }
 
     /// Report progress (0..=100) plus an optional status line.
+    ///
+    /// **Coalesced (MISSION-156):** a burst of ticks that stay inside one
+    /// percent bucket — an import/export calling this once per row — collapses
+    /// into a single `task-changed` event, so a 10k-row run emits ~100 events
+    /// instead of 10k. The stored state is still updated on a dropped tick, so
+    /// the next emitted event (or the terminal snapshot) carries the latest
+    /// message. Non-progress events always emit.
     pub fn progress(&self, percent: u32, message: Option<String>) {
+        let percent = percent.min(100);
         *self
             .entry
             .progress
             .write()
-            .unwrap_or_else(PoisonError::into_inner) = Some(percent.min(100));
+            .unwrap_or_else(PoisonError::into_inner) = Some(percent);
         *self
             .entry
             .message
             .write()
             .unwrap_or_else(PoisonError::into_inner) = message;
+        let mut last = self
+            .entry
+            .last_emitted_percent
+            .write()
+            .unwrap_or_else(PoisonError::into_inner);
+        if *last == Some(percent) {
+            return;
+        }
+        *last = Some(percent);
+        drop(last);
         self.emit();
     }
 
@@ -519,6 +541,37 @@ mod tests {
         let progresses: Vec<Option<u32>> =
             seen.lock().unwrap().iter().map(|s| s.progress).collect();
         assert_eq!(progresses, vec![None, Some(30), Some(70), Some(70)]);
+    }
+
+    /// MISSION-156: an import/export ticks once per row; without coalescing
+    /// that is one `task-changed` event per row. Ticks inside one percent
+    /// bucket must collapse, while the terminal snapshot still carries the
+    /// latest message.
+    #[tokio::test]
+    async fn repeated_progress_within_one_percent_collapses_to_one_event() {
+        let (manager, seen) = collecting_manager();
+        let id = manager.spawn(
+            TaskKind::ExportFile,
+            "coalesce".to_string(),
+            |reporter| async move {
+                for row in 0..500u32 {
+                    reporter.progress(row * 100 / 500, Some(format!("row {row}")));
+                }
+                Ok(json!(null))
+            },
+        );
+        wait_terminal(&manager, &id).await;
+
+        let events = seen.lock().unwrap();
+        assert!(
+            events.len() < 150,
+            "500 per-row ticks must coalesce to ~100 events, got {}",
+            events.len()
+        );
+        assert!(
+            events.last().unwrap().message.as_deref() == Some("row 499"),
+            "the terminal snapshot carries the last message"
+        );
     }
 
     #[tokio::test]

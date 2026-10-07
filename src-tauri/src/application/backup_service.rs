@@ -253,6 +253,17 @@ impl BackupService {
 
     /// Create a validated `.mylore` archive of the whole library.
     pub async fn create(&self) -> Result<BackupReport, AppError> {
+        self.create_with_progress(|_, _| {}).await
+    }
+
+    /// [`create`](Self::create) with an asset-packing progress callback
+    /// (`done`, `total` over the cached files written into the archive). The
+    /// write loop is the slow part for a library with many cached covers, so
+    /// reporting it keeps a large backup from looking frozen (MISSION-156).
+    pub async fn create_with_progress<F>(&self, mut on_asset: F) -> Result<BackupReport, AppError>
+    where
+        F: FnMut(u32, u32),
+    {
         let backups_dir = self.backups_dir();
         std::fs::create_dir_all(&backups_dir)?;
 
@@ -322,7 +333,7 @@ impl BackupService {
 
         // 3. Write the archive: meta, snapshot, then each asset file.
         let meta_json = serde_json::to_string_pretty(&meta)?;
-        write_archive(&partial, &meta_json, &snapshot, &asset_files)?;
+        write_archive(&partial, &meta_json, &snapshot, &asset_files, &mut on_asset)?;
 
         // 4. Rename into place, then re-open and validate what we shipped.
         std::fs::rename(&partial, &dest)?;
@@ -504,6 +515,22 @@ impl BackupService {
         path: &Path,
         override_key: Option<&str>,
     ) -> Result<RestoreReport, AppError> {
+        self.restore_with_progress(path, override_key, |_, _| {})
+            .await
+    }
+
+    /// [`restore_with`](Self::restore_with) with a staging progress callback
+    /// (`done`, `total` over the archived asset files) so a large restore
+    /// reports movement instead of sitting at 5 % (MISSION-156).
+    pub async fn restore_with_progress<F>(
+        &self,
+        path: &Path,
+        override_key: Option<&str>,
+        mut on_asset: F,
+    ) -> Result<RestoreReport, AppError>
+    where
+        F: FnMut(u32, u32),
+    {
         // 1. Validate with zero side effects first.
         let meta = self.validate_with(path, override_key).await?;
 
@@ -515,7 +542,7 @@ impl BackupService {
         let _guard = PartialGuard {
             paths: vec![staging.clone()],
         };
-        let staged_db = extract_archive(path, &meta, &staging)?;
+        let staged_db = extract_archive(path, &meta, &staging, &mut on_asset)?;
 
         // 3. Unlock the live database files.
         self.pool.close().await;
@@ -726,6 +753,7 @@ fn write_archive(
     meta_json: &str,
     snapshot: &Path,
     assets: &[(String, PathBuf)],
+    mut on_asset: impl FnMut(u32, u32),
 ) -> Result<(), AppError> {
     let zipped = |error: zip::result::ZipError| {
         AppError::internal(format!("backup archive write failed: {error}"))
@@ -740,10 +768,12 @@ fn write_archive(
     zip.start_file(DB_ENTRY, options).map_err(zipped)?;
     io::copy(&mut std::fs::File::open(snapshot)?, &mut zip)?;
 
-    for (archive_path, source) in assets {
+    let total = assets.len() as u32;
+    for (index, (archive_path, source)) in assets.iter().enumerate() {
         zip.start_file(archive_path.as_str(), options)
             .map_err(zipped)?;
         io::copy(&mut std::fs::File::open(source)?, &mut zip)?;
+        on_asset(index as u32 + 1, total);
     }
 
     zip.finish().map_err(zipped)?;
@@ -757,6 +787,7 @@ fn extract_archive(
     archive_path: &Path,
     meta: &BackupMeta,
     staging: &Path,
+    mut on_asset: impl FnMut(u32, u32),
 ) -> Result<PathBuf, AppError> {
     let invalid = |message: &'static str| AppError::validation(message);
     let file =
@@ -773,12 +804,14 @@ fn extract_archive(
         io::copy(&mut db_entry, &mut out)?;
     }
     std::fs::create_dir_all(staging.join(ASSETS_PREFIX))?;
-    for entry in &meta.assets {
+    let total = meta.assets.len() as u32;
+    for (index, entry) in meta.assets.iter().enumerate() {
         let mut asset_entry = archive
             .by_name(&entry.file)
             .map_err(|_| invalid("backup archive is missing a manifest asset"))?;
         let mut out = std::fs::File::create(staging.join(&entry.file))?;
         io::copy(&mut asset_entry, &mut out)?;
+        on_asset(index as u32 + 1, total);
     }
     Ok(staged_db)
 }
@@ -984,6 +1017,64 @@ mod tests {
         h.cleanup().await;
     }
 
+    /// MISSION-156: a backup reports one tick per cached file as it packs them,
+    /// so a library with thousands of covers no longer sits at 5 % while zipping.
+    #[tokio::test]
+    async fn create_reports_asset_packing_progress() {
+        let h = harness("create-progress.db").await;
+        seed_media(&h.pool, "m-1").await;
+        let cache = h.data_dir.join("images").join("cache");
+        std::fs::create_dir_all(&cache).expect("cache dir");
+        for n in 1..=4 {
+            let path = cache.join(format!("a-{n}.jpg"));
+            std::fs::write(&path, b"bytes").expect("write image");
+            seed_cached_asset(&h.pool, &format!("a-{n}"), &path.display().to_string()).await;
+        }
+
+        let mut ticks = Vec::new();
+        let report = h
+            .service
+            .create_with_progress(|done, total| ticks.push((done, total)))
+            .await
+            .expect("create backup");
+        assert_eq!(report.asset_count, 4);
+        assert_eq!(
+            ticks,
+            vec![(1, 4), (2, 4), (3, 4), (4, 4)],
+            "one tick per asset, ending at the total"
+        );
+
+        h.cleanup().await;
+    }
+
+    /// MISSION-156: a restore reports one tick per staged asset file.
+    #[tokio::test]
+    async fn restore_reports_asset_staging_progress() {
+        let h = harness("restore-progress.db").await;
+        seed_media(&h.pool, "m-1").await;
+        let images = h.data_dir.join("images");
+        std::fs::create_dir_all(&images).expect("images dir");
+        for n in 1..=3 {
+            let path = images.join(format!("a-{n}.jpg"));
+            std::fs::write(&path, b"bytes").expect("write image");
+            seed_cached_asset(&h.pool, &format!("a-{n}"), &path.display().to_string()).await;
+        }
+        let backup = h.service.create().await.expect("create backup");
+
+        let mut ticks = Vec::new();
+        let restored = h
+            .service
+            .restore_with_progress(Path::new(&backup.path), None, |done, total| {
+                ticks.push((done, total))
+            })
+            .await
+            .expect("restore");
+        assert_eq!(restored.asset_count, 3);
+        assert_eq!(ticks, vec![(1, 3), (2, 3), (3, 3)]);
+
+        h.cleanup().await;
+    }
+
     #[tokio::test]
     async fn manifest_declares_encrypted_false_for_a_plaintext_backup() {
         // MISSION-140: the written manifest must state the snapshot's real
@@ -1066,7 +1157,8 @@ mod tests {
             .read_to_string(&mut meta_json)
             .expect("read meta");
         let meta: BackupMeta = serde_json::from_str(&meta_json).expect("manifest parses");
-        let staged_db = extract_archive(Path::new(&report.path), &meta, &staging).expect("extract");
+        let staged_db =
+            extract_archive(Path::new(&report.path), &meta, &staging, |_, _| {}).expect("extract");
 
         let future_version = crate::infrastructure::db::latest_migration_version() + 1000;
         {
@@ -1088,7 +1180,7 @@ mod tests {
         // Re-pack with the manifest unchanged (schema_version still the old
         // one — validation must trust the snapshot, not the label).
         let bumped = h.data_dir.join("schema-bumped.mylore");
-        write_archive(&bumped, &meta_json, &staged_db, &[]).expect("re-pack");
+        write_archive(&bumped, &meta_json, &staged_db, &[], |_, _| {}).expect("re-pack");
 
         let err = h
             .service
@@ -1527,7 +1619,8 @@ mod tests {
             .expect("validate");
         let staging = h.data_dir.join(".restore-sabotage");
         std::fs::create_dir_all(&staging).expect("staging");
-        let staged_db = extract_archive(Path::new(&backup.path), &meta, &staging).expect("extract");
+        let staged_db =
+            extract_archive(Path::new(&backup.path), &meta, &staging, |_, _| {}).expect("extract");
         std::fs::remove_file(staging.join(&meta.assets[0].file)).expect("sabotage staged asset");
 
         h.pool.close().await;

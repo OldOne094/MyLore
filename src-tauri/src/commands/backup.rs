@@ -16,6 +16,16 @@ use crate::domain::task::{TaskError, TaskKind, TaskSnapshot};
 use crate::error::AppError;
 use crate::infrastructure::db::validate_ipc_path;
 
+/// Map asset-packing ticks into the 5..=95 band the backup commands reserve
+/// for the file loop (MISSION-156), so the coarse stage markers and the fine
+/// ticks share one scale.
+fn asset_percent(done: u32, total: u32) -> u32 {
+    if total == 0 {
+        return 95;
+    }
+    5 + (u64::from(done.min(total)) * 90 / u64::from(total)) as u32
+}
+
 /// Create a validated `.mylore` backup under `{data_dir}/backups`
 /// (MISSION-084). Resolves with the queued snapshot; the `BackupReport`
 /// (path, size, counts) is the task's typed result on success.
@@ -32,15 +42,24 @@ pub async fn backup_create(
         "Create library backup".to_string(),
         move |reporter| async move {
             reporter.progress(5, Some("Snapshotting database…".to_string()));
-            tokio::select! {
-                result = service.create() => {
-                    let report = result.map_err(|error| TaskError::failed(error.to_string()))?;
-                    reporter.progress(100, Some("Backup finished".to_string()));
-                    serde_json::to_value(&report)
-                        .map_err(|error| TaskError::failed(error.to_string()))
+            let create = service.create_with_progress({
+                let reporter = reporter.clone();
+                move |done, total| {
+                    reporter.progress(
+                        asset_percent(done, total),
+                        Some(format!("Packing cover {done}/{total}")),
+                    );
                 }
-                _ = reporter.cancelled() => Err(TaskError::Cancelled),
-            }
+            });
+            tokio::pin!(create);
+            let report = tokio::select! {
+                result = &mut create => {
+                    result.map_err(|error| TaskError::failed(error.to_string()))?
+                }
+                _ = reporter.cancelled() => return Err(TaskError::Cancelled),
+            };
+            reporter.progress(100, Some("Backup finished".to_string()));
+            serde_json::to_value(&report).map_err(|error| TaskError::failed(error.to_string()))
         },
     );
 
@@ -92,15 +111,22 @@ pub async fn backup_restore(
         "Restore library backup".to_string(),
         move |reporter| async move {
             reporter.progress(5, Some("Validating backup…".to_string()));
-            let report = service.restore_with(&source, passphrase.as_deref()).await;
-            match report {
-                Ok(report) => {
-                    reporter.progress(100, Some("Restore finished".to_string()));
-                    serde_json::to_value(&report)
-                        .map_err(|error| TaskError::failed(error.to_string()))
-                }
-                Err(error) => Err(TaskError::failed(error.to_string())),
-            }
+            // Non-cancelable by design: a dropped future mid-swap would skip the
+            // rollback (MISSION-085), so this deliberately does not `select!`.
+            let report = service
+                .restore_with_progress(&source, passphrase.as_deref(), {
+                    let reporter = reporter.clone();
+                    move |done, total| {
+                        reporter.progress(
+                            asset_percent(done, total),
+                            Some(format!("Restoring cover {done}/{total}")),
+                        );
+                    }
+                })
+                .await
+                .map_err(|error| TaskError::failed(error.to_string()))?;
+            reporter.progress(100, Some("Restore finished".to_string()));
+            serde_json::to_value(&report).map_err(|error| TaskError::failed(error.to_string()))
         },
     );
 
