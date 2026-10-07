@@ -131,4 +131,39 @@ describe("toMediaCreateArgs", () => {
       genres: ["sci-fi"],
     });
   });
+
+  it("keeps only the counters the content type uses (MISSION-159)", () => {
+    const base = {
+      title: "Mushoku Tensei",
+      pages: 240,
+      durationMin: 24,
+      epCount: 12,
+      chCount: 300,
+      genres: [],
+    };
+
+    // A novel counts chapters — the page and episode counters must not be stored.
+    expect(toMediaCreateArgs({ ...base, contentType: "novel" })).toMatchObject({
+      pages: null,
+      durationMin: null,
+      epCount: null,
+      chCount: 300,
+    });
+
+    // A book counts pages, not chapters.
+    expect(toMediaCreateArgs({ ...base, contentType: "book" })).toMatchObject({
+      pages: 240,
+      durationMin: null,
+      epCount: null,
+      chCount: null,
+    });
+
+    // A film has a runtime, and no chapter or page count.
+    expect(toMediaCreateArgs({ ...base, contentType: "movie" })).toMatchObject({
+      pages: null,
+      durationMin: 24,
+      epCount: null,
+      chCount: null,
+    });
+  });
 });

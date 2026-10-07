@@ -27,6 +27,7 @@ import {
   isP2pBuild,
   syncReportOf,
   useComposeThreadNote,
+  useCopyGroupWork,
   useCreateInvite,
   useDeleteGroup,
   useGroupKeyStatusQuery,
@@ -75,6 +76,7 @@ export function GroupDetailPage() {
   const sync = useSyncGroup();
   const deleteGroup = useDeleteGroup();
   const createInvite = useCreateInvite();
+  const copy = useCopyGroupWork(groupId);
 
   const [taskId, setTaskId] = useState<string | null>(null);
   const task = useGroupSyncTask(taskId, groupId);
@@ -116,6 +118,11 @@ export function GroupDetailPage() {
   const relays = relaysQuery.data?.relays ?? [];
   const works = buildAlignment(shelfQuery.data ?? [], group.members);
   const selected = works.find((work) => work.work_key === selectedWork) ?? null;
+  /** The library title this work was copied into, when it has been. The copy
+      belongs to this install, so any member's row answers for the whole work. */
+  const copiedMediaId =
+    Object.values(selected?.by_member ?? {}).find((entry) => entry.copied_media_id)
+      ?.copied_media_id ?? null;
   const notes = threadQuery.data?.notes ?? [];
   const synced = threadQuery.data?.synced ?? false;
   const report = syncReportOf(task.data);
@@ -131,6 +138,19 @@ export function GroupDetailPage() {
         onError: () => toast.error({ title: t("groupsPage.postErrorToast") }),
       },
     );
+  };
+
+  const onCopy = () => {
+    if (!selected) return;
+    copy.mutate(selected.work_key, {
+      onSuccess: (result) =>
+        toast.success({
+          title: result.created
+            ? t("groupsPage.copyToast", { title: result.title })
+            : t("groupsPage.copyExistsToast", { title: result.title }),
+        }),
+      onError: () => toast.error({ title: t("groupsPage.copyErrorToast") }),
+    });
   };
 
   const onInvite = () => {
@@ -300,6 +320,23 @@ export function GroupDetailPage() {
           <h2 className="truncate text-sm font-semibold text-text-primary">
             {selected ? selected.title : t("groupsPage.threadHeading")}
           </h2>
+
+          {selected ? (
+            <div className="mt-2">
+              {copiedMediaId ? (
+                <Link
+                  to={`/library/${copiedMediaId}`}
+                  className="text-xs text-accent underline-offset-2 hover:underline"
+                >
+                  {t("groupsPage.copyInLibrary")}
+                </Link>
+              ) : (
+                <Button size="sm" variant="secondary" disabled={copy.isPending} onClick={onCopy}>
+                  {t("groupsPage.copyToLibrary")}
+                </Button>
+              )}
+            </div>
+          ) : null}
 
           {!selected ? (
             <p className="mt-2 text-sm text-text-tertiary">{t("groupsPage.threadPickWork")}</p>

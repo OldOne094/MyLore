@@ -9,7 +9,7 @@ use tracing::info;
 
 use crate::application::reading_group_service::{
     GroupExportReport, GroupImportReport, GroupNoteView, GroupPrefs, GroupShelfEntryView,
-    GroupView, ReadingGroupService,
+    GroupView, GroupWorkCopyView, ReadingGroupService,
 };
 use crate::domain::reading_group::work_key;
 use crate::domain::value_objects::{ExternalId, ProviderId};
@@ -193,6 +193,22 @@ pub async fn reading_group_set_shelf(
             &status,
             progress,
         )
+        .await
+}
+
+/// Copy a work the group is reading into the personal library (MISSION-160).
+///
+/// Idempotent by the group's work key, so pressing it twice cannot create a
+/// second title; the reply says which case happened so the UI can say so too.
+#[command]
+pub async fn reading_group_copy_work(
+    state: State<'_, SqlitePool>,
+    group_id: String,
+    work_key: String,
+) -> Result<GroupWorkCopyView, AppError> {
+    info!(group_id, work_key, "reading_group_copy_work invoked");
+    ReadingGroupService::new(state.inner().clone())
+        .copy_work(&group_id, &work_key)
         .await
 }
 

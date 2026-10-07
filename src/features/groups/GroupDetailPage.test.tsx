@@ -41,6 +41,7 @@ function shelfEntry(member_id: string, progress: number) {
     status: "in_progress",
     progress,
     updated_at: "2026-01-02T00:00:00Z",
+    copied_media_id: null,
   };
 }
 
@@ -176,6 +177,45 @@ describe("GroupDetailPage", () => {
     await userEvent.click(buttons[buttons.length - 1]);
 
     expect(invoke).toHaveBeenCalledWith("reading_group_key_rotate", { groupId: "g-1" });
+  });
+
+  it("copies a work the group is reading into my library", async () => {
+    mockWorld({
+      reading_group_copy_work: {
+        media_id: "m-copy-1",
+        created: true,
+        title: "Berserk",
+        content_type: "manga",
+      },
+    });
+    renderPage();
+
+    await userEvent.click(await screen.findByRole("button", { name: "Berserk" }));
+    await userEvent.click(await screen.findByRole("button", { name: "Add to my library" }));
+
+    expect(invoke).toHaveBeenCalledWith("reading_group_copy_work", {
+      groupId: "g-1",
+      workKey: "h:berserk",
+    });
+    expect(await screen.findByText("Added “Berserk” to your library")).toBeInTheDocument();
+  });
+
+  it("links to the copy once the work is in my library", async () => {
+    // The backend reports the copy on the shelf row, so the page stops offering
+    // the action instead of inviting a second one (MISSION-160).
+    mockWorld({
+      reading_group_shelf: [
+        { ...shelfEntry("m-me", 3), copied_media_id: "m-copy-1" },
+        { ...shelfEntry("m-nour", 40), copied_media_id: "m-copy-1" },
+      ],
+    });
+    renderPage();
+
+    await userEvent.click(await screen.findByRole("button", { name: "Berserk" }));
+
+    const link = await screen.findByRole("link", { name: "Open in your library" });
+    expect(link).toHaveAttribute("href", "/library/m-copy-1");
+    expect(screen.queryByRole("button", { name: "Add to my library" })).not.toBeInTheDocument();
   });
 
   it("falls back to the local notes table in a build without relay support", async () => {

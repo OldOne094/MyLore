@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { ContentNode } from "@/api";
-import { consumingStateFor, nodeUnitLabel, unreadUnits } from "./progress";
+import { nodeUnitLabel, unreadUnits } from "./progress";
 
 function unit(
   id: string,
@@ -51,20 +51,6 @@ describe("unreadUnits", () => {
   it("ignores container kinds (seasons, volumes) entirely", () => {
     const unread = unreadUnits(TREE, "watched");
     expect(unread.some((n) => n.kind === "season" || n.kind === "volume")).toBe(false);
-  });
-});
-
-describe("consumingStateFor", () => {
-  it("watches anime, tv and movies", () => {
-    expect(consumingStateFor("anime")).toBe("watched");
-    expect(consumingStateFor("tv")).toBe("watched");
-    expect(consumingStateFor("movie")).toBe("watched");
-  });
-
-  it("reads everything else", () => {
-    for (const type of ["manga", "novel", "book", "other"]) {
-      expect(consumingStateFor(type)).toBe("read");
-    }
   });
 });
 

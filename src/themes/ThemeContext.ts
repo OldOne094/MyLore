@@ -6,7 +6,12 @@ export interface ThemeContextValue {
   theme: ResolvedTheme;
   /** User preference, including "system". */
   preference: ThemePreference;
-  setPreference: (preference: ThemePreference) => void;
+  /** Applies a theme and mirrors the boot cache. **Does not persist**: the
+      preferences store is written only by `PreferencesProvider` (MISSION-158),
+      because the store wins over the boot cache at startup — a surface that
+      applied its change here alone had it reverted on the next launch. An
+      app-level change must go through `usePreferences().setTheme`. */
+  applyPreference: (preference: ThemePreference) => void;
 }
 
 export const ThemeContext = createContext<ThemeContextValue | null>(null);

@@ -7,7 +7,7 @@ use tauri::State;
 use tracing::info;
 
 use crate::application::media_service::{
-    AddMediaInput, MediaListInput, MediaListItem, MediaService,
+    AddMediaInput, MediaListInput, MediaListItem, MediaService, UpdateMediaInput,
 };
 use crate::error::AppError;
 use crate::infrastructure::repositories::media::TagLink;
@@ -120,6 +120,51 @@ pub async fn media_get(
     info!(id, "media_get invoked");
     let service = MediaService::new(state.inner().clone());
     service.get_media(&id).await
+}
+
+/// Apply a hand edit to a media's metadata (MISSION-161). Resolves with the
+/// media id; fields the user actually changed are pinned so a later provider
+/// refresh keeps them, and `unpin` releases fields back to the provider.
+#[allow(clippy::too_many_arguments)]
+#[command]
+pub async fn media_update(
+    state: State<'_, SqlitePool>,
+    id: String,
+    title: String,
+    pub_status: String,
+    format: Option<String>,
+    synopsis: Option<String>,
+    release_year: Option<i64>,
+    genres: Vec<String>,
+    unpin: Vec<String>,
+) -> Result<String, AppError> {
+    info!(id, "media_update invoked");
+    let service = MediaService::new(state.inner().clone());
+    let updated = service
+        .update_media(UpdateMediaInput {
+            id,
+            title,
+            pub_status,
+            format,
+            synopsis,
+            release_year,
+            genres,
+            unpin,
+        })
+        .await?;
+    Ok(updated.id)
+}
+
+/// The provider-owned fields the user has pinned by editing them (MISSION-161).
+#[command]
+pub async fn media_overrides(
+    state: State<'_, SqlitePool>,
+    id: String,
+) -> Result<Vec<String>, AppError> {
+    info!(id, "media_overrides invoked");
+    MediaService::new(state.inner().clone())
+        .field_overrides(&id)
+        .await
 }
 
 /// Local full-text search over the library (MISSION-043). Resolves with summary

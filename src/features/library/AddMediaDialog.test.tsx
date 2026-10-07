@@ -82,4 +82,53 @@ describe("AddMediaDialog", () => {
       );
     });
   });
+
+  it("asks only for the counters the chosen type uses (MISSION-159)", async () => {
+    renderDialog();
+    await userEvent.click(screen.getByRole("button", { name: "Add title" }));
+    const type = await screen.findByLabelText("Type");
+
+    // A film has a runtime — not an episode count, a chapter count or pages.
+    await userEvent.selectOptions(type, "movie");
+    expect(screen.getByLabelText("Runtime (min)")).toBeInTheDocument();
+    expect(screen.queryByLabelText("Episodes")).not.toBeInTheDocument();
+    expect(screen.queryByLabelText("Chapters")).not.toBeInTheDocument();
+    expect(screen.queryByLabelText("Pages")).not.toBeInTheDocument();
+
+    // A series has episodes and an episode length, never pages or chapters.
+    await userEvent.selectOptions(type, "anime");
+    expect(screen.getByLabelText("Episodes")).toBeInTheDocument();
+    expect(screen.getByLabelText("Episode length (min)")).toBeInTheDocument();
+    expect(screen.queryByLabelText("Pages")).not.toBeInTheDocument();
+    expect(screen.queryByLabelText("Chapters")).not.toBeInTheDocument();
+
+    // A book counts pages only.
+    await userEvent.selectOptions(type, "book");
+    expect(screen.getByLabelText("Pages")).toBeInTheDocument();
+    expect(screen.queryByLabelText("Chapters")).not.toBeInTheDocument();
+    expect(screen.queryByLabelText("Episode length (min)")).not.toBeInTheDocument();
+  });
+
+  it("drops a counter the new type cannot use", async () => {
+    vi.mocked(invoke).mockResolvedValue(NEW_ID);
+    renderDialog();
+
+    await userEvent.click(screen.getByRole("button", { name: "Add title" }));
+    const type = await screen.findByLabelText("Type");
+
+    await userEvent.selectOptions(type, "book");
+    await userEvent.type(screen.getByLabelText("Pages"), "300");
+    // A page count left over from the previous type must not be submitted.
+    await userEvent.selectOptions(type, "anime");
+
+    await userEvent.type(await screen.findByLabelText("Title"), "Dune");
+    await userEvent.click(screen.getByRole("button", { name: "Add to library" }));
+
+    await waitFor(() => {
+      expect(invoke).toHaveBeenCalledWith(
+        "media_create",
+        expect.objectContaining({ pages: null, chCount: null }),
+      );
+    });
+  });
 });

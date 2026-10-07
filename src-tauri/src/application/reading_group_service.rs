@@ -16,6 +16,7 @@ use sqlx::SqlitePool;
 use tracing::info;
 use uuid::Uuid;
 
+use crate::application::media_service::{AddMediaInput, MediaService};
 use crate::domain::enums::CoreStatus;
 use crate::domain::reading_group::{Group, GroupMember, GroupNote, MemberRole, ShelfEntry};
 use crate::error::AppError;
@@ -62,6 +63,20 @@ pub struct GroupShelfEntryView {
     pub status: String,
     pub progress: i64,
     pub updated_at: String,
+    /// The library title this work was copied into, once it has been
+    /// (MISSION-160). The copy belongs to this install, so every member's row
+    /// for the work reports the same id.
+    pub copied_media_id: Option<String>,
+}
+
+/// The outcome of taking a group work into the personal library (MISSION-160).
+#[derive(Debug, Clone, serde::Serialize)]
+pub struct GroupWorkCopyView {
+    pub media_id: String,
+    /// False when the work had already been copied — the call is idempotent.
+    pub created: bool,
+    pub title: String,
+    pub content_type: String,
 }
 
 /// A shared note row.
@@ -425,10 +440,18 @@ impl ReadingGroupService {
         member_id: Option<&str>,
     ) -> Result<Vec<GroupShelfEntryView>, AppError> {
         self.require_group(group_id).await?;
+        let copied: std::collections::HashMap<String, String> =
+            repo::copied_origins(&self.pool, group_id)
+                .await?
+                .into_iter()
+                .collect();
         Ok(repo::list_shelf(&self.pool, group_id, member_id)
             .await?
             .into_iter()
-            .map(shelf_view)
+            .map(|record| {
+                let copied_media_id = copied.get(&record.work_key).cloned();
+                shelf_view(record, copied_media_id)
+            })
             .collect())
     }
 
@@ -473,7 +496,85 @@ impl ReadingGroupService {
             updated_at: entry.updated_at,
         };
         repo::upsert_shelf(&self.pool, &record).await?;
-        Ok(shelf_view(record))
+        let copied_media_id = repo::origin_media(&self.pool, group_id, &record.work_key).await?;
+        Ok(shelf_view(record, copied_media_id))
+    }
+
+    /// Take a work the group is reading into the personal library
+    /// (MISSION-160). Idempotent: a work that was already copied resolves with
+    /// `created: false` and the existing title's id, so a second press cannot
+    /// produce a duplicate.
+    ///
+    /// A shelf row is nothing but a title and a content type, so that is
+    /// exactly what the copy starts from. The group never supplied more, and
+    /// filling in the rest from guesswork would put invented metadata in the
+    /// library; a provider refresh can supply the rest later.
+    pub async fn copy_work(
+        &self,
+        group_id: &str,
+        work_key: &str,
+    ) -> Result<GroupWorkCopyView, AppError> {
+        self.require_group(group_id).await?;
+        let key = work_key.trim();
+        // Deterministic source: the lowest member id that shelved the work, so
+        // two installs copying the same work agree on its title.
+        let source = repo::list_shelf(&self.pool, group_id, None)
+            .await?
+            .into_iter()
+            .filter(|row| row.work_key == key)
+            .min_by(|a, b| a.member_id.cmp(&b.member_id))
+            .ok_or_else(|| {
+                AppError::validation(format!("no member has shelved {key} in this group"))
+            })?;
+
+        if let Some(media_id) = repo::origin_media(&self.pool, group_id, key).await? {
+            return Ok(GroupWorkCopyView {
+                media_id,
+                created: false,
+                title: source.title,
+                content_type: source.content_type,
+            });
+        }
+
+        let created = MediaService::new(self.pool.clone())
+            .add_media(AddMediaInput {
+                title: source.title.clone(),
+                content_type: source.content_type.clone(),
+                format: None,
+                pub_status: None,
+                synopsis: None,
+                release_year: None,
+                language: None,
+                country: None,
+                pages: None,
+                duration_min: None,
+                ep_count: None,
+                ch_count: None,
+                genres: Vec::new(),
+            })
+            .await
+            .map(|media_id| media_id.as_str().to_string())?;
+
+        if repo::insert_origin(&self.pool, group_id, key, &created, &now()).await? {
+            return Ok(GroupWorkCopyView {
+                media_id: created,
+                created: true,
+                title: source.title,
+                content_type: source.content_type,
+            });
+        }
+
+        // Another copy claimed the key first: keep its title, and report the id
+        // the shelf already shows so the UI links to the one that counts.
+        let media_id = repo::origin_media(&self.pool, group_id, key)
+            .await?
+            .unwrap_or(created);
+        Ok(GroupWorkCopyView {
+            media_id,
+            created: false,
+            title: source.title,
+            content_type: source.content_type,
+        })
     }
 
     // ------------------------------------------------------------- notes
@@ -781,7 +882,7 @@ fn now() -> String {
     Utc::now().to_rfc3339()
 }
 
-fn shelf_view(s: ShelfRecord) -> GroupShelfEntryView {
+fn shelf_view(s: ShelfRecord, copied_media_id: Option<String>) -> GroupShelfEntryView {
     GroupShelfEntryView {
         group_id: s.group_id,
         member_id: s.member_id,
@@ -791,6 +892,7 @@ fn shelf_view(s: ShelfRecord) -> GroupShelfEntryView {
         status: s.status,
         progress: s.progress,
         updated_at: s.updated_at,
+        copied_media_id,
     }
 }
 
@@ -1029,6 +1131,109 @@ mod tests {
             )
             .await
             .is_err());
+        cleanup_files(&path);
+    }
+
+    // ------------------------------------------- MISSION-160: copying a work
+
+    /// A group whose second member has shelved one work, with the raw pool so a
+    /// test can inspect the library row a copy creates.
+    async fn group_with_a_shelved_work(
+        name: &str,
+    ) -> (ReadingGroupService, SqlitePool, String, std::path::PathBuf) {
+        let (pool, path) = migrated_pool(name).await;
+        let svc = ReadingGroupService::new(pool.clone());
+        let group = svc.create_group("Book Club").await.expect("create");
+        svc.add_member(&group.id, "m-friend", "Friend", "member")
+            .await
+            .expect("add member");
+        svc.set_shelf_entry(
+            &group.id,
+            "m-friend",
+            "anilist:42",
+            "Berserk",
+            "manga",
+            "in_progress",
+            3,
+        )
+        .await
+        .expect("shelf");
+        (svc, pool, group.id, path)
+    }
+
+    #[tokio::test]
+    async fn copy_work_creates_the_title_from_the_shelf_row() {
+        let (svc, pool, group_id, path) = group_with_a_shelved_work("rg_copy.db").await;
+
+        let copy = svc.copy_work(&group_id, "anilist:42").await.expect("copy");
+        assert!(copy.created);
+        assert_eq!(copy.title, "Berserk");
+        assert_eq!(copy.content_type, "manga");
+
+        // The title really is in the library, carrying what the group knew.
+        let (title, content_type): (String, String) =
+            sqlx::query_as("SELECT title_main, content_type FROM media WHERE id = ?")
+                .bind(&copy.media_id)
+                .fetch_one(&pool)
+                .await
+                .expect("media row");
+        assert_eq!(title, "Berserk");
+        assert_eq!(content_type, "manga");
+
+        // And the shelf now reports the copy, so the UI can stop offering it.
+        let shelf = svc.shelf(&group_id, None).await.expect("shelf");
+        assert_eq!(shelf.len(), 1);
+        assert_eq!(
+            shelf[0].copied_media_id.as_deref(),
+            Some(copy.media_id.as_str())
+        );
+        cleanup_files(&path);
+    }
+
+    #[tokio::test]
+    async fn copying_a_work_twice_does_not_duplicate_it() {
+        let (svc, pool, group_id, path) = group_with_a_shelved_work("rg_copy_twice.db").await;
+
+        let first = svc.copy_work(&group_id, "anilist:42").await.expect("copy");
+        let second = svc.copy_work(&group_id, "anilist:42").await.expect("again");
+        assert!(first.created);
+        assert!(!second.created, "the second press adds nothing");
+        assert_eq!(second.media_id, first.media_id);
+
+        let (count,): (i64,) = sqlx::query_as("SELECT COUNT(*) FROM media")
+            .fetch_one(&pool)
+            .await
+            .expect("count");
+        assert_eq!(count, 1, "one title, not two");
+        cleanup_files(&path);
+    }
+
+    #[tokio::test]
+    async fn copy_work_rejects_a_work_no_member_shelved() {
+        let (svc, _pool, group_id, path) = group_with_a_shelved_work("rg_copy_unknown.db").await;
+        assert!(svc.copy_work(&group_id, "anilist:999").await.is_err());
+        cleanup_files(&path);
+    }
+
+    #[tokio::test]
+    async fn deleting_the_copy_frees_the_work_to_be_copied_again() {
+        let (svc, pool, group_id, path) = group_with_a_shelved_work("rg_copy_repeat.db").await;
+
+        let first = svc.copy_work(&group_id, "anilist:42").await.expect("copy");
+        // Removing the title outright must not leave a ghost "already added"
+        // badge behind: the origin row cascades with the media row.
+        sqlx::query("DELETE FROM media WHERE id = ?")
+            .bind(&first.media_id)
+            .execute(&pool)
+            .await
+            .expect("delete");
+
+        let again = svc
+            .copy_work(&group_id, "anilist:42")
+            .await
+            .expect("copy again");
+        assert!(again.created);
+        assert_ne!(again.media_id, first.media_id);
         cleanup_files(&path);
     }
 }

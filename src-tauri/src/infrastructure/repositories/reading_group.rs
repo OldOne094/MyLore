@@ -300,6 +300,60 @@ pub async fn upsert_shelf(pool: &SqlitePool, s: &ShelfRecord) -> Result<(), AppE
     Ok(())
 }
 
+/// The media a work was copied into, when it has been (MISSION-160).
+pub async fn origin_media(
+    pool: &SqlitePool,
+    group_id: &str,
+    work_key: &str,
+) -> Result<Option<String>, AppError> {
+    let row = sqlx::query_as::<_, (String,)>(
+        "SELECT media_id FROM group_work_origin WHERE group_id = ? AND work_key = ?",
+    )
+    .bind(group_id)
+    .bind(work_key)
+    .fetch_optional(pool)
+    .await?;
+    Ok(row.map(|(media_id,)| media_id))
+}
+
+/// Every copied work in a group as `(work_key, media_id)`, so the shelf can
+/// mark the rows that already exist in the library.
+pub async fn copied_origins(
+    pool: &SqlitePool,
+    group_id: &str,
+) -> Result<Vec<(String, String)>, AppError> {
+    let rows = sqlx::query_as::<_, (String, String)>(
+        "SELECT work_key, media_id FROM group_work_origin WHERE group_id = ? ORDER BY work_key",
+    )
+    .bind(group_id)
+    .fetch_all(pool)
+    .await?;
+    Ok(rows)
+}
+
+/// Record a copy of `work_key`. Returns `false` when the key was already
+/// claimed — that conflict is what makes a repeated press idempotent.
+pub async fn insert_origin(
+    pool: &SqlitePool,
+    group_id: &str,
+    work_key: &str,
+    media_id: &str,
+    created_at: &str,
+) -> Result<bool, AppError> {
+    let result = sqlx::query(
+        "INSERT INTO group_work_origin (group_id, work_key, media_id, created_at)
+         VALUES (?, ?, ?, ?)
+         ON CONFLICT(group_id, work_key) DO NOTHING",
+    )
+    .bind(group_id)
+    .bind(work_key)
+    .bind(media_id)
+    .bind(created_at)
+    .execute(pool)
+    .await?;
+    Ok(result.rows_affected() == 1)
+}
+
 // ----------------------------------------------------------------- notes
 
 /// Notes for a group (all works, or one work when `work_key` is given),

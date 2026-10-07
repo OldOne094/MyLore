@@ -17,6 +17,7 @@ import { asList } from "@/lib/asList";
 import {
   reading_group_add_member,
   reading_group_add_note,
+  reading_group_copy_work,
   reading_group_create,
   reading_group_delete,
   reading_group_export,
@@ -47,6 +48,7 @@ import {
   type GroupRelayView,
   type GroupSyncReport,
   type GroupView,
+  type GroupWorkCopyView,
   type TaskSnapshot,
 } from "@/api";
 import { queryKeys } from "@/api";
@@ -195,6 +197,24 @@ export function useSetShelfEntry(groupId: string) {
       await queryClient.invalidateQueries({
         queryKey: queryKeys.readingGroup.shelf(groupId, null),
       });
+    },
+  });
+}
+
+/** Take a work the group is reading into the personal library (MISSION-160).
+    Idempotent by work key, so a second press cannot create a second title. */
+export function useCopyGroupWork(groupId: string) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (workKey: string): Promise<GroupWorkCopyView> =>
+      reading_group_copy_work({ groupId, workKey }),
+    onSuccess: async () => {
+      // It is a library title now, and the shelf row carries its id.
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: queryKeys.media.lists() }),
+        queryClient.invalidateQueries({ queryKey: queryKeys.media.count() }),
+        queryClient.invalidateQueries({ queryKey: queryKeys.readingGroup.shelf(groupId, null) }),
+      ]);
     },
   });
 }
@@ -408,4 +428,5 @@ export type {
   GroupRelayView,
   GroupSyncReport,
   GroupView,
+  GroupWorkCopyView,
 };

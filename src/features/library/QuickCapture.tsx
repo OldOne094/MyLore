@@ -11,7 +11,7 @@ import { cn } from "@/lib/cn";
 import { useMediaSearchQuery } from "@/features/search/api";
 import type { MediaListItem } from "./api";
 import { ProgressBar } from "./ProgressBar";
-import { consumingStateFor } from "./progress";
+import { consumingStateFor } from "./mediaFields";
 import { nodeUnitLabel } from "./progress";
 import { unreadUnits } from "./progress";
 import { useMarkNextUnit } from "./progress";

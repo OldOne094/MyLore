@@ -59,6 +59,14 @@ export function EnrichDialog({ view, open, onOpenChange }: EnrichDialogProps) {
           <p className="mt-4 text-sm text-text-secondary">{t("enrich.noChanges")}</p>
         )}
 
+        {view.kept.length > 0 ? (
+          <p className="mt-3 text-sm text-text-secondary">
+            {t("enrich.keptNote", {
+              fields: view.kept.map((field) => prettyFieldLabel(field, t)).join(", "),
+            })}
+          </p>
+        ) : null}
+
         <div className="mt-6 flex justify-end">
           <DialogClose asChild>
             <Button variant="secondary">{t("enrich.close")}</Button>

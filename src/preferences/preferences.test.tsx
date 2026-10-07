@@ -166,3 +166,71 @@ describe("settings page", () => {
     expect(await screen.findByRole("link", { name: "المكتبة" })).toBeInTheDocument();
   });
 });
+
+/* MISSION-158 — the TopBar and LanguageSwitcher used to apply their change to
+   the boot cache only (theme via `useTheme`, language via i18n's `setLanguage`),
+   while startup loads the preferences store and overrides the cache. A choice
+   made from the bar was therefore reverted on the next launch. These tests pin
+   the read/write round trip rather than the value on screen: the payload the
+   repository writes (`mylore.preferences`, the same key `settings.json` holds)
+   must carry every change, and it alone must be enough to restore a session. */
+describe("preferences survive a restart (MISSION-158)", () => {
+  const persisted = (): Record<string, unknown> =>
+    JSON.parse(localStorage.getItem(PREFERENCES_KEY) ?? "{}");
+
+  /** The shell's own switchers — the Settings page has groups of the same name. */
+  function topBarGroup(name: string) {
+    return within(screen.getByRole("banner")).getByRole("group", { name });
+  }
+
+  it("persists a theme picked in the top bar, not only the boot cache", async () => {
+    const user = userEvent.setup();
+    renderSettings();
+
+    await user.click(within(topBarGroup("Theme")).getByRole("button", { name: "Dark" }));
+
+    expect(document.documentElement.getAttribute("data-theme")).toBe("dark");
+    expect(localStorage.getItem("mylore.theme")).toBe("dark");
+    await waitFor(() => {
+      expect(persisted().theme).toBe("dark");
+    });
+  });
+
+  it("keeps an earlier top-bar choice when a later one is made", async () => {
+    const user = userEvent.setup();
+    renderSettings();
+
+    await user.click(within(topBarGroup("Theme")).getByRole("button", { name: "Dark" }));
+    await user.click(within(topBarGroup("Language")).getByRole("button", { name: "ع" }));
+
+    expect(document.documentElement.getAttribute("data-theme")).toBe("dark");
+    await waitFor(() => {
+      expect(persisted()).toMatchObject({ theme: "dark", language: "ar" });
+    });
+  });
+
+  it("restores top-bar choices from the stored payload alone", async () => {
+    const user = userEvent.setup();
+    const firstLaunch = renderSettings();
+
+    await user.click(within(topBarGroup("Theme")).getByRole("button", { name: "Dark" }));
+    await user.click(within(topBarGroup("Language")).getByRole("button", { name: "ع" }));
+    await waitFor(() => {
+      expect(persisted()).toMatchObject({ theme: "dark", language: "ar" });
+    });
+    firstLaunch.unmount();
+
+    /* A relaunch: the boot cache is gone, so only the stored payload can bring
+       the session back. This is what a user sees when the store was not written. */
+    localStorage.removeItem("mylore.theme");
+    localStorage.removeItem("mylore.lang");
+    document.documentElement.removeAttribute("data-theme");
+    document.documentElement.removeAttribute("dir");
+    renderSettings();
+
+    await waitFor(() => {
+      expect(document.documentElement.getAttribute("data-theme")).toBe("dark");
+      expect(document.documentElement.getAttribute("dir")).toBe("rtl");
+    });
+  });
+});

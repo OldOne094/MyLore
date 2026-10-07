@@ -247,6 +247,7 @@ describe("MediaDetailPage", () => {
         { field: "title_main", before: "Steins;Gate", after: "Steins;Gate 0" },
         { field: "ch_count", before: null, after: "24" },
       ],
+      kept: [],
     };
     vi.mocked(invoke).mockImplementation((cmd: string) => {
       if (cmd === "media_get") return Promise.resolve(PROVIDER_DETAIL);

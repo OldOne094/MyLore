@@ -30,6 +30,7 @@ function shelf(
     status: progress > 0 ? "in_progress" : "planned",
     progress,
     updated_at: "2026-01-02T00:00:00Z",
+    copied_media_id: null,
   };
 }
 

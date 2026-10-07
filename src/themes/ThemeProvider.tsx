@@ -36,14 +36,14 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
     return () => media.removeEventListener("change", onChange);
   }, [preference]);
 
-  const setPreference = useCallback((next: ThemePreference) => {
+  const applyPreference = useCallback((next: ThemePreference) => {
     writePreference(next);
     setPreferenceState(next);
   }, []);
 
   const value = useMemo<ThemeContextValue>(
-    () => ({ theme, preference, setPreference }),
-    [theme, preference, setPreference],
+    () => ({ theme, preference, applyPreference }),
+    [theme, preference, applyPreference],
   );
 
   return <ThemeContext.Provider value={value}>{children}</ThemeContext.Provider>;

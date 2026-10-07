@@ -1,6 +1,6 @@
 import { zodResolver } from "@hookform/resolvers/zod";
-import { useState } from "react";
-import { useForm } from "react-hook-form";
+import { useEffect, useState } from "react";
+import { useForm, useWatch } from "react-hook-form";
 import { useTranslation } from "react-i18next";
 import { useToast } from "@/components/ui";
 import {
@@ -22,10 +22,14 @@ import {
   type AddMediaFormInput,
   type AddMediaFormValues,
 } from "./AddMediaSchema";
+import { COUNTER_FIELD_LIST, counterFields, counterLabelKey, usesCounter } from "./mediaFields";
 
 /* MISSION-038 — Add-a-title dialog. React Hook Form + Zod; schema messages are
    i18n keys (mapIssuesToKeys) so field errors render translated. Numeric and
-   status fields arrive as free text and are normalized in the schema. */
+   status fields arrive as free text and are normalized in the schema.
+   MISSION-159 — the runtime counters are chosen by the content type
+   (`mediaFields`): a novel is not asked for an episode length, a film not for a
+   chapter count. */
 
 const SELECT_CLASSES =
   "h-[var(--control-height)] w-full rounded-sm border bg-bg-base px-3 text-base text-text-primary " +
@@ -56,6 +60,8 @@ export function AddMediaDialog({
   const {
     register,
     handleSubmit,
+    control,
+    setValue,
     formState: { errors, isSubmitting },
   } = useForm<AddMediaFormInput, unknown, AddMediaFormValues>({
     resolver: zodResolver(addMediaSchema, { error: mapIssuesToKeys }),
@@ -76,6 +82,16 @@ export function AddMediaDialog({
       genres: "",
     },
   });
+
+  /* A counter the chosen type cannot use is cleared rather than just hidden
+     (MISSION-159): a leftover value would still be validated, blocking submit
+     with an error no field can show, and would still reach the command. */
+  const contentType = useWatch({ control, name: "contentType", defaultValue: "other" });
+  useEffect(() => {
+    for (const field of COUNTER_FIELD_LIST) {
+      if (!usesCounter(contentType, field)) setValue(field, "");
+    }
+  }, [contentType, setValue]);
 
   const onSubmit = handleSubmit((values) => {
     if (isSubmitting) return;
@@ -165,26 +181,14 @@ export function AddMediaDialog({
             {...register("country")}
           />
 
-          <InputField
-            label={t("library.fieldDuration")}
-            error={fieldError("durationMin")}
-            {...register("durationMin")}
-          />
-          <InputField
-            label={t("library.fieldEpisodes")}
-            error={fieldError("epCount")}
-            {...register("epCount")}
-          />
-          <InputField
-            label={t("library.fieldChapters")}
-            error={fieldError("chCount")}
-            {...register("chCount")}
-          />
-          <InputField
-            label={t("library.fieldPages")}
-            error={fieldError("pages")}
-            {...register("pages")}
-          />
+          {counterFields(contentType).map((field) => (
+            <InputField
+              key={field}
+              label={t(counterLabelKey(field, contentType))}
+              error={fieldError(field)}
+              {...register(field)}
+            />
+          ))}
 
           <div className="col-span-2">
             <TextareaField

@@ -9,10 +9,17 @@ import type { Preferences } from "./types";
 /* MISSION-034 — The single context for reading and updating app preferences.
    Renders immediately with boot values (no flash), then reconciles with the
    persisted store once loaded. Every change is persisted and mirrored to the
-   boot cache so the pre-paint boot and this store never diverge. */
+   boot cache so the pre-paint boot and this store never diverge.
+
+   MISSION-158 — this provider is the **only writer** of preferences, and it has
+   to be: the store beats the boot cache at startup, so a surface that applied
+   its change through the theme/i18n singletons alone (the TopBar theme switcher
+   and the language switcher both did) had it reverted on the next launch as
+   soon as `settings.json` held a snapshot. Every mutation now goes through
+   `persist`, which writes the store and the caches together. */
 
 export function PreferencesProvider({ children }: { children: ReactNode }) {
-  const { setPreference } = useTheme();
+  const { applyPreference } = useTheme();
   const [preferences, setPreferences] = useState<Preferences>(() => ({
     theme: readPreference(),
     language: readLanguage(),
@@ -20,15 +27,18 @@ export function PreferencesProvider({ children }: { children: ReactNode }) {
     accent: "classic",
   }));
   const repositoryRef = useRef(getPreferencesRepository());
+  /* Armed by the first user mutation: a choice made while the store is still
+     loading must not be reverted by the snapshot that lands after it. */
+  const mutatedRef = useRef(false);
 
   useEffect(() => {
     let cancelled = false;
     void repositoryRef.current
       .load()
       .then((stored) => {
-        if (cancelled || stored === null) return;
+        if (cancelled || stored === null || mutatedRef.current) return;
         setPreferences(stored);
-        setPreference(stored.theme);
+        applyPreference(stored.theme);
         void setLanguage(stored.language);
       })
       .catch(() => {
@@ -37,44 +47,40 @@ export function PreferencesProvider({ children }: { children: ReactNode }) {
     return () => {
       cancelled = true;
     };
-  }, [setPreference]);
+  }, [applyPreference]);
+
+  /** The one write path: store + boot cache + in-memory state together. */
+  const persist = useCallback((next: Preferences) => {
+    mutatedRef.current = true;
+    setPreferences(next);
+    void repositoryRef.current.save(next);
+  }, []);
 
   const setTheme = useCallback(
     (theme: Preferences["theme"]) => {
-      setPreferences((current) => {
-        const next = { ...current, theme };
-        void repositoryRef.current.save(next);
-        setPreference(theme);
-        return next;
-      });
+      persist({ ...preferences, theme });
+      applyPreference(theme);
     },
-    [setPreference],
+    [applyPreference, persist, preferences],
   );
 
-  const setLocale = useCallback((language: Preferences["language"]) => {
-    setPreferences((current) => {
-      const next = { ...current, language };
-      void repositoryRef.current.save(next);
+  const setLocale = useCallback(
+    (language: Preferences["language"]) => {
+      persist({ ...preferences, language });
       void setLanguage(language);
-      return next;
-    });
-  }, []);
+    },
+    [persist, preferences],
+  );
 
-  const setDensity = useCallback((density: Preferences["density"]) => {
-    setPreferences((current) => {
-      const next = { ...current, density };
-      void repositoryRef.current.save(next);
-      return next;
-    });
-  }, []);
+  const setDensity = useCallback(
+    (density: Preferences["density"]) => persist({ ...preferences, density }),
+    [persist, preferences],
+  );
 
-  const setAccent = useCallback((accent: Preferences["accent"]) => {
-    setPreferences((current) => {
-      const next = { ...current, accent };
-      void repositoryRef.current.save(next);
-      return next;
-    });
-  }, []);
+  const setAccent = useCallback(
+    (accent: Preferences["accent"]) => persist({ ...preferences, accent }),
+    [persist, preferences],
+  );
 
   // Reflect the accent choice on the root so the CSS variable overrides in
   // tokens.css apply everywhere (MISSION-112 freedom layer).

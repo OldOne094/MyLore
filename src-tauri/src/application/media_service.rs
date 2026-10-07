@@ -44,6 +44,25 @@ pub struct AddMediaInput {
     pub genres: Vec<String>,
 }
 
+/// The hand-editable, provider-owned fields of a media (MISSION-161).
+///
+/// The shape is total for the fields it accepts: the edit dialog always sends
+/// the current values, so `None` means "cleared", not "unchanged".
+#[derive(Debug, Clone, serde::Deserialize)]
+pub struct UpdateMediaInput {
+    pub id: String,
+    pub title: String,
+    pub pub_status: String,
+    pub format: Option<String>,
+    pub synopsis: Option<String>,
+    pub release_year: Option<i64>,
+    /// The full replacement genre set, by name.
+    pub genres: Vec<String>,
+    /// Fields to release back to the provider, so a later refresh wins again.
+    #[serde(default)]
+    pub unpin: Vec<String>,
+}
+
 /// Media use-cases.
 pub struct MediaService {
     pool: SqlitePool,
@@ -91,6 +110,11 @@ impl MediaService {
     /// Total number of titles in the library (the status-bar count, MISSION-146).
     pub async fn total(&self) -> Result<i64, AppError> {
         media_repo::count_all(&self.pool).await
+    }
+
+    /// Provider-owned fields the user has pinned by editing them (MISSION-161).
+    pub async fn field_overrides(&self, id: &str) -> Result<Vec<String>, AppError> {
+        media_repo::field_overrides(&self.pool, id).await
     }
 
     /// Create a media entry from manual input; resolves with the new media id.
@@ -155,6 +179,79 @@ impl MediaService {
         let record = to_record(&media);
         crate::infrastructure::repositories::media::create(&self.pool, &record).await?;
         Ok(media.id)
+    }
+
+    /// Apply a hand edit to a media's user-visible metadata (MISSION-161).
+    ///
+    /// Every field the user actually changed is **pinned** to that value, so a
+    /// provider refresh keeps it and reports that it did instead of silently
+    /// replacing it; `unpin` releases the fields the user wants the provider to
+    /// own again. Only the fields in this input are ever written — tracking,
+    /// review, personal tags and assets are untouched (ADR-007).
+    pub async fn update_media(&self, input: UpdateMediaInput) -> Result<MediaRecord, AppError> {
+        let stored = media_repo::get(&self.pool, &input.id)
+            .await?
+            .ok_or_else(|| AppError::validation("media not found"))?;
+
+        let title = input.title.trim();
+        if title.is_empty() {
+            return Err(AppError::validation("title must not be empty"));
+        }
+        let status = MediaStatus::from_str(input.pub_status.trim())?;
+
+        let mut genres = Vec::new();
+        for name in &input.genres {
+            let name = name.trim();
+            if !name.is_empty() {
+                genres.push(media_repo::resolve_genre(&self.pool, name).await?);
+            }
+        }
+        genres.sort();
+        genres.dedup();
+
+        let blank_to_none = |value: Option<String>| {
+            value
+                .map(|text| text.trim().to_string())
+                .filter(|text| !text.is_empty())
+        };
+
+        let next = MediaRecord {
+            title_main: title.to_string(),
+            pub_status: status.as_str().to_string(),
+            format: blank_to_none(input.format),
+            synopsis: blank_to_none(input.synopsis),
+            release_year: input.release_year,
+            genres,
+            updated_at: Utc::now().to_rfc3339(),
+            ..stored.clone()
+        };
+        media_repo::update(&self.pool, &next).await?;
+
+        // Pin exactly what changed: re-pinning an untouched field would stop the
+        // provider from ever refreshing it.
+        let mut before_genres = stored.genres.clone();
+        before_genres.sort();
+        let mut pinned: Vec<String> = Vec::new();
+        let mut pin_if = |field: &str, changed: bool| {
+            if changed {
+                pinned.push(field.to_string());
+            }
+        };
+        pin_if("title_main", next.title_main != stored.title_main);
+        pin_if("synopsis", next.synopsis != stored.synopsis);
+        pin_if("release_year", next.release_year != stored.release_year);
+        pin_if("pub_status", next.pub_status != stored.pub_status);
+        pin_if("format", next.format != stored.format);
+        pin_if("genres", next.genres != before_genres);
+
+        media_repo::pin_field_overrides(&self.pool, &next.id, &pinned, &next.updated_at).await?;
+        if !input.unpin.is_empty() {
+            media_repo::clear_field_overrides(&self.pool, &next.id, &input.unpin).await?;
+        }
+
+        media_repo::get(&self.pool, &input.id)
+            .await?
+            .ok_or_else(|| AppError::internal("media vanished during update"))
     }
 
     /// List library entries with optional filters; title-ascending by default.
@@ -800,6 +897,125 @@ mod tests {
                 .remove_tag("m-ghost", "tag-x")
                 .await
                 .expect_err("unknown"),
+            AppError::Validation(_)
+        ));
+    }
+
+    // ------------------------------------------------ MISSION-161: hand edits
+
+    fn edit(id: &str) -> UpdateMediaInput {
+        UpdateMediaInput {
+            id: id.to_string(),
+            title: "Sword of the Dawn".into(),
+            pub_status: "ongoing".into(),
+            format: Some("light_novel".into()),
+            synopsis: Some("A blade that learns to dream.".into()),
+            release_year: Some(2026),
+            genres: vec!["fantasy".into()],
+            unpin: Vec::new(),
+        }
+    }
+
+    #[tokio::test]
+    async fn update_media_writes_the_edit_and_pins_what_changed() {
+        let (pool, _path) = migrated_pool("media_service_update.db").await;
+        let service = MediaService::new(pool.clone());
+        let id = service.add_media(input()).await.expect("add media");
+
+        let updated = service
+            .update_media(UpdateMediaInput {
+                title: "  Sword of the Dusk  ".into(),
+                pub_status: "completed".into(),
+                format: Some("hardcover".into()),
+                synopsis: Some("  Rewritten by hand.  ".into()),
+                release_year: Some(2024),
+                genres: vec!["fantasy".into(), "mystery".into()],
+                ..edit(id.as_str())
+            })
+            .await
+            .expect("update");
+
+        assert_eq!(updated.title_main, "Sword of the Dusk", "trimmed");
+        assert_eq!(updated.synopsis.as_deref(), Some("Rewritten by hand."));
+        assert_eq!(updated.pub_status, "completed");
+        assert_eq!(updated.format.as_deref(), Some("hardcover"));
+        assert_eq!(updated.release_year, Some(2024));
+        assert_eq!(updated.genres.len(), 2, "the genre set was replaced");
+        // Fields the edit did not touch keep their values.
+        assert_eq!(updated.language.as_deref(), Some("ja"));
+        assert_eq!(updated.pages, Some(320));
+
+        let expected: Vec<String> = [
+            "format",
+            "genres",
+            "pub_status",
+            "release_year",
+            "synopsis",
+            "title_main",
+        ]
+        .iter()
+        .map(|field| field.to_string())
+        .collect();
+        assert_eq!(
+            media::field_overrides(&pool, id.as_str()).await.unwrap(),
+            expected,
+            "every changed field is pinned, and only those"
+        );
+    }
+
+    #[tokio::test]
+    async fn update_media_releases_the_fields_the_user_unpins() {
+        let (pool, _path) = migrated_pool("media_service_unpin.db").await;
+        let service = MediaService::new(pool.clone());
+        let id = service.add_media(input()).await.expect("add media");
+        media::pin_field_overrides(
+            &pool,
+            id.as_str(),
+            &["title_main".to_string(), "synopsis".to_string()],
+            "2026-02-01",
+        )
+        .await
+        .unwrap();
+
+        // Re-sending the same values changes nothing, so only `unpin` acts.
+        service
+            .update_media(UpdateMediaInput {
+                unpin: vec!["title_main".into(), "synopsis".into()],
+                ..edit(id.as_str())
+            })
+            .await
+            .expect("update");
+
+        assert!(
+            media::field_overrides(&pool, id.as_str())
+                .await
+                .unwrap()
+                .is_empty(),
+            "the released fields are the provider's again"
+        );
+    }
+
+    #[tokio::test]
+    async fn update_media_rejects_a_blank_title_and_unknown_media() {
+        let (pool, _path) = migrated_pool("media_service_update_invalid.db").await;
+        let service = MediaService::new(pool.clone());
+        let id = service.add_media(input()).await.expect("add media");
+
+        let blank = UpdateMediaInput {
+            title: "   ".into(),
+            ..edit(id.as_str())
+        };
+        assert!(matches!(
+            service.update_media(blank).await.expect_err("blank"),
+            AppError::Validation(_)
+        ));
+
+        let ghost = UpdateMediaInput {
+            title: "X".into(),
+            ..edit("m-ghost")
+        };
+        assert!(matches!(
+            service.update_media(ghost).await.expect_err("unknown"),
             AppError::Validation(_)
         ));
     }

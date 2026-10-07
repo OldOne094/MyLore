@@ -197,4 +197,25 @@ test.describe("E2E flows (MISSION-097)", () => {
     await expect.poll(() => stub.calls(page, "backup_restore")).toHaveLength(1);
     await page.getByText(/restart MyLore/i).waitFor();
   });
+
+  test("keeps theme and language across a relaunch", async ({ page }) => {
+    const stub = makeStub(BASE_FIXTURES);
+    await gotoDashboard(page, stub);
+
+    await page.getByRole("group", { name: "Theme" }).getByRole("button", { name: "Dark" }).click();
+    await page.getByRole("group", { name: "Language" }).getByRole("button", { name: "ع" }).click();
+    await expect(page.locator("html")).toHaveAttribute("data-theme", "dark");
+
+    /* Drop the pre-paint boot cache: only the persisted store can bring the
+       session back. A surface that wrote the cache but not the store passed
+       every assertion up to here and lost the choice on relaunch (MISSION-158). */
+    await page.evaluate(() => {
+      localStorage.removeItem("mylore.theme");
+      localStorage.removeItem("mylore.lang");
+    });
+    await page.reload();
+
+    await expect(page.locator("html")).toHaveAttribute("data-theme", "dark");
+    await expect(page.locator("html")).toHaveAttribute("dir", "rtl");
+  });
 });

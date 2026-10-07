@@ -3,7 +3,8 @@ import { useTranslation } from "react-i18next";
 import { useToast } from "@/components/ui";
 import { cn } from "@/lib/cn";
 import type { MediaListItem } from "./api";
-import { consumingStateFor, useMarkNextUnit } from "./progress";
+import { consumingStateFor } from "./mediaFields";
+import { useMarkNextUnit } from "./progress";
 
 /* MISSION-049 — In-grid quick control. A pill on the card's poster (icon-only
    on the list row) that marks the next unit done in one click. It must render

@@ -188,6 +188,7 @@ export interface EnrichView {
   refreshed_at: string;
   changed: boolean;
   changes: EnrichChange[];
+  kept: string[];
 }
 export interface AssetView {
   id: string;
@@ -454,6 +455,13 @@ export interface GroupShelfEntryView {
   status: string;
   progress: number;
   updated_at: string;
+  copied_media_id: string | null;
+}
+export interface GroupWorkCopyView {
+  media_id: string;
+  created: boolean;
+  title: string;
+  content_type: string;
 }
 export interface GroupNoteView {
   id: string;
@@ -654,6 +662,25 @@ export function media_get(args: { id: string }): Promise<{
     external_ids: { provider: string; ext_id: string; url: string | null }[];
     relations: { to_id: string; relation: string }[];
   } | null>("media_get", args);
+}
+
+/** MISSION-161 - apply a hand edit to a media's metadata. Every field that actually changed is pinned so a provider refresh keeps it instead of silently replacing it; `unpin` releases fields back to the provider. `genres` is the full replacement set, by name. Resolves with the media id or rejects with an AppError string. */
+export function media_update(args: {
+  id: string;
+  title: string;
+  pubStatus: string;
+  format: string | null;
+  synopsis: string | null;
+  releaseYear: number | null;
+  genres: string[];
+  unpin: string[];
+}): Promise<string> {
+  return invoke<string>("media_update", args);
+}
+
+/** MISSION-161 - the provider-owned fields the user has pinned by editing them, as enrich field keys (`title_main`, `synopsis`, `release_year`, `pub_status`, `format`, `genres`). Resolves with the keys or rejects with an AppError string. */
+export function media_overrides(args: { id: string }): Promise<string[]> {
+  return invoke<string[]>("media_overrides", args);
 }
 
 /** Local full-text search over the library. When content_type is provided, only media of that type are returned. Resolves with summary rows (each carrying its progress summary) or rejects with an AppError string. */
@@ -1197,6 +1224,14 @@ export function reading_group_set_shelf(args: {
   progress: number;
 }): Promise<GroupShelfEntryView> {
   return invoke<GroupShelfEntryView>("reading_group_set_shelf", args);
+}
+
+/** MISSION-160 - take a work the group is reading into the personal library, starting from the shelf's title and content type. Idempotent by work key: a work already copied resolves with created: false and the existing media id. Resolves with the copy or rejects with an AppError string. */
+export function reading_group_copy_work(args: {
+  groupId: string;
+  workKey: string;
+}): Promise<GroupWorkCopyView> {
+  return invoke<GroupWorkCopyView>("reading_group_copy_work", args);
 }
 
 /** MISSION-114 - a group's shared notes, optionally narrowed to one work. Resolves with the rows or rejects with an AppError string. */

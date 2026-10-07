@@ -14,13 +14,6 @@ import type { ContentNode } from "@/api";
 /** Unit node kinds that count toward progress (mirrors the backend UNIT_KINDS). */
 const UNIT_KINDS = new Set(["episode", "chapter", "node"]);
 
-/** Consuming state per content type (mirrors the backend ProgressTemplate):
-    episodes/movies are "watched", everything else is "read". */
-export function consumingStateFor(contentType: string): string {
-  if (contentType === "anime" || contentType === "tv" || contentType === "movie") return "watched";
-  return "read";
-}
-
 /** Countable unit nodes still to be consumed, in display order. Skipped nodes
     remain candidates — the backend treats them as next-to-mark too. */
 export function unreadUnits(nodes: ContentNode[], consumingState: string): ContentNode[] {

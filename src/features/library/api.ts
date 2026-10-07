@@ -14,12 +14,15 @@ import {
   media_get,
   media_list,
   media_nodes,
+  media_overrides,
+  media_update,
   node_progress_range,
   node_progress_set,
 } from "@/api";
 import { queryKeys } from "@/api";
 import { useToast } from "@/components/ui";
 import type { ContentNode, ProgressSummary } from "@/api";
+import { usesCounter, type CounterField } from "./mediaFields";
 import type { AddMediaInput } from "./types";
 
 export interface MediaCreateArgs {
@@ -142,12 +145,23 @@ export function toMediaCreateArgs(input: AddMediaInput): MediaCreateArgs {
     releaseYear: input.releaseYear ?? null,
     language: input.language ?? null,
     country: input.country ?? null,
-    pages: input.pages ?? null,
-    durationMin: input.durationMin ?? null,
-    epCount: input.epCount ?? null,
-    chCount: input.chCount ?? null,
+    pages: counterArg(input, "pages", input.pages),
+    durationMin: counterArg(input, "durationMin", input.durationMin),
+    epCount: counterArg(input, "epCount", input.epCount),
+    chCount: counterArg(input, "chCount", input.chCount),
     genres: input.genres,
   };
+}
+
+/** A counter reaches the command only when its content type uses it
+    (MISSION-159), so what is stored never depends on which surface built the
+    input — a novel cannot carry an episode count. */
+function counterArg(
+  input: AddMediaInput,
+  field: CounterField,
+  value: number | undefined,
+): number | null {
+  return usesCounter(input.contentType, field) ? (value ?? null) : null;
 }
 
 export function useAddMedia() {
@@ -158,6 +172,47 @@ export function useAddMedia() {
       await queryClient.invalidateQueries({ queryKey: queryKeys.media.lists() });
       await queryClient.invalidateQueries({ queryKey: queryKeys.dashboard.all() });
     },
+  });
+}
+
+/** The hand-editable fields of a media (MISSION-161). */
+export interface UpdateMediaArgs {
+  id: string;
+  title: string;
+  pubStatus: string;
+  format: string | null;
+  synopsis: string | null;
+  releaseYear: number | null;
+  genres: string[];
+  /** Field keys to release back to the provider, so a refresh may take them again. */
+  unpin: string[];
+}
+
+/** Apply a hand edit to a media's metadata (MISSION-161). Genres feed the facet
+    menu and the title feeds the dashboard, so both are invalidated with the
+    detail row. */
+export function useUpdateMedia() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (input: UpdateMediaArgs): Promise<string> => media_update(input),
+    onSuccess: async (_id, input) => {
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: queryKeys.media.detail(input.id) }),
+        queryClient.invalidateQueries({ queryKey: queryKeys.media.overrides(input.id) }),
+        queryClient.invalidateQueries({ queryKey: queryKeys.media.lists() }),
+        queryClient.invalidateQueries({ queryKey: queryKeys.media.facets() }),
+        queryClient.invalidateQueries({ queryKey: queryKeys.dashboard.all() }),
+      ]);
+    },
+  });
+}
+
+/** The provider-owned fields the user pinned by editing them (MISSION-161). */
+export function useMediaOverridesQuery(id: string) {
+  return useQuery({
+    queryKey: queryKeys.media.overrides(id),
+    queryFn: () => media_overrides({ id }),
+    enabled: id.length > 0,
   });
 }
 

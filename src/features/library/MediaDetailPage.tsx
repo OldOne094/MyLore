@@ -7,6 +7,7 @@ import {
   RefreshCcw,
   Star,
   Activity,
+  Pencil,
   Trash2,
 } from "lucide-react";
 import { useTranslation } from "react-i18next";
@@ -24,12 +25,14 @@ import {
 } from "@/components/ui";
 import { useMediaDetailQuery, useAssetViews, useEnrichMedia } from "./api";
 import type { EnrichView } from "@/api";
+import { EditMediaDialog } from "./EditMediaDialog";
 import { NodeTree } from "./NodeTree";
 import { TrackingTab } from "./TrackingTab";
 import { ReviewTab } from "./ReviewTab";
 import { useAcknowledgeWarnings, useReviewQuery } from "./review";
 import { EnrichDialog } from "./EnrichDialog";
 import { useDeleteMedia, useRestoreTrashItem } from "@/features/trash/api";
+import { counterMetaLabelKey, usesCounter, type CounterField } from "./mediaFields";
 import { STATUS_VARIANTS } from "./mediaMeta";
 import { CoverImage } from "./CoverImage";
 
@@ -53,6 +56,27 @@ const TAB_ICONS: Record<DetailTab, typeof FileText> = {
 
 function prettyId(raw: string): string {
   return raw.replace(/_/g, " ").replace(/\b\w/g, (char) => char.toUpperCase());
+}
+
+/** The runtime counters this title carries, in display order. A type never
+    shows a count it cannot use — no chapter count for a film, no page count for
+    a series (MISSION-159). */
+function counterCells(data: {
+  content_type: string;
+  pages: number | null;
+  ep_count: number | null;
+  ch_count: number | null;
+  duration_min: number | null;
+}): { field: CounterField; value: number }[] {
+  const candidates: { field: CounterField; value: number | null }[] = [
+    { field: "pages", value: data.pages },
+    { field: "epCount", value: data.ep_count },
+    { field: "chCount", value: data.ch_count },
+    { field: "durationMin", value: data.duration_min },
+  ];
+  return candidates.flatMap(({ field, value }) =>
+    value !== null && usesCounter(data.content_type, field) ? [{ field, value }] : [],
+  );
 }
 
 function DetailSkeleton() {
@@ -90,6 +114,7 @@ export function MediaDetailPage() {
   const toast = useToast();
   const [tab, setTab] = useState<DetailTab>("overview");
   const [enrichView, setEnrichView] = useState<EnrichView | null>(null);
+  const [editOpen, setEditOpen] = useState(false);
   const { data, isPending, isError, refetch } = useMediaDetailQuery(id ?? "");
   const { data: coverViews } = useAssetViews(data?.cover_asset_id ? [data.cover_asset_id] : []);
   const cover = coverViews?.[0] ?? null;
@@ -208,6 +233,15 @@ export function MediaDetailPage() {
                 ) : null}
               </div>
               <div className="flex shrink-0 items-center gap-2">
+                <Button
+                  variant="secondary"
+                  size="sm"
+                  onClick={() => setEditOpen(true)}
+                  aria-label={t("library.editAria")}
+                >
+                  <Pencil size={14} aria-hidden="true" />
+                  {t("library.editTitle")}
+                </Button>
                 {data.provider ? (
                   <Button
                     variant="secondary"
@@ -236,6 +270,7 @@ export function MediaDetailPage() {
                 </Button>
               </div>
             </div>
+            {editOpen ? <EditMediaDialog media={data} onOpenChange={setEditOpen} /> : null}
             <div className="flex flex-wrap items-center gap-2">
               <Badge variant="accent">{t(`contentType.${data.content_type}`)}</Badge>
               <Badge variant={STATUS_VARIANTS[data.pub_status] ?? "neutral"}>
@@ -318,18 +353,13 @@ export function MediaDetailPage() {
               />
               <MetaCell label={t("detail.metaLanguage")} value={data.language ?? ""} />
               <MetaCell label={t("detail.metaCountry")} value={data.country ?? ""} />
-              {data.pages ? (
-                <MetaCell label={t("detail.metaPages")} value={String(data.pages)} />
-              ) : null}
-              {data.ep_count ? (
-                <MetaCell label={t("detail.metaEpisodes")} value={String(data.ep_count)} />
-              ) : null}
-              {data.ch_count ? (
-                <MetaCell label={t("detail.metaChapters")} value={String(data.ch_count)} />
-              ) : null}
-              {data.duration_min ? (
-                <MetaCell label={t("detail.metaDuration")} value={`${data.duration_min} min`} />
-              ) : null}
+              {counterCells(data).map(({ field, value }) => (
+                <MetaCell
+                  key={field}
+                  label={t(counterMetaLabelKey(field, data.content_type))}
+                  value={field === "durationMin" ? `${value} min` : String(value)}
+                />
+              ))}
             </div>
             {data.genres.length > 0 ? (
               <div className="mt-8 flex flex-col gap-2">

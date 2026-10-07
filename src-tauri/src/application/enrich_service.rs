@@ -42,6 +42,10 @@ pub struct EnrichView {
     pub changed: bool,
     /// Per-field before/after diffs (`changed` implies at least one entry).
     pub changes: Vec<EnrichChange>,
+    /// Fields the provider would have changed but the user's own edit owns
+    /// (MISSION-161). Reported rather than hidden: a refresh that quietly
+    /// declines to update something is more confusing than one that says so.
+    pub kept: Vec<String>,
 }
 
 /// Enrich metadata use-cases.
@@ -86,13 +90,35 @@ impl EnrichService {
 
         let changes = self.diff(&stored, &provider, &details).await?;
 
+        // A field the user edited by hand is not the provider's to change
+        // (MISSION-161). Split the diff instead of merging silently: what the
+        // provider would have overwritten is reported back as `kept`.
+        // Only the fields a hand edit can actually pin (see `PINNABLE_FIELDS`),
+        // so a stray row can never make the report claim to have kept a value it
+        // did not keep.
+        let overrides: Vec<String> = media_repo::field_overrides(&self.pool, media_id)
+            .await?
+            .into_iter()
+            .filter(|field| PINNABLE_FIELDS.contains(&field.as_str()))
+            .collect();
+        let kept: Vec<String> = changes
+            .iter()
+            .filter(|change| overrides.contains(&change.field))
+            .map(|change| change.field.clone())
+            .collect();
+        let changes: Vec<EnrichChange> = changes
+            .into_iter()
+            .filter(|change| !overrides.contains(&change.field))
+            .collect();
+
         let refreshed_at = Utc::now().to_rfc3339();
         if changes.is_empty() {
             media_repo::stamp_metadata_refreshed(&self.pool, media_id, &refreshed_at).await?;
         } else {
-            let fresh = self
+            let mut fresh = self
                 .build_fresh(&stored, &provider, &provider_id, &details, &refreshed_at)
                 .await?;
+            apply_overrides(&mut fresh, &stored, &overrides);
             media_repo::update(&self.pool, &fresh).await?;
         }
 
@@ -102,6 +128,7 @@ impl EnrichService {
             refreshed_at,
             changed: !changes.is_empty(),
             changes,
+            kept,
         })
     }
 
@@ -390,6 +417,36 @@ fn external_id_labels(provider: &str, details: &ProviderMedia) -> Vec<String> {
         }
     }
     labels
+}
+
+/// The fields a hand edit may pin — exactly what `MediaService::update_media`
+/// writes (MISSION-161). Declared here as well as there so the skip, the
+/// "kept" report and the record copy all agree on one closed set.
+const PINNABLE_FIELDS: &[&str] = &[
+    "title_main",
+    "synopsis",
+    "pub_status",
+    "format",
+    "release_year",
+    "genres",
+];
+
+/// Put the user's pinned values back over a provider-built record (MISSION-161).
+///
+/// Pinned fields were already removed from the diff, so this keeps the stored
+/// record and the reported diff telling the same story.
+fn apply_overrides(fresh: &mut MediaRecord, stored: &MediaRecord, overrides: &[String]) {
+    for field in overrides {
+        match field.as_str() {
+            "title_main" => fresh.title_main = stored.title_main.clone(),
+            "synopsis" => fresh.synopsis = stored.synopsis.clone(),
+            "pub_status" => fresh.pub_status = stored.pub_status.clone(),
+            "format" => fresh.format = stored.format.clone(),
+            "release_year" => fresh.release_year = stored.release_year,
+            "genres" => fresh.genres = stored.genres.clone(),
+            _ => {}
+        }
+    }
 }
 
 fn push_scalar(
@@ -850,6 +907,50 @@ mod tests {
             .await
             .unwrap();
         assert!(stored.tags.contains(&rising), "new domain tag persisted");
+
+        pool.close().await;
+        cleanup_files(&path);
+    }
+
+    #[tokio::test]
+    async fn a_hand_edited_field_survives_a_refresh_and_is_reported_kept() {
+        let (pool, path) = migrated_pool("enrich_pinned.db").await;
+        seed_media(&pool, "m-1", "Sword of the Dawn").await;
+        // The user renamed the title by hand (MISSION-161): the pin is what the
+        // edit surface records, and the media row already holds the new value.
+        media_repo::pin_field_overrides(&pool, "m-1", &["title_main".to_string()], "2026-02-01")
+            .await
+            .unwrap();
+        sqlx::query("UPDATE media SET title_main = 'My Own Title' WHERE id = 'm-1'")
+            .execute(&pool)
+            .await
+            .unwrap();
+
+        // The provider still calls it "Sword of the Dawn" and moves other fields.
+        let provider: Arc<dyn Provider> = Arc::new(FakeProvider {
+            id: "fake".into(),
+            behavior: Mutex::new(Behavior::Ok(Box::new(details(
+                "x1",
+                "Sword of the Dawn",
+                Some(120),
+                Some("A fresh synopsis.".to_string()),
+            )))),
+        });
+        let service = EnrichService::new(pool.clone(), coord(provider));
+        let view = service.enrich_from_provider("m-1").await.expect("enrich");
+
+        assert_eq!(view.kept, vec!["title_main".to_string()], "reported, not hidden");
+        assert!(
+            !view.changes.iter().any(|change| change.field == "title_main"),
+            "a pinned field is not in the diff: {:?}",
+            view.changes.iter().map(|c| &c.field).collect::<Vec<_>>()
+        );
+        assert!(view.changed, "the other fields did refresh");
+
+        let stored = media_repo::get(&pool, "m-1").await.unwrap().unwrap();
+        assert_eq!(stored.title_main, "My Own Title", "the edit won");
+        assert_eq!(stored.ch_count, Some(120), "everything else refreshed");
+        assert_eq!(stored.synopsis.as_deref(), Some("A fresh synopsis."));
 
         pool.close().await;
         cleanup_files(&path);

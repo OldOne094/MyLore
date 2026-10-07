@@ -31,6 +31,8 @@ export const queryKeys = {
     facets: () => ["media", "facets"] as const,
     details: () => ["media", "detail"] as const,
     detail: (id: string) => ["media", "detail", id] as const,
+    /** Provider-owned fields the user pinned by editing them (MISSION-161). */
+    overrides: (id: string) => ["media", "overrides", id] as const,
     nodes: (id: string) => ["media", "nodes", id] as const,
     /** Personal tags linked to one media (MISSION-074). */
     tags: (id: string) => ["media", "tags", id] as const,

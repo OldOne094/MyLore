@@ -27,17 +27,64 @@ export function makeStub(fixtures: StubFixtures): IpcStub {
       const stores = new Map();
       let nextId = 1;
 
+      // The real store is a file on disk. A plain Map would be rebuilt by every
+      // reload (this init script re-runs), so back it with localStorage: a
+      // reload then behaves like a relaunch, which is the only way an E2E test
+      // can observe that a setting was persisted at all (MISSION-158).
+      const STORE_KEY = "__myloreStore";
+      function snapshot() {
+        try {
+          return JSON.parse(localStorage.getItem(STORE_KEY) || "{}");
+        } catch {
+          return {};
+        }
+      }
+      function commit(data) {
+        try {
+          localStorage.setItem(STORE_KEY, JSON.stringify(data));
+        } catch {
+          /* Storage unavailable — the store stays in-memory for this page. */
+        }
+      }
+
       function handleStore(cmd, args) {
         if (cmd === "plugin:store|load") {
           const rid = nextId++;
-          stores.set(rid, { data: {} });
+          stores.set(rid, { data: snapshot() });
           return Promise.resolve(rid);
         }
         const store = stores.get(args?.rid);
         if (!store) return Promise.resolve(null);
-        if (cmd === "plugin:store|get") return Promise.resolve(store.data[args.key] ?? null);
+        const key = args?.key;
+        const hasKey = () => Object.prototype.hasOwnProperty.call(store.data, key);
+        // The plugin answers get with a [value, exists] tuple, and has with a
+        // boolean. Returning the bare value here is not destructured: it reads
+        // as "absent", so no store-backed setting is ever seen as persisted.
+        if (cmd === "plugin:store|get") {
+          return Promise.resolve([hasKey() ? store.data[key] : null, hasKey()]);
+        }
         if (cmd === "plugin:store|set") {
-          store.data[args.key] = args.value;
+          store.data[key] = args.value;
+          commit(store.data);
+          return Promise.resolve(null);
+        }
+        if (cmd === "plugin:store|has") return Promise.resolve(hasKey());
+        if (cmd === "plugin:store|keys") return Promise.resolve(Object.keys(store.data));
+        if (cmd === "plugin:store|values") return Promise.resolve(Object.values(store.data));
+        if (cmd === "plugin:store|entries") return Promise.resolve(Object.entries(store.data));
+        if (cmd === "plugin:store|length") return Promise.resolve(Object.keys(store.data).length);
+        if (cmd === "plugin:store|delete") {
+          delete store.data[key];
+          commit(store.data);
+          return Promise.resolve(null);
+        }
+        if (cmd === "plugin:store|clear") {
+          store.data = {};
+          commit(store.data);
+          return Promise.resolve(null);
+        }
+        if (cmd === "plugin:store|save" || cmd === "plugin:store|reload") {
+          commit(store.data);
           return Promise.resolve(null);
         }
         return Promise.resolve(null);

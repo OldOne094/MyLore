@@ -345,6 +345,56 @@ pub async fn update(pool: &SqlitePool, media: &MediaRecord) -> Result<(), AppErr
     Ok(())
 }
 
+/// Provider-owned fields the user has pinned by editing them (MISSION-161).
+/// The names are the enrich diff's field keys, so one list drives both the pin
+/// and the skip.
+pub async fn field_overrides(pool: &SqlitePool, media_id: &str) -> Result<Vec<String>, AppError> {
+    let rows = sqlx::query_as::<_, (String,)>(
+        "SELECT field FROM media_field_override WHERE media_id = ? ORDER BY field",
+    )
+    .bind(media_id)
+    .fetch_all(pool)
+    .await?;
+    Ok(rows.into_iter().map(|(field,)| field).collect())
+}
+
+/// Pin fields to the user's value. Idempotent: editing a field again re-pins it.
+pub async fn pin_field_overrides(
+    pool: &SqlitePool,
+    media_id: &str,
+    fields: &[String],
+    at: &str,
+) -> Result<(), AppError> {
+    for field in fields {
+        sqlx::query(
+            "INSERT INTO media_field_override (media_id, field, updated_at) VALUES (?, ?, ?)
+             ON CONFLICT(media_id, field) DO UPDATE SET updated_at = excluded.updated_at",
+        )
+        .bind(media_id)
+        .bind(field)
+        .bind(at)
+        .execute(pool)
+        .await?;
+    }
+    Ok(())
+}
+
+/// Release fields back to the provider, so a later refresh wins again.
+pub async fn clear_field_overrides(
+    pool: &SqlitePool,
+    media_id: &str,
+    fields: &[String],
+) -> Result<(), AppError> {
+    for field in fields {
+        sqlx::query("DELETE FROM media_field_override WHERE media_id = ? AND field = ?")
+            .bind(media_id)
+            .bind(field)
+            .execute(pool)
+            .await?;
+    }
+    Ok(())
+}
+
 /// Delete a media; the FTS index and all aggregates cascade via FKs.
 pub async fn delete(pool: &SqlitePool, id: &str) -> Result<(), AppError> {
     sqlx::query("DELETE FROM media WHERE id = ?")
@@ -469,6 +519,22 @@ pub async fn ensure_person_in_tx<'e>(
         .execute(&mut **tx)
         .await?;
     Ok(id)
+}
+
+/// Resolve a genre token to its id: an existing id wins, otherwise the token is
+/// treated as a name and created/reused (MISSION-161). The edit surface holds
+/// the ids the aggregate carries and may send them straight back, while a
+/// hand-typed genre is a name — accepting both keeps one from becoming a second
+/// row that only looks the same.
+pub async fn resolve_genre(pool: &SqlitePool, token: &str) -> Result<String, AppError> {
+    let existing = sqlx::query_as::<_, (String,)>("SELECT id FROM genre WHERE id = ?")
+        .bind(token)
+        .fetch_optional(pool)
+        .await?;
+    match existing {
+        Some((id,)) => Ok(id),
+        None => ensure_genre(pool, token).await,
+    }
 }
 
 /// Find-or-create a genre by name; resolves with its id (MISSION-060). Seed

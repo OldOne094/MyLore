@@ -5,14 +5,19 @@ import { useTranslation } from "react-i18next";
 import { Segmented } from "@/components/ui";
 import { NAV_ITEMS } from "@/navigation";
 import { THEME_CHOICES } from "@/themes/preferences";
-import { useTheme } from "@/themes/useTheme";
+import { usePreferences } from "@/preferences/usePreferences";
 import { LanguageSwitcher } from "./LanguageSwitcher";
 
 /* DESIGN_SYSTEM.md — Top bar: current page title + global actions (local
    search, locale, theme). Fully translated (MISSION-033). The search field
    navigates to /search?q= (MISSION-043); while on the search page it mirrors
    the URL query so results and the box stay in sync. The input is remounted
-   (via `key`) whenever the URL query changes so no effect is needed to sync. */
+   (via `key`) whenever the URL query changes so no effect is needed to sync.
+
+   MISSION-158 — the theme switcher writes through `usePreferences`, not
+   `useTheme().applyPreference`: the latter only applied the theme and mirrored
+   the boot cache, never the settings store, so a theme picked from here was
+   reverted on the next launch. */
 
 function HeaderSearch() {
   const { t } = useTranslation();
@@ -55,7 +60,7 @@ function HeaderSearch() {
 export function TopBar() {
   const location = useLocation();
   const { t } = useTranslation();
-  const { preference, setPreference } = useTheme();
+  const { preferences, setTheme } = usePreferences();
   const current = NAV_ITEMS.find((item) => item.path === location.pathname);
 
   return (
@@ -70,8 +75,8 @@ export function TopBar() {
         <LanguageSwitcher />
         <Segmented
           aria-label={t("a11y.theme")}
-          value={preference}
-          onChange={setPreference}
+          value={preferences.theme}
+          onChange={setTheme}
           options={THEME_CHOICES.map((choice) => ({
             value: choice,
             label: t(`theme.${choice}`),
