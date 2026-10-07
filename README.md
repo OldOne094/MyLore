@@ -8,7 +8,7 @@ and safe backups. Your library lives in **one SQLite database on your
 machine**; the internet is only ever used to *fetch* metadata.
 
 - 🔒 **Private by design** — no account, no telemetry, no cloud. Encrypted-at-rest is opt-in on the roadmap.
-- 🌐 **English + Arabic**, full RTL layout.
+- 🌐 **English, Arabic, Turkish & Spanish**, full RTL layout.
 - 🧩 **10 metadata providers** (AniList, MangaDex, NovelUpdates, WTR-LAB, OpenLibrary, Bangumi, Jikan, TMDB, Google Books, Hardcover) with per-provider failure isolation — one down provider never breaks a search.
 - 💾 **Portable backups** (`.mylore` archives), rollback-safe restore, pre-migration auto-backup.
 
@@ -121,7 +121,7 @@ feature costs (26.5 MB → 32.4 MB at the time of writing). See
 
 MyLore is open source — **no credential of yours ever belongs in this
 repository.** Everything below lives outside the repo, in your OS user
-profile. Full policy: [`SECURITY.md`](SECURITY.md).
+profile. Full policy: [`SECURITY.md`](PROJECTMAP/SECURITY.md).
 
 ### Key-less providers (nothing to configure)
 
@@ -171,19 +171,20 @@ Notes:
 ## Development workflow
 
 Work is organized as numbered missions tracked in
-[`ROADMAP.md`](ROADMAP.md). Each mission follows
+[`ROADMAP.md`](PROJECTMAP/ROADMAP.md). Each mission follows
 implement → test → review → docs → gates → status update. Milestone M0–M14
 are complete (Alpha); current phase and future scope are at the top of the
 roadmap.
 
-Key docs:
+Key docs — all of them live in [`PROJECTMAP/`](PROJECTMAP/README.md), which is
+the index and the suggested reading order:
 
-- [`ARCHITECTURE.md`](ARCHITECTURE.md) — layers, state, IPC policy engine
-- [`API_PROVIDERS.md`](API_PROVIDERS.md) — every provider contract & quirks
-- [`DATABASE.md`](DATABASE.md) / [`DOMAIN_MODEL.md`](DOMAIN_MODEL.md)
-- [`DESIGN_SYSTEM.md`](DESIGN_SYSTEM.md) — tokens & primitives
-- [`SECURITY.md`](SECURITY.md) — the secrets contract described above
-- [`CHANGELOG.md`](CHANGELOG.md)
+- [`ARCHITECTURE.md`](PROJECTMAP/ARCHITECTURE.md) — layers, state, IPC policy engine
+- [`API_PROVIDERS.md`](PROJECTMAP/API_PROVIDERS.md) — every provider contract & quirks
+- [`DATABASE.md`](PROJECTMAP/DATABASE.md) / [`DOMAIN_MODEL.md`](PROJECTMAP/DOMAIN_MODEL.md)
+- [`DESIGN_SYSTEM.md`](PROJECTMAP/DESIGN_SYSTEM.md) — tokens & primitives
+- [`SECURITY.md`](PROJECTMAP/SECURITY.md) — the secrets contract described above
+- [`CHANGELOG.md`](PROJECTMAP/CHANGELOG.md)
 
 ### Testing notes
 
@@ -213,7 +214,7 @@ in `src-tauri/tests/live_network.rs` and are marked `#[ignore]`.
 
 ## Security
 
-See [`SECURITY.md`](SECURITY.md). Short version: secrets live outside the
+See [`SECURITY.md`](PROJECTMAP/SECURITY.md). Short version: secrets live outside the
 repo, tokens never cross the IPC boundary, logs carry lengths not values,
 and a regression test keeps it that way.
 

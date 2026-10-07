@@ -72,7 +72,8 @@ This is the mechanism `ARCHITECTURE.md §4` refers to when it says fixtures "ena
   viewport so TanStack Virtual renders in jsdom.
 - Conventions: one `*.test.tsx` per feature/page; assert the four data states (loading skeleton,
   empty, error+retry, content) where a surface shows data; keep i18n parity covered by
-  `src/i18n/locales.test.ts` (exact key match EN↔AR, Arabic superset of plural forms).
+  `src/i18n/locales.test.ts` (every language matches EN's non-plural keys exactly and covers
+  every English plural form — Arabic carries the extra zero/two/few/many categories).
 
 ## 6. End-to-end (Playwright)
 

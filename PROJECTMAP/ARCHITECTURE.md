@@ -436,6 +436,18 @@ has no type column. `delimiter` is the CSV field delimiter, `separator` splits m
     the wire instead of by hand. The projection only adds or refreshes: membership *revocation* is
     expressed by the key rotation, not by the document, because two replicas both believing they
     own the group would otherwise publish conflicting rosters.
+  - **Shipped (MISSION-162): relay resilience.** The transport no longer treats a relay set as one
+    publish target. `connect` registers the set with `and_connect` and returns the URLs the pool
+    accepted (a rejected URL is logged, not swallowed); `publish` reads `nostr-sdk`'s per-relay
+    `Output` — **one relay taking the event means sent, an empty success set means the row stays
+    queued** (it used to mark a fully-failed send as sent). A pass in which every relay fails comes
+    back as a normal report with `published = 0` and the envelopes still pending, and a failed
+    `fetch` is skipped rather than raised, so a total outage degrades instead of failing the task
+    — the GroupSync task ends with "Queued — no relay reachable". `GroupTransport::relay_status`
+    exposes each relay's reachability (`RelayStatus { url, reachable, detail }`), the real one via
+    a **bounded** connect probe (3 s) so a page cannot hang; `GroupRelayView.status` carries it to
+    the UI, which shows a dot and label per relay and the queued line where the relays are set.
+    No migration: the outbox already held every envelope, only the reporting was wrong.
   - **Threat model (explicit):** E2EE (XChaCha20-Poly1305, group key in the OS keyring, shared
     only via out-of-band QR/link invite) protects payloads, but public relays still observe
     metadata — IP address, pubkey, timing, packet sizes, group size. The feature is therefore
@@ -597,7 +609,11 @@ Cancellation propagates to Tokio tasks and HTTP requests (drop-based cancellatio
   tightens globally. Micro-interactions stay restrained by design: uniform
   `duration-150 ease-out` transitions clamped under `prefers-reduced-motion`.
 
-- `i18next` + ICU; locales `en` and `ar` in MVP, provider names/titles kept in original script.
+- `i18next` + ICU; locales `en`, `ar`, `tr` and `es` (MISSION-163), provider names/titles kept
+  in original script. A single `LOCALES` descriptor table (`src/i18n/locales.ts`) is the source
+  for the switcher list, its compact labels and each language's writing direction, so adding a
+  language is one row and `en`/`ar` keep their trees there while `tr`/`es` live in sibling
+  modules; `locales.test.ts` enforces key parity across every language.
 - Layout via **logical CSS properties** and Tailwind `rtl:` variants - mirrored navigation,
   sidebars, and text alignment work without separate stylesheets.
 - Directional icons flip with `rtl:rotate-180`; horizontal keyboard navigation (tabs, tree
