@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
@@ -9,8 +9,10 @@ import i18n from "@/i18n";
 
 vi.mock("@tauri-apps/api/core", () => ({ invoke: vi.fn() }));
 vi.mock("@tauri-apps/plugin-dialog", () => ({ save: vi.fn(), open: vi.fn() }));
+vi.mock("@tauri-apps/api/event", () => ({ listen: vi.fn(), emit: vi.fn() }));
 
 import { invoke } from "@tauri-apps/api/core";
+import { listen } from "@tauri-apps/api/event";
 import { encodeNoteId } from "@/features/groups/alignment";
 import { GroupDetailPage } from "./GroupDetailPage";
 
@@ -65,7 +67,11 @@ function mockWorld(overrides: Record<string, unknown> = {}, unsupported = false)
             )
           : Promise.resolve({ has_key: true, key_id: "abcdef123456" });
       case "reading_group_relays_get":
-        return Promise.resolve({ relays: ["wss://relay.test"], pending: 0 });
+        return Promise.resolve({
+          relays: ["wss://relay.test"],
+          pending: 0,
+          status: [{ url: "wss://relay.test", reachable: true, detail: null }],
+        });
       case "reading_group_note_state":
         return unsupported
           ? Promise.reject(
@@ -116,7 +122,12 @@ function renderPage() {
 
 afterEach(async () => {
   vi.mocked(invoke).mockReset();
+  vi.mocked(listen).mockReset();
   await i18n.changeLanguage("en");
+});
+
+beforeEach(() => {
+  vi.mocked(listen).mockResolvedValue(() => undefined);
 });
 
 describe("GroupDetailPage", () => {
@@ -239,5 +250,67 @@ describe("GroupDetailPage", () => {
       groupId: "g-1",
       workKey: "h:berserk",
     });
+  });
+
+  it("shows each relay's reachability", async () => {
+    mockWorld({
+      reading_group_relays_get: {
+        relays: ["wss://up.test", "wss://down.test"],
+        pending: 0,
+        status: [
+          { url: "wss://up.test", reachable: true, detail: null },
+          { url: "wss://down.test", reachable: false, detail: "Disconnected" },
+        ],
+      },
+    });
+    renderPage();
+
+    expect(await screen.findByText("wss://up.test")).toBeInTheDocument();
+    expect(screen.getByText("Reachable")).toBeInTheDocument();
+    expect(screen.getByText("Unreachable")).toBeInTheDocument();
+  });
+
+  it("says a queued change cannot leave while no relay is reachable", async () => {
+    mockWorld({
+      reading_group_relays_get: {
+        relays: ["wss://relay.test"],
+        pending: 2,
+        status: [{ url: "wss://relay.test", reachable: false, detail: null }],
+      },
+    });
+    renderPage();
+
+    expect(await screen.findByText("Queued — no relay reachable")).toBeInTheDocument();
+  });
+
+  it("reports a sync as queued instead of failing when no relay is reachable", async () => {
+    // The backend now reaches `success` for a total outage (MISSION-162), with a
+    // report whose `published` is zero and `pending` non-zero.
+    const task = {
+      id: "t-sync-1",
+      kind: "group_sync",
+      title: "Sync group g-1",
+      state: "success",
+      progress: 100,
+      message: null,
+      error: null,
+      result: { published: 0, failed: 2, received: 0, merged: 0, skipped: 0, pending: 2 },
+      created_at: "2026-01-01T00:00:00Z",
+      updated_at: "2026-01-01T00:00:00Z",
+    };
+    mockWorld({
+      reading_group_sync_now: task,
+      task_get: task,
+      reading_group_relays_get: {
+        relays: ["wss://relay.test"],
+        pending: 2,
+        status: [{ url: "wss://relay.test", reachable: false, detail: null }],
+      },
+    });
+    renderPage();
+
+    await userEvent.click(await screen.findByRole("button", { name: "Sync now" }));
+
+    expect(await screen.findAllByText("Queued — no relay reachable")).not.toHaveLength(0);
   });
 });

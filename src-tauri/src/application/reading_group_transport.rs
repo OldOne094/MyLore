@@ -15,11 +15,24 @@
 
 use crate::error::AppError;
 
+/// The reachability of one relay in a group's set, as of the last probe.
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize)]
+pub struct RelayStatus {
+    pub url: String,
+    /// True when the transport holds a live connection to this relay.
+    pub reachable: bool,
+    /// The connection state (or why the URL was rejected) when not reachable.
+    pub detail: Option<String>,
+}
+
 /// A group's relays plus how many envelopes are still waiting to go out.
 #[derive(Debug, Clone, serde::Serialize)]
 pub struct GroupRelayView {
     pub relays: Vec<String>,
     pub pending: i64,
+    /// One entry per configured relay, in `relays` order, so an outage is
+    /// visible rather than silent (MISSION-162).
+    pub status: Vec<RelayStatus>,
 }
 
 /// What one sync pass did.
@@ -41,7 +54,7 @@ pub struct GroupSyncReport {
 
 #[cfg(feature = "p2p")]
 mod imp {
-    use std::collections::HashMap;
+    use std::collections::{HashMap, HashSet};
     use std::sync::atomic::{AtomicBool, Ordering};
     use std::sync::Mutex;
     use std::time::Duration;
@@ -73,6 +86,9 @@ mod imp {
     const CHUNK_HEADER: usize = 28;
     const FETCH_TIMEOUT: Duration = Duration::from_secs(15);
     const FETCH_LIMIT: usize = 500;
+    /// How long a relay-status probe waits for the set to connect before it
+    /// reports what it has; keeps a page-level status read bounded.
+    const RELAY_PROBE_TIMEOUT: Duration = Duration::from_secs(3);
     const NOSTR_KEY_ENTRY: &str = "readingGroup.nostrKey";
     /// Keep the relay set small: every envelope goes to every relay.
     const MAX_RELAYS: usize = 8;
@@ -101,6 +117,11 @@ mod imp {
         /// Every whole envelope currently readable for `group_id`.
         async fn fetch(&self, relays: &[String], group_id: &str)
             -> Result<Vec<Incoming>, AppError>;
+
+        /// The reachability of each configured relay. A best-effort probe: an
+        /// unreachable relay is reported, never raised, so a total outage is
+        /// visible instead of failing the caller (MISSION-162).
+        async fn relay_status(&self, relays: &[String]) -> Vec<RelayStatus>;
     }
 
     // --------------------------------------------------------------- chunking
@@ -220,10 +241,21 @@ mod imp {
             })
         }
 
-        async fn connect(&self, relays: &[String]) {
+        /// Register the relay set and start connecting. Returns the URLs the pool
+        /// accepted; an *unreachable* relay is still accepted (its connection
+        /// state is a separate, observable thing), only a URL the pool rejects
+        /// is left out — the caller used to swallow that silently (MISSION-162).
+        async fn connect(&self, relays: &[String]) -> Vec<String> {
+            let mut accepted = Vec::with_capacity(relays.len());
             for url in relays {
-                let _ = self.client.add_relay(url.as_str()).await;
+                match self.client.add_relay(url.as_str()).and_connect().await {
+                    Ok(_) => accepted.push(url.clone()),
+                    Err(error) => {
+                        tracing::warn!(%url, %error, "relay rejected by the pool");
+                    }
+                }
             }
+            accepted
         }
 
         /// Only the group tag is public. The work a payload is about rides inside
@@ -250,14 +282,29 @@ mod imp {
             if relays.is_empty() {
                 return Err(AppError::validation("no relays configured for this group"));
             }
-            self.connect(relays).await;
+            let accepted = self.connect(relays).await;
+            if accepted.is_empty() {
+                return Err(AppError::validation("no relay reachable for this group"));
+            }
             for chunk in chunk_payload(envelope, MAX_EVENT_BYTES - CHUNK_HEADER) {
                 let event = self.build_event(group_id, &chunk)?;
-                self.client
+                let output = self
+                    .client
                     .send_event(&event)
-                    .to(relays.to_vec())
+                    .to(accepted.clone())
                     .await
                     .map_err(nostr_err)?;
+                // `nostr-sdk` reports per-relay results in `Output` and returns
+                // `Ok` even when every relay refused: one relay taking the event
+                // means it is sent, an empty success set means it stays queued
+                // (MISSION-162).
+                if output.success.is_empty() {
+                    let reasons: Vec<&str> = output.failed.values().map(String::as_str).collect();
+                    return Err(AppError::validation(format!(
+                        "no relay accepted the event: {}",
+                        reasons.join("; ")
+                    )));
+                }
             }
             Ok(())
         }
@@ -270,7 +317,11 @@ mod imp {
             if relays.is_empty() {
                 return Ok(Vec::new());
             }
-            self.connect(relays).await;
+            if self.connect(relays).await.is_empty() {
+                // No relay could even be registered: nothing to read, and not an
+                // error — the next pass tries again.
+                return Ok(Vec::new());
+            }
             let filter = Filter::new()
                 .kind(Kind::Custom(GROUP_EVENT_KIND))
                 .custom_tag(SingleLetterTag::LOWERCASE_G, group_id.to_string())
@@ -290,6 +341,40 @@ mod imp {
                 chunks.push(chunk);
             }
             Ok(assemble(&chunks))
+        }
+
+        /// Whether each configured relay currently holds a live connection.
+        async fn relay_status(&self, relays: &[String]) -> Vec<RelayStatus> {
+            self.connect(relays).await;
+            // Bounded: returns as soon as the set is connected, or at the probe
+            // timeout, so a group page cannot hang on a dead relay.
+            self.client.connect().and_wait(RELAY_PROBE_TIMEOUT).await;
+            let mut out = Vec::with_capacity(relays.len());
+            for url in relays {
+                let entry = match self.client.relay(url.as_str()).await {
+                    Ok(Some(relay)) => {
+                        let status = relay.status();
+                        let reachable = status.is_connected();
+                        RelayStatus {
+                            url: url.clone(),
+                            reachable,
+                            detail: (!reachable).then(|| status.to_string()),
+                        }
+                    }
+                    Ok(None) => RelayStatus {
+                        url: url.clone(),
+                        reachable: false,
+                        detail: Some("not accepted by the relay pool".to_string()),
+                    },
+                    Err(error) => RelayStatus {
+                        url: url.clone(),
+                        reachable: false,
+                        detail: Some(error.to_string()),
+                    },
+                };
+                out.push(entry);
+            }
+            out
         }
     }
 
@@ -332,6 +417,10 @@ mod imp {
     pub struct InMemoryTransport {
         stored: Mutex<Vec<StoredChunk>>,
         online: AtomicBool,
+        /// Relays taken down individually while the rest stay up.
+        offline: Mutex<HashSet<String>>,
+        /// A partial outage: writes go out but the pull fails.
+        fetch_offline: AtomicBool,
     }
 
     impl InMemoryTransport {
@@ -339,12 +428,40 @@ mod imp {
             Self {
                 stored: Mutex::new(Vec::new()),
                 online: AtomicBool::new(true),
+                offline: Mutex::new(HashSet::new()),
+                fetch_offline: AtomicBool::new(false),
             }
         }
 
         /// Simulate the network being down (a flush must keep its rows pending).
         pub fn set_online(&self, online: bool) {
             self.online.store(online, Ordering::SeqCst);
+        }
+
+        /// The relay accepts writes but its reads time out — a partial outage.
+        pub fn set_fetch_offline(&self, offline: bool) {
+            self.fetch_offline.store(offline, Ordering::SeqCst);
+        }
+
+        /// Take one relay down (or bring it back) while the others stay up — the
+        /// "all relays fail at once" case is `set_online(false)`.
+        pub fn set_relay_offline(&self, url: &str, offline: bool) {
+            if let Ok(mut set) = self.offline.lock() {
+                if offline {
+                    set.insert(url.to_string());
+                } else {
+                    set.remove(url);
+                }
+            }
+        }
+
+        fn reachable(&self, url: &str) -> bool {
+            self.online.load(Ordering::SeqCst)
+                && self
+                    .offline
+                    .lock()
+                    .map(|set| !set.contains(url))
+                    .unwrap_or(false)
         }
 
         /// How many events the relay is holding.
@@ -357,13 +474,16 @@ mod imp {
     impl GroupTransport for InMemoryTransport {
         async fn publish(
             &self,
-            _relays: &[String],
+            relays: &[String],
             group_id: &str,
             _message_id: &str,
             envelope: &[u8],
         ) -> Result<(), AppError> {
-            if !self.online.load(Ordering::SeqCst) {
-                return Err(AppError::validation("relay unreachable"));
+            if relays.is_empty() {
+                return Err(AppError::validation("no relays configured for this group"));
+            }
+            if !relays.iter().any(|url| self.reachable(url)) {
+                return Err(AppError::validation("no relay reachable"));
             }
             let mut stored = self
                 .stored
@@ -380,11 +500,17 @@ mod imp {
 
         async fn fetch(
             &self,
-            _relays: &[String],
+            relays: &[String],
             group_id: &str,
         ) -> Result<Vec<Incoming>, AppError> {
-            if !self.online.load(Ordering::SeqCst) {
-                return Err(AppError::validation("relay unreachable"));
+            if relays.is_empty() {
+                return Ok(Vec::new());
+            }
+            if !relays.iter().any(|url| self.reachable(url)) {
+                return Err(AppError::validation("no relay reachable"));
+            }
+            if self.fetch_offline.load(Ordering::SeqCst) {
+                return Err(AppError::validation("relay read failed"));
             }
             let stored = self
                 .stored
@@ -397,32 +523,71 @@ mod imp {
                 .collect();
             Ok(assemble(&chunks))
         }
+
+        async fn relay_status(&self, relays: &[String]) -> Vec<RelayStatus> {
+            relays
+                .iter()
+                .map(|url| {
+                    let reachable = self.reachable(url);
+                    RelayStatus {
+                        url: url.clone(),
+                        reachable,
+                        detail: (!reachable).then(|| "relay unreachable".to_string()),
+                    }
+                })
+                .collect()
+        }
     }
 
     // ------------------------------------------------------------- use-cases
 
-    /// A group's relays and outbox depth.
+    /// A group's relays, outbox depth and per-relay status.
     pub async fn relays_view(
         pool: &SqlitePool,
+        transport: &dyn GroupTransport,
         group_id: &str,
     ) -> Result<GroupRelayView, AppError> {
+        let relays = repo::relays(pool, group_id).await?;
         Ok(GroupRelayView {
-            relays: repo::relays(pool, group_id).await?,
+            status: transport.relay_status(&relays).await,
             pending: repo::pending_count(pool, group_id).await?,
+            relays,
         })
+    }
+
+    /// IPC entry: probe the group's relays through the real transport.
+    pub async fn relays_get(
+        pool: &SqlitePool,
+        store: &dyn SecretStore,
+        group_id: &str,
+    ) -> Result<GroupRelayView, AppError> {
+        let transport = NostrTransport::new(store)?;
+        relays_view(pool, &transport, group_id).await
     }
 
     /// Replace a group's relay set. Owner-only: relays are group settings, and
     /// every member's traffic flows through them.
     pub async fn set_relays(
         pool: &SqlitePool,
+        transport: &dyn GroupTransport,
         group_id: &str,
         relays: Vec<String>,
     ) -> Result<GroupRelayView, AppError> {
         require_owner(pool, group_id).await?;
         let relays = normalize_relays(relays);
         repo::set_relays(pool, group_id, &relays).await?;
-        relays_view(pool, group_id).await
+        relays_view(pool, transport, group_id).await
+    }
+
+    /// IPC entry: replace a group's relay set and probe the new one.
+    pub async fn relays_set(
+        pool: &SqlitePool,
+        store: &dyn SecretStore,
+        group_id: &str,
+        relays: Vec<String>,
+    ) -> Result<GroupRelayView, AppError> {
+        let transport = NostrTransport::new(store)?;
+        set_relays(pool, &transport, group_id, relays).await
     }
 
     /// Queue a sealed envelope for broadcast (outbox-first). The `work_key` is
@@ -499,7 +664,18 @@ mod imp {
         //    is resolved first for the dedup key and again for the merge.
         let (mut received, mut merged, mut skipped) = (0, 0, 0);
         if failed == 0 {
-            for incoming in transport.fetch(&relays, group_id).await? {
+            // A relay outage is not a sync failure: whatever is queued stays
+            // queued (the flush above already marked it), and there is simply
+            // nothing to pull this pass. The user sees "queued, no relay
+            // reachable" instead of an error (MISSION-162).
+            let pulled = match transport.fetch(&relays, group_id).await {
+                Ok(incoming) => incoming,
+                Err(error) => {
+                    tracing::debug!(%error, "relay fetch failed; skipping this pass");
+                    Vec::new()
+                }
+            };
+            for incoming in pulled {
                 received += 1;
                 let Ok(topic) =
                     reading_group_p2p::topic_of(pool, store, group_id, &incoming.envelope).await
@@ -576,7 +752,13 @@ mod imp {
             let report = sync_now(&pool, store.as_ref(), &transport, &group_id)
                 .await
                 .map_err(|e| TaskError::failed(e.to_string()))?;
-            reporter.progress(100, Some("Sync complete".to_string()));
+            let message = if report.published == 0 && report.pending > 0 {
+                // Degraded, not failed: the change is safe in the outbox.
+                "Queued — no relay reachable".to_string()
+            } else {
+                "Sync complete".to_string()
+            };
+            reporter.progress(100, Some(message));
             serde_json::to_value(report).map_err(|e| TaskError::failed(e.to_string()))
         });
 
@@ -602,15 +784,17 @@ mod imp {
         ))
     }
 
-    pub async fn relays_view(
+    pub async fn relays_get(
         _pool: &SqlitePool,
+        _store: &dyn SecretStore,
         _group_id: &str,
     ) -> Result<GroupRelayView, AppError> {
         unsupported()
     }
 
-    pub async fn set_relays(
+    pub async fn relays_set(
         _pool: &SqlitePool,
+        _store: &dyn SecretStore,
         _group_id: &str,
         _relays: Vec<String>,
     ) -> Result<GroupRelayView, AppError> {
@@ -638,13 +822,13 @@ mod imp {
     }
 }
 
-#[cfg(not(feature = "p2p"))]
-pub use imp::spawn_sync;
-pub use imp::{enqueue_envelope, relays_view, set_relays};
 #[cfg(feature = "p2p")]
 pub use imp::{
-    spawn_sync, sync_now, GroupTransport, InMemoryTransport, NostrTransport, GROUP_EVENT_KIND,
+    enqueue_envelope, relays_get, relays_set, relays_view, set_relays, spawn_sync, sync_now,
+    GroupTransport, InMemoryTransport, NostrTransport, GROUP_EVENT_KIND,
 };
+#[cfg(not(feature = "p2p"))]
+pub use imp::{enqueue_envelope, relays_get, relays_set, spawn_sync};
 
 /// Decode the base64 update an engine view carries back into raw bytes.
 pub fn envelope_bytes(update_b64: &str) -> Result<Vec<u8>, AppError> {
@@ -807,17 +991,23 @@ mod tests {
         invite_accept(&b.pool, &b.store, &invite.link)
             .await
             .unwrap();
-        set_relays(&a.pool, &group.id, vec!["wss://relay.test".into()])
+        set_relays(&a.pool, &relay, &group.id, vec!["wss://relay.test".into()])
             .await
             .unwrap();
-        set_relays(&b.pool, &group.id, vec!["wss://relay.test".into()])
+        set_relays(&b.pool, &relay, &group.id, vec!["wss://relay.test".into()])
             .await
             .unwrap();
 
         // A writes a note: queued locally first, nothing published yet.
         edit_and_queue(&a, &group.id, "n1", "hello").await;
         assert_eq!(relay.event_count(), 0);
-        assert_eq!(relays_view(&a.pool, &group.id).await.unwrap().pending, 1);
+        assert_eq!(
+            relays_view(&a.pool, &relay, &group.id)
+                .await
+                .unwrap()
+                .pending,
+            1
+        );
 
         // A syncs (its "session" ends) — only now do the envelopes leave: the
         // note it wrote plus its own state announcement.
@@ -864,7 +1054,7 @@ mod tests {
             .create_group("G")
             .await
             .expect("group");
-        set_relays(&a.pool, &group.id, vec!["wss://relay.test".into()])
+        set_relays(&a.pool, &relay, &group.id, vec!["wss://relay.test".into()])
             .await
             .unwrap();
         edit_and_queue(&a, &group.id, "n1", "queued while offline").await;
@@ -909,10 +1099,10 @@ mod tests {
         invite_accept(&b.pool, &b.store, &invite.link)
             .await
             .unwrap();
-        set_relays(&a.pool, &group.id, vec!["wss://relay.test".into()])
+        set_relays(&a.pool, &relay, &group.id, vec!["wss://relay.test".into()])
             .await
             .unwrap();
-        set_relays(&b.pool, &group.id, vec!["wss://relay.test".into()])
+        set_relays(&b.pool, &relay, &group.id, vec!["wss://relay.test".into()])
             .await
             .unwrap();
 
@@ -943,15 +1133,18 @@ mod tests {
     #[tokio::test]
     async fn only_the_owner_can_change_relays() {
         let a = device("rg_tx_owner.db").await;
+        let relay = InMemoryTransport::new();
         let group = ReadingGroupService::new(a.pool.clone())
             .create_group("G")
             .await
             .expect("group");
 
         // The owner can set relays…
-        assert!(set_relays(&a.pool, &group.id, vec!["wss://r.test".into()])
-            .await
-            .is_ok());
+        assert!(
+            set_relays(&a.pool, &relay, &group.id, vec!["wss://r.test".into()])
+                .await
+                .is_ok()
+        );
 
         // …but this device is no longer that owner.
         sqlx::query("UPDATE settings SET value = 'm-someone-else' WHERE key = ?")
@@ -959,16 +1152,133 @@ mod tests {
             .execute(&a.pool)
             .await
             .unwrap();
-        let error = set_relays(&a.pool, &group.id, vec!["wss://evil.test".into()])
+        let error = set_relays(&a.pool, &relay, &group.id, vec!["wss://evil.test".into()])
             .await
             .expect_err("a non-owner is rejected");
         assert!(error.to_string().contains("owner"), "got: {error}");
 
         // The relay set is untouched by the rejected attempt.
         assert_eq!(
-            relays_view(&a.pool, &group.id).await.unwrap().relays,
+            relays_view(&a.pool, &relay, &group.id)
+                .await
+                .unwrap()
+                .relays,
             vec!["wss://r.test".to_string()]
         );
+
+        cleanup_files(&a.path);
+    }
+
+    /// MISSION-162: a simultaneous outage used to be invisible or fatal. Every
+    /// relay down must leave the envelope queued and come back as a normal
+    /// report, never an error, so the UI can say "queued, no relay reachable".
+    #[tokio::test]
+    async fn a_total_relay_outage_keeps_the_outbox_and_does_not_fail_the_sync() {
+        let a = device("rg_tx_all_down.db").await;
+        let relay = InMemoryTransport::new();
+        let group = ReadingGroupService::new(a.pool.clone())
+            .create_group("G")
+            .await
+            .expect("group");
+        set_relays(
+            &a.pool,
+            &relay,
+            &group.id,
+            vec!["wss://one.test".into(), "wss://two.test".into()],
+        )
+        .await
+        .unwrap();
+        edit_and_queue(&a, &group.id, "n1", "queued while every relay is down").await;
+
+        relay.set_online(false);
+        let report = sync_now(&a.pool, &a.store, &relay, &group.id)
+            .await
+            .expect("a relay outage must not fail the sync");
+        assert_eq!(report.published, 0);
+        assert!(report.pending >= 1, "the envelope stays queued");
+        assert_eq!(
+            report.failed, report.pending,
+            "nothing may be marked sent while no relay took it"
+        );
+
+        // The per-relay status makes the outage visible instead of silent.
+        let view = relays_view(&a.pool, &relay, &group.id).await.unwrap();
+        assert_eq!(view.status.len(), 2);
+        assert!(view.status.iter().all(|s| !s.reachable));
+
+        // Reconnect: the same envelope goes out, nothing was lost.
+        relay.set_online(true);
+        let report = sync_now(&a.pool, &a.store, &relay, &group.id)
+            .await
+            .unwrap();
+        assert_eq!((report.failed, report.pending), (0, 0));
+        assert!(report.published >= 1);
+
+        cleanup_files(&a.path);
+    }
+
+    /// One relay up means sent — the whole set is not a single publish target.
+    #[tokio::test]
+    async fn one_reachable_relay_is_enough_to_send() {
+        let a = device("rg_tx_one_up.db").await;
+        let relay = InMemoryTransport::new();
+        let group = ReadingGroupService::new(a.pool.clone())
+            .create_group("G")
+            .await
+            .expect("group");
+        set_relays(
+            &a.pool,
+            &relay,
+            &group.id,
+            vec!["wss://dead.test".into(), "wss://alive.test".into()],
+        )
+        .await
+        .unwrap();
+        edit_and_queue(&a, &group.id, "n1", "hello").await;
+
+        relay.set_relay_offline("wss://dead.test", true);
+        let report = sync_now(&a.pool, &a.store, &relay, &group.id)
+            .await
+            .unwrap();
+        assert!(report.published >= 1);
+        assert_eq!((report.failed, report.pending), (0, 0));
+
+        let view = relays_view(&a.pool, &relay, &group.id).await.unwrap();
+        let reachable: Vec<&str> = view
+            .status
+            .iter()
+            .filter(|s| s.reachable)
+            .map(|s| s.url.as_str())
+            .collect();
+        assert_eq!(reachable, vec!["wss://alive.test"]);
+
+        cleanup_files(&a.path);
+    }
+
+    /// A partial outage: the writes go out but the pull fails. The pass must
+    /// still succeed (the old code `?`-propagated the fetch error and failed the
+    /// task), reporting zero received rather than an error.
+    #[tokio::test]
+    async fn a_read_failure_does_not_fail_a_pass_whose_writes_succeeded() {
+        let a = device("rg_tx_read_down.db").await;
+        let relay = InMemoryTransport::new();
+        let group = ReadingGroupService::new(a.pool.clone())
+            .create_group("G")
+            .await
+            .expect("group");
+        set_relays(&a.pool, &relay, &group.id, vec!["wss://relay.test".into()])
+            .await
+            .unwrap();
+        edit_and_queue(&a, &group.id, "n1", "hello").await;
+
+        relay.set_fetch_offline(true);
+        let report = sync_now(&a.pool, &a.store, &relay, &group.id)
+            .await
+            .expect("a read failure must not fail the pass");
+        assert!(report.published >= 1, "the write still went out");
+        assert_eq!(report.failed, 0);
+        assert_eq!(report.received, 0, "nothing could be pulled this pass");
+        assert_eq!(report.pending, 0);
 
         cleanup_files(&a.path);
     }

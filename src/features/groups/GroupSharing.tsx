@@ -16,6 +16,8 @@ import {
   TextareaField,
   useToast,
 } from "@/components/ui";
+import { cn } from "@/lib/cn";
+import type { RelayStatus } from "@/api";
 import {
   useExportGroupFile,
   useGroupKeyStatusQuery,
@@ -49,7 +51,11 @@ export function GroupSharing({ groupId, groupName, p2p, isOwner }: GroupSharingP
 
   const relays = relaysQuery.data?.relays ?? [];
   const pending = relaysQuery.data?.pending ?? 0;
+  const status = relaysQuery.data?.status ?? [];
   const text = draft ?? relays.join("\n");
+  const statusByUrl = new Map<string, RelayStatus>(status.map((entry) => [entry.url, entry]));
+  const noneReachable =
+    relays.length > 0 && relays.every((url) => !statusByUrl.get(url)?.reachable);
 
   const onExport = () => {
     exportFile.mutate(
@@ -137,6 +143,40 @@ export function GroupSharing({ groupId, groupName, p2p, isOwner }: GroupSharingP
             <p className="mt-1 text-sm text-text-secondary">
               {t("groupsPage.pendingCount", { count: pending })}
             </p>
+          ) : null}
+          {relays.length > 0 ? (
+            <div className="mt-3">
+              <h4 className="text-xs font-medium text-text-secondary">
+                {t("groupsPage.relayStatusHeading")}
+              </h4>
+              <ul className="mt-1 flex flex-col gap-1">
+                {relays.map((url) => {
+                  const reachable = statusByUrl.get(url)?.reachable ?? false;
+                  return (
+                    <li key={url} className="flex items-center gap-2 text-xs">
+                      <span
+                        aria-hidden
+                        className={cn(
+                          "size-1.5 shrink-0 rounded-full",
+                          reachable ? "bg-ok" : "bg-danger",
+                        )}
+                      />
+                      <span className="truncate font-mono text-text-secondary">{url}</span>
+                      <span
+                        className={cn("shrink-0", reachable ? "text-text-tertiary" : "text-danger")}
+                      >
+                        {t(reachable ? "groupsPage.relayUp" : "groupsPage.relayDown")}
+                      </span>
+                    </li>
+                  );
+                })}
+              </ul>
+              {/* Nothing can leave while every relay is down; say so where the
+                  relay set is set, not only after a failed-looking sync. */}
+              {pending > 0 && noneReachable ? (
+                <p className="mt-2 text-xs text-danger">{t("groupsPage.syncQueued")}</p>
+              ) : null}
+            </div>
           ) : null}
           {isOwner ? (
             <div className="mt-3 flex justify-end">

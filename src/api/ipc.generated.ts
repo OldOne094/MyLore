@@ -527,9 +527,15 @@ export interface GroupNoteSyncView {
   notes: GroupNoteEntry[];
   compacted: boolean;
 }
+export interface RelayStatus {
+  url: string;
+  reachable: boolean;
+  detail: string | null;
+}
 export interface GroupRelayView {
   relays: string[];
   pending: number;
+  status: RelayStatus[];
 }
 export interface GroupSyncReport {
   published: number;
@@ -1348,12 +1354,12 @@ export function reading_group_note_sync(args: {
   return invoke<GroupNoteSyncView>("reading_group_note_sync", args);
 }
 
-/** MISSION-116 (p2p) - a group's relays plus how many envelopes are still waiting in the outbox. Resolves with the view or rejects with an AppError string. */
+/** MISSION-116 (p2p) / MISSION-162 - a group's relays, how many envelopes are still waiting in the outbox, and each relay's reachability (a bounded probe, so a total outage is visible). Resolves with the view or rejects with an AppError string. */
 export function reading_group_relays_get(args: { groupId: string }): Promise<GroupRelayView> {
   return invoke<GroupRelayView>("reading_group_relays_get", args);
 }
 
-/** MISSION-116 (p2p) - replace a group's relay set (owner-only; trimmed, deduped, capped at 8). Resolves with the new view or rejects with an AppError string. */
+/** MISSION-116 (p2p) / MISSION-162 - replace a group's relay set (owner-only; trimmed, deduped, capped at 8) and probe the new set's reachability. Resolves with the new view or rejects with an AppError string. */
 export function reading_group_relays_set(args: {
   groupId: string;
   relays: string[];

@@ -49,6 +49,7 @@ import {
   type GroupSyncReport,
   type GroupView,
   type GroupWorkCopyView,
+  type RelayStatus,
   type TaskSnapshot,
 } from "@/api";
 import { queryKeys } from "@/api";
@@ -429,4 +430,5 @@ export type {
   GroupSyncReport,
   GroupView,
   GroupWorkCopyView,
+  RelayStatus,
 };

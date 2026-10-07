@@ -201,12 +201,14 @@ export function GroupDetailPage() {
             </p>
           ) : report ? (
             <p className="mt-1 text-xs text-text-tertiary">
-              {t("groupsPage.syncReport", {
-                published: report.published,
-                merged: report.merged,
-                skipped: report.skipped,
-                pending: report.pending,
-              })}
+              {report.published === 0 && report.pending > 0
+                ? t("groupsPage.syncQueued")
+                : t("groupsPage.syncReport", {
+                    published: report.published,
+                    merged: report.merged,
+                    skipped: report.skipped,
+                    pending: report.pending,
+                  })}
             </p>
           ) : null}
         </div>

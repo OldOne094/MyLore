@@ -287,8 +287,12 @@
       "shape": "group_id: string; work_key: string; state_vector: string; update: string; notes: GroupNoteEntry[]; compacted: boolean"
     },
     {
+      "name": "RelayStatus",
+      "shape": "url: string; reachable: boolean; detail: string | null"
+    },
+    {
       "name": "GroupRelayView",
-      "shape": "relays: string[]; pending: number"
+      "shape": "relays: string[]; pending: number; status: RelayStatus[]"
     },
     {
       "name": "GroupSyncReport",
@@ -1088,13 +1092,13 @@
       "name": "reading_group_relays_get",
       "args": { "group_id": "string" },
       "returns": "GroupRelayView",
-      "doc": "MISSION-116 (p2p) - a group's relays plus how many envelopes are still waiting in the outbox. Resolves with the view or rejects with an AppError string."
+      "doc": "MISSION-116 (p2p) / MISSION-162 - a group's relays, how many envelopes are still waiting in the outbox, and each relay's reachability (a bounded probe, so a total outage is visible). Resolves with the view or rejects with an AppError string."
     },
     {
       "name": "reading_group_relays_set",
       "args": { "group_id": "string", "relays": "string[]" },
       "returns": "GroupRelayView",
-      "doc": "MISSION-116 (p2p) - replace a group's relay set (owner-only; trimmed, deduped, capped at 8). Resolves with the new view or rejects with an AppError string."
+      "doc": "MISSION-116 (p2p) / MISSION-162 - replace a group's relay set (owner-only; trimmed, deduped, capped at 8) and probe the new set's reachability. Resolves with the new view or rejects with an AppError string."
     },
     {
       "name": "reading_group_sync_now",

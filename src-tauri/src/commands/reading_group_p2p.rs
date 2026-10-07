@@ -131,25 +131,29 @@ pub async fn reading_group_note_sync(
     .await
 }
 
-/// A group's relays and how many envelopes are still waiting to go out.
+/// A group's relays, how many envelopes are still waiting to go out, and each
+/// relay's reachability.
 #[command]
 pub async fn reading_group_relays_get(
     state: State<'_, SqlitePool>,
+    store: State<'_, Arc<dyn SecretStore>>,
     group_id: String,
 ) -> Result<GroupRelayView, AppError> {
     info!(group_id, "reading_group_relays_get invoked");
-    reading_group_transport::relays_view(state.inner(), &group_id).await
+    reading_group_transport::relays_get(state.inner(), store.inner().as_ref(), &group_id).await
 }
 
 /// Replace a group's relay set (owner-only).
 #[command]
 pub async fn reading_group_relays_set(
     state: State<'_, SqlitePool>,
+    store: State<'_, Arc<dyn SecretStore>>,
     group_id: String,
     relays: Vec<String>,
 ) -> Result<GroupRelayView, AppError> {
     info!(group_id, "reading_group_relays_set invoked");
-    reading_group_transport::set_relays(state.inner(), &group_id, relays).await
+    reading_group_transport::relays_set(state.inner(), store.inner().as_ref(), &group_id, relays)
+        .await
 }
 
 /// Run one relay sync pass (flush the outbox, pull and merge) as a background
