@@ -15,6 +15,7 @@ import {
   media_list,
   media_nodes,
   media_overrides,
+  media_set_cover,
   media_update,
   node_progress_range,
   node_progress_set,
@@ -213,6 +214,22 @@ export function useMediaOverridesQuery(id: string) {
     queryKey: queryKeys.media.overrides(id),
     queryFn: () => media_overrides({ id }),
     enabled: id.length > 0,
+  });
+}
+
+/** Replace or clear a media's cover (MISSION-167). It goes through the image
+    pipeline rather than writing a URL onto the row, so the image is downloaded
+    once and cached for offline use. `null` removes the cover. */
+export function useSetMediaCover(id: string) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (url: string | null): Promise<unknown> => media_set_cover({ id, url }),
+    onSuccess: async () => {
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: queryKeys.media.detail(id) }),
+        queryClient.invalidateQueries({ queryKey: queryKeys.media.lists() }),
+      ]);
+    },
   });
 }
 

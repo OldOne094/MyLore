@@ -24,6 +24,8 @@ use crate::error::AppError;
 use crate::infrastructure::images::{ImageCache, ImageClient, ImageError};
 use crate::infrastructure::repositories::asset as asset_repo;
 use crate::infrastructure::repositories::asset::AssetRecord;
+use crate::infrastructure::repositories::media as media_repo;
+use crate::infrastructure::repositories::media::MediaRecord;
 
 /// How long a `failed` asset must wait before a resolve retries it.
 pub const FAILED_RETRY_COOLDOWN: Duration = Duration::from_secs(60 * 60);
@@ -207,6 +209,105 @@ impl ImageService {
             .await?
             .ok_or_else(|| AppError::validation(format!("asset {id} not found")))?;
         Ok(asset.into())
+    }
+
+    /// Replace, or clear, a media's cover (MISSION-167).
+    ///
+    /// The new cover enters as an asset in the `remote` state, so the existing
+    /// cache policy downloads it once and serves it from disk afterwards — that
+    /// is what keeps a cover working offline, and why this goes through the
+    /// image pipeline instead of writing a URL onto the row. The previous asset
+    /// is disposed of (row and cached file) unless something still references
+    /// it. Clearing detaches the cover and touches nothing else.
+    pub async fn set_cover(
+        &self,
+        media_id: &str,
+        url: Option<&str>,
+    ) -> Result<Option<AssetView>, AppError> {
+        let media = media_repo::get(&self.pool, media_id)
+            .await?
+            .ok_or_else(|| AppError::validation("media not found"))?;
+        let previous = media.cover_asset_id.clone();
+
+        let next = match url.map(str::trim).filter(|url| !url.is_empty()) {
+            Some(url) => {
+                let asset = AssetRecord {
+                    id: format!("a-{}", uuid::Uuid::new_v4()),
+                    kind: "cover".to_string(),
+                    remote_url: Some(url.to_string()),
+                    local_path: None,
+                    status: "remote".to_string(),
+                    mime_type: None,
+                    width: None,
+                    height: None,
+                    etag: None,
+                    last_fetched_at: None,
+                    created_at: now_rfc3339(),
+                };
+                asset_repo::insert(&self.pool, &asset).await?;
+                self.point_cover_at(&media, Some(&asset.id)).await?;
+                Some(asset.id)
+            }
+            None => {
+                self.point_cover_at(&media, None).await?;
+                None
+            }
+        };
+
+        if let Some(previous) = previous {
+            if next.as_deref() != Some(previous.as_str()) {
+                self.dispose_asset(&previous).await?;
+            }
+        }
+
+        match next {
+            Some(id) => self.resolve(&id).await.map(Some),
+            None => Ok(None),
+        }
+    }
+
+    /// Point (or un-point) `media.cover_asset_id`, leaving every other column —
+    /// including the banner and `metadata_refreshed_at` — exactly as it was.
+    async fn point_cover_at(
+        &self,
+        media: &MediaRecord,
+        asset_id: Option<&str>,
+    ) -> Result<(), AppError> {
+        let next = MediaRecord {
+            cover_asset_id: asset_id.map(str::to_string),
+            updated_at: now_rfc3339(),
+            ..media.clone()
+        };
+        media_repo::update(&self.pool, &next).await
+    }
+
+    /// Forget an asset nothing references any more: its row first, then the
+    /// file the cache wrote for it. An asset that is still a banner is left
+    /// alone, and a file that is already gone is not an error.
+    async fn dispose_asset(&self, asset_id: &str) -> Result<(), AppError> {
+        let (referenced,): (i64,) = sqlx::query_as(
+            "SELECT COUNT(*) FROM media WHERE cover_asset_id = ? OR banner_asset_id = ?",
+        )
+        .bind(asset_id)
+        .bind(asset_id)
+        .fetch_one(&self.pool)
+        .await?;
+        if referenced > 0 {
+            return Ok(());
+        }
+
+        let cached = asset_repo::get(&self.pool, asset_id)
+            .await?
+            .and_then(|asset| asset.local_path);
+        asset_repo::delete(&self.pool, asset_id).await?;
+        if let Some(path) = cached {
+            match std::fs::remove_file(&path) {
+                Ok(()) => {}
+                Err(error) if error.kind() == std::io::ErrorKind::NotFound => {}
+                Err(error) => warn!(%error, path, "could not remove a replaced cover file"),
+            }
+        }
+        Ok(())
     }
 }
 
@@ -520,6 +621,96 @@ mod tests {
         let h = Harness::new("unknown.db").await;
         let result = h.service.resolve("nope").await;
         assert!(result.is_err());
+        h.pool.close().await;
+        cleanup_files(&h.db_path);
+    }
+
+    // ------------------------------------------------- MISSION-167: covers
+
+    /// A media row with a cover asset, without building the whole aggregate.
+    async fn seed_media_with_cover(pool: &sqlx::SqlitePool, media_id: &str, cover_id: &str) {
+        sqlx::query(
+            "INSERT INTO media (id, content_type, title_main, pub_status, created_at, updated_at)
+             VALUES (?, 'novel', 'Sword', 'unknown', '2026-01-01', '2026-01-01')",
+        )
+        .bind(media_id)
+        .execute(pool)
+        .await
+        .unwrap();
+        sqlx::query(
+            "INSERT INTO asset (id, kind, status, created_at)
+             VALUES (?, 'cover', 'remote', '2026-01-01')",
+        )
+        .bind(cover_id)
+        .execute(pool)
+        .await
+        .unwrap();
+        sqlx::query("UPDATE media SET cover_asset_id = ? WHERE id = ?")
+            .bind(cover_id)
+            .bind(media_id)
+            .execute(pool)
+            .await
+            .unwrap();
+    }
+
+    #[tokio::test]
+    async fn setting_a_cover_replaces_the_asset_and_disposes_the_previous_one() {
+        let h = Harness::new("cover_swap.db").await;
+        seed_media_with_cover(&h.pool, "m-1", "a-old").await;
+
+        // A refused connection is enough: the asset is created and attached
+        // before the fetch is attempted, which is what this test is about.
+        let view = h
+            .service
+            .set_cover("m-1", Some("http://127.0.0.1:1/cover.jpg"))
+            .await
+            .expect("set cover")
+            .expect("a cover to show");
+
+        let stored = media_repo::get(&h.pool, "m-1").await.unwrap().unwrap();
+        assert_eq!(stored.cover_asset_id.as_deref(), Some(view.id.as_str()));
+        assert!(
+            asset_repo::get(&h.pool, "a-old").await.unwrap().is_none(),
+            "the replaced cover's row is gone"
+        );
+        h.pool.close().await;
+        cleanup_files(&h.db_path);
+    }
+
+    #[tokio::test]
+    async fn clearing_a_cover_detaches_it_and_disposes_the_asset() {
+        let h = Harness::new("cover_clear.db").await;
+        seed_media_with_cover(&h.pool, "m-1", "a-old").await;
+
+        let cleared = h.service.set_cover("m-1", None).await.expect("clear");
+        assert!(cleared.is_none(), "nothing to show");
+        assert!(h.service.set_cover("m-1", Some("   ")).await.is_ok());
+
+        let stored = media_repo::get(&h.pool, "m-1").await.unwrap().unwrap();
+        assert!(stored.cover_asset_id.is_none(), "detached");
+        assert!(asset_repo::get(&h.pool, "a-old").await.unwrap().is_none());
+        h.pool.close().await;
+        cleanup_files(&h.db_path);
+    }
+
+    #[tokio::test]
+    async fn an_asset_still_used_as_a_banner_is_not_disposed() {
+        let h = Harness::new("cover_banner.db").await;
+        seed_media_with_cover(&h.pool, "m-1", "a-old").await;
+        sqlx::query("UPDATE media SET banner_asset_id = 'a-old' WHERE id = 'm-1'")
+            .execute(&h.pool)
+            .await
+            .unwrap();
+
+        h.service
+            .set_cover("m-1", Some("http://127.0.0.1:1/cover.jpg"))
+            .await
+            .expect("set cover");
+
+        assert!(
+            asset_repo::get(&h.pool, "a-old").await.unwrap().is_some(),
+            "still referenced as the banner"
+        );
         h.pool.close().await;
         cleanup_files(&h.db_path);
     }

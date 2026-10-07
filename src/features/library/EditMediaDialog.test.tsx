@@ -145,4 +145,21 @@ describe("EditMediaDialog", () => {
     expect(await screen.findByText("This field is required.")).toBeInTheDocument();
     expect(invoke).not.toHaveBeenCalledWith("media_update", expect.anything());
   });
+
+  it("sets a cover through the image pipeline (MISSION-167)", async () => {
+    mockWorld();
+    renderDialog();
+
+    const field = await screen.findByLabelText("Cover image URL");
+    await userEvent.type(field, "https://img.test/a.jpg");
+    await userEvent.click(screen.getByRole("button", { name: "Set cover" }));
+
+    await waitFor(() => {
+      expect(invoke).toHaveBeenCalledWith("media_set_cover", {
+        id: "m-1",
+        url: "https://img.test/a.jpg",
+      });
+    });
+    expect(await screen.findByText("Cover updated")).toBeInTheDocument();
+  });
 });

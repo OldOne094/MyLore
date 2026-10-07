@@ -13,6 +13,7 @@ import { PUBLICATION_STATUS_VALUES } from "./AddMediaSchema";
 import {
   useMediaFacetsQuery,
   useMediaOverridesQuery,
+  useSetMediaCover,
   useUpdateMedia,
   type MediaDetail,
 } from "./api";
@@ -71,11 +72,25 @@ export function EditMediaDialog({ media, onOpenChange }: EditMediaDialogProps) {
     setGenres(media.genres.map((id) => names.get(id) ?? id.replace(/_/g, " ")).join(", "));
   }, [facets.data, media.genres]);
   const [release, setRelease] = useState<string[]>([]);
+  const setCover = useSetMediaCover(media.id);
+  const [coverUrl, setCoverUrl] = useState("");
 
   const toggleRelease = (field: string, checked: boolean) =>
     setRelease((current) =>
       checked ? [...current, field] : current.filter((entry) => entry !== field),
     );
+
+  /* The cover is applied on its own, not with the form: it replaces an asset
+     rather than a column, so it has its own button and its own result. */
+  const applyCover = (url: string | null) => {
+    setCover.mutate(url, {
+      onSuccess: () =>
+        toast.success({
+          title: url ? t("library.coverSetToast") : t("library.coverClearedToast"),
+        }),
+      onError: () => toast.error({ title: t("library.coverError") }),
+    });
+  };
 
   const onSubmit = (event: React.FormEvent) => {
     event.preventDefault();
@@ -167,6 +182,41 @@ export function EditMediaDialog({ media, onOpenChange }: EditMediaDialogProps) {
               onChange={(event) => setSynopsis(event.target.value)}
             />
           </div>
+
+          <fieldset className="col-span-2 rounded-sm border border-border-subtle p-3">
+            <legend className="px-1 text-xs uppercase tracking-wide text-text-tertiary">
+              {t("library.coverHeading")}
+            </legend>
+            <InputField
+              label={t("library.fieldCoverUrl")}
+              value={coverUrl}
+              placeholder="https://…"
+              onChange={(event) => setCoverUrl(event.target.value)}
+            />
+            <div className="mt-3 flex items-center justify-end gap-2">
+              {media.cover_asset_id ? (
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  disabled={setCover.isPending}
+                  onClick={() => applyCover(null)}
+                >
+                  {t("library.coverClear")}
+                </Button>
+              ) : null}
+              <Button
+                type="button"
+                variant="secondary"
+                size="sm"
+                disabled={setCover.isPending || coverUrl.trim().length === 0}
+                onClick={() => applyCover(coverUrl.trim())}
+              >
+                {t("library.coverSet")}
+              </Button>
+            </div>
+            <p className="mt-2 text-xs text-text-tertiary">{t("library.coverHint")}</p>
+          </fieldset>
 
           {overrides.length > 0 ? (
             <fieldset className="col-span-2 rounded-sm border border-border-subtle p-3">

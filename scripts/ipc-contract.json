@@ -658,6 +658,12 @@
       "doc": "Resolve one cover/banner asset to a cached local file, downloading per the cache policy when needed. `status` is `cached` (local_path usable via `convertFileSrc`), `failed` (transient, retried after a cooldown) or `missing` (permanent broken URL). Resolves with the asset view or rejects with an AppError string."
     },
     {
+      "name": "media_set_cover",
+      "args": { "id": "string", "url": "string | null" },
+      "returns": "AssetView | null",
+      "doc": "MISSION-167 - replace or clear a media's cover. The new cover becomes a fresh asset in the image pipeline (downloaded once, cached for offline use) and the previous asset is disposed of (row and cached file) unless something still references it; `url: null` clears the cover. Resolves with the resolved cover view or null when cleared; rejects with an AppError string."
+    },
+    {
       "name": "assets_resolve",
       "args": { "asset_ids": "string[]" },
       "returns": "AssetView[]",

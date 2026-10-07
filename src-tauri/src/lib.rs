@@ -227,6 +227,7 @@ pub fn run() {
             commands::media::media_get,
             commands::media::media_update,
             commands::media::media_overrides,
+            commands::images::media_set_cover,
             commands::media::media_search,
             commands::discover::search_external,
             commands::discover::provider_get_details,

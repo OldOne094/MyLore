@@ -32,3 +32,17 @@ pub async fn assets_resolve(
     info!(count = asset_ids.len(), "assets_resolve invoked");
     service.resolve_many(&asset_ids).await
 }
+
+/// Set or clear a media's cover (MISSION-167). The new cover enters the image
+/// pipeline as a fresh asset (so it is downloaded once and cached for offline
+/// use) and the previous one is disposed of. Resolves with the resolved cover
+/// view, or null when the cover was cleared.
+#[command]
+pub async fn media_set_cover(
+    service: State<'_, Arc<ImageService>>,
+    id: String,
+    url: Option<String>,
+) -> Result<Option<AssetView>, AppError> {
+    info!(id, "media_set_cover invoked");
+    service.set_cover(&id, url.as_deref()).await
+}

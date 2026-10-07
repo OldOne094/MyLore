@@ -926,6 +926,14 @@ export function asset_resolve(args: { assetId: string }): Promise<AssetView> {
   return invoke<AssetView>("asset_resolve", args);
 }
 
+/** MISSION-167 - replace or clear a media's cover. The new cover becomes a fresh asset in the image pipeline (downloaded once, cached for offline use) and the previous asset is disposed of (row and cached file) unless something still references it; `url: null` clears the cover. Resolves with the resolved cover view or null when cleared; rejects with an AppError string. */
+export function media_set_cover(args: {
+  id: string;
+  url: string | null;
+}): Promise<AssetView | null> {
+  return invoke<AssetView | null>("media_set_cover", args);
+}
+
 /** Resolve many cover/banner assets in one call (deduped; unknown ids are skipped). The library grid calls this once per visible page so covers resolve as a batch. Resolves with the resolved asset views or rejects with an AppError string. */
 export function assets_resolve(args: { assetIds: string[] }): Promise<AssetView[]> {
   return invoke<AssetView[]>("assets_resolve", args);
