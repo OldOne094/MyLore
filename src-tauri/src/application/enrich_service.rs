@@ -939,9 +939,16 @@ mod tests {
         let service = EnrichService::new(pool.clone(), coord(provider));
         let view = service.enrich_from_provider("m-1").await.expect("enrich");
 
-        assert_eq!(view.kept, vec!["title_main".to_string()], "reported, not hidden");
+        assert_eq!(
+            view.kept,
+            vec!["title_main".to_string()],
+            "reported, not hidden"
+        );
         assert!(
-            !view.changes.iter().any(|change| change.field == "title_main"),
+            !view
+                .changes
+                .iter()
+                .any(|change| change.field == "title_main"),
             "a pinned field is not in the diff: {:?}",
             view.changes.iter().map(|c| &c.field).collect::<Vec<_>>()
         );
