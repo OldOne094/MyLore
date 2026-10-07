@@ -1,6 +1,14 @@
-/* MISSION-033 — Application strings. Key tree is the contract: en and ar must
-   stay in sync (verified by i18n.interop test). Namespaces: "shell", "nav",
-   "page". Plural-aware via Intl rules and {{count}} interpolation. */
+/* MISSION-033 — Application strings. Key tree is the contract: every language
+   must stay in sync (verified by locales.test.ts). Namespaces: "shell", "nav",
+   "page". Plural-aware via Intl rules and {{count}} interpolation.
+
+   MISSION-163 — `en` and `ar` live here; `tr` and `es` are sibling modules
+   (`locales.tr.ts` / `locales.es.ts`) so the file stays navigable. The
+   `LOCALES` table below is the single source for the switcher list, the compact
+   labels and the writing direction. */
+
+import { es } from "./locales.es";
+import { tr } from "./locales.tr";
 
 const en = {
   shell: {
@@ -809,6 +817,10 @@ const en = {
     relayCount_other: "{{count}} relays",
     pendingCount_one: "{{count}} message waiting to send",
     pendingCount_other: "{{count}} messages waiting to send",
+    relayStatusHeading: "Relay status",
+    relayUp: "Reachable",
+    relayDown: "Unreachable",
+    syncQueued: "Queued — no relay reachable",
     backToGroups: "All groups",
     badgeSealed: "Encrypted",
     badgeNoKey: "No key yet",
@@ -1994,6 +2006,10 @@ const ar = {
     relayCount_other: "{{count}} مرحّلات",
     pendingCount_one: "رسالة واحدة في انتظار الإرسال",
     pendingCount_other: "{{count}} رسائل في انتظار الإرسال",
+    relayStatusHeading: "حالة المرحّلات",
+    relayUp: "متاح",
+    relayDown: "غير متاح",
+    syncQueued: "في الانتظار — لا مرحّل متاح",
     backToGroups: "كل المجموعات",
     badgeSealed: "مشفَّر",
     badgeNoKey: "لا مفتاح بعد",
@@ -2357,6 +2373,29 @@ const ar = {
   },
 };
 
-export const resources = { en: { translation: en }, ar: { translation: ar } } as const;
+export const resources = {
+  en: { translation: en },
+  ar: { translation: ar },
+  tr: { translation: tr },
+  es: { translation: es },
+} as const;
 
 export type AppLanguage = keyof typeof resources;
+
+/** One row per language: the switcher list, its compact labels and the writing
+    direction all derive from this table, so adding a language is one row and
+    can never drift from a second hardcoded list (MISSION-163). */
+export interface LocaleDescriptor {
+  /** Endonym, shown in settings/list contexts. */
+  name: string;
+  /** 1–2 character label for the compact pill switchers. */
+  short: string;
+  dir: "ltr" | "rtl";
+}
+
+export const LOCALES: Record<AppLanguage, LocaleDescriptor> = {
+  en: { name: "English", short: "EN", dir: "ltr" },
+  ar: { name: "العربية", short: "ع", dir: "rtl" },
+  tr: { name: "Türkçe", short: "TR", dir: "ltr" },
+  es: { name: "Español", short: "ES", dir: "ltr" },
+};

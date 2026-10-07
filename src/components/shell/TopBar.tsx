@@ -65,7 +65,7 @@ export function TopBar() {
 
   return (
     <header className="flex h-14 shrink-0 items-center justify-between gap-3 border-b border-border-subtle px-5">
-      <h1 className="truncate text-md font-semibold text-text-primary">
+      <h1 className="min-w-0 truncate text-md font-semibold text-text-primary">
         {current ? t(`nav.${current.key}`) : t("shell.brand")}
       </h1>
 

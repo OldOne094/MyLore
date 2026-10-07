@@ -136,6 +136,25 @@ describe("settings page", () => {
     });
   });
 
+  it("offers every locale and switches to Turkish without RTL (MISSION-163)", async () => {
+    const user = userEvent.setup();
+    renderSettings();
+    const languageGroup = await within(screen.getByRole("main")).findByRole("group", {
+      name: "Language",
+    });
+    expect(
+      within(languageGroup)
+        .getAllByRole("button")
+        .map((button) => button.textContent),
+    ).toEqual(["EN", "ع", "TR", "ES"]);
+
+    await user.click(within(languageGroup).getByRole("button", { name: "TR" }));
+    expect(document.documentElement.getAttribute("lang")).toBe("tr");
+    expect(document.documentElement.getAttribute("dir")).toBe("ltr");
+    // The settings page re-renders in Turkish, so the section label is Turkish.
+    expect(await screen.findByText("Dil")).toBeInTheDocument();
+  });
+
   it("switches the density tier, reflects it on the root and persists it (MISSION-095)", async () => {
     const user = userEvent.setup();
     renderSettings();

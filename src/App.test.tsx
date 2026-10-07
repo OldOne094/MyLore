@@ -123,4 +123,13 @@ describe("App shell", () => {
     expect(document.documentElement.getAttribute("dir")).toBe("rtl");
     expect(document.documentElement.getAttribute("lang")).toBe("ar");
   });
+
+  it("switches the language to Spanish from the top bar (MISSION-163)", async () => {
+    const user = userEvent.setup();
+    renderApp("/library");
+    await user.click(screen.getByRole("button", { name: "ES" }));
+    expect(await screen.findByRole("link", { name: "Biblioteca" })).toBeInTheDocument();
+    expect(document.documentElement.getAttribute("dir")).toBe("ltr");
+    expect(document.documentElement.getAttribute("lang")).toBe("es");
+  });
 });
